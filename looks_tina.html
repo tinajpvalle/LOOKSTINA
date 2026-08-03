@@ -579,8 +579,8 @@ body.compare-mode .card-compare-btn { display: flex; }
     <!-- Step 1: Choose pieces -->
     <div class="suggest-step active" id="suggestStep1">
       <div class="suggest-header">
-        <span style="font-size:1.2rem">🌤️</span>
-        <h3>Passo 1 — Escolha as peças para a semana</h3>
+        <span style="font-size:1.2rem">🎯</span>
+        <h3>Refinar por peças específicas (opcional)</h3>
         <button class="btn-dismiss" onclick="document.getElementById('suggestPanel').style.display='none'" style="margin-left:auto">✕</button>
       </div>
       <div class="suggest-subtitle" id="suggestSubtitle">Carregando previsão do tempo…</div>
@@ -600,8 +600,8 @@ body.compare-mode .card-compare-btn { display: flex; }
         <button class="fbar-btn" id="wzViagem" onclick="setWizardOcasiao('viagem')">✈️ Viagem</button>
       </div>
       <div class="suggest-actions">
-        <button class="btn-next" id="btnStep2" onclick="proceedToStep2()" disabled>Ver looks →</button>
-        <span class="suggest-hint" id="pieceSelHint">Selecione ao menos 1 peça</span>
+        <button class="btn-next" id="btnStep2" onclick="proceedToStep2()">Ver looks →</button>
+        <span class="suggest-hint" id="pieceSelHint">Nenhuma peça selecionada — sugestão livre por clima e novidade</span>
         <button class="btn-dismiss" onclick="document.getElementById('suggestPanel').style.display='none'">Cancelar</button>
       </div>
     </div>
@@ -610,14 +610,14 @@ body.compare-mode .card-compare-btn { display: flex; }
     <div class="suggest-step" id="suggestStep2">
       <div class="suggest-header">
         <span style="font-size:1.2rem">👗</span>
-        <h3>Passo 2 — Looks sugeridos por dia</h3>
+        <h3>✨ Looks sugeridos pra semana</h3>
         <button class="btn-dismiss" onclick="document.getElementById('suggestPanel').style.display='none'" style="margin-left:auto">✕</button>
       </div>
       <div class="suggest-subtitle">Clique nas <strong>setas ‹ ›</strong> para trocar o look de cada dia individualmente. Clique na foto para ampliar.</div>
       <div class="assign-grid" id="assignGrid"></div>
       <div class="suggest-actions">
         <button class="btn-apply" onclick="applySuggestions()">✓ Aplicar na minha semana</button>
-        <button class="btn-back" onclick="goBackToStep1()">← Voltar às peças</button>
+        <button class="btn-back" onclick="goBackToStep1()">🎯 Refinar peças</button>
         <button class="btn-dismiss" onclick="document.getElementById('suggestPanel').style.display='none'">Cancelar</button>
         <button class="btn-back" onclick="printWeekPlan()" style="margin-left:auto">🖨️ PDF</button>
         <button class="btn-back" onclick="emailWeekPlan()">📧 Email</button>
@@ -3992,19 +3992,23 @@ var assignedLooks = {}; // {day: {id, thumb, tags, alts: [...], altIdx}}
 function showSuggestions() {
   selectedPieces = new Set();
   assignedLooks = {};
-  // Show step 1 right away, com um estado de carregando enquanto a previsão real chega
-  document.getElementById('suggestStep1').classList.add('active');
+  // Vai direto pro resultado (Passo 2). O Passo 1 (peças específicas) fica disponível
+  // como refinamento opcional, acessível pelo botão "Refinar peças" no resultado.
+  document.getElementById('suggestStep1').classList.remove('active');
   document.getElementById('suggestStep2').classList.remove('active');
   document.getElementById('suggestPanel').style.display = 'block';
   document.getElementById('suggestPanel').scrollIntoView({behavior:'smooth', block:'nearest'});
   var wxBar = document.getElementById('suggestWxBar');
   wxBar.innerHTML = '<div style="font-size:.78rem;color:#888;">Carregando previsão do tempo real…</div>';
+  var grid = document.getElementById('assignGrid');
+  if (grid) grid.innerHTML = '<div style="padding:24px;color:#888;font-size:.85rem;">Carregando previsão do tempo e montando os looks da semana…</div>';
 
   loadForecast().then(function(){
     renderWeatherBar();
     updateSuggestSubtitle();
     buildPieceCatBar();
     renderPieceGrid();
+    proceedToStep2();
   });
 }
 
@@ -4035,7 +4039,7 @@ function updateSuggestSubtitle() {
   var seasonTxt = season === 'inverno' ? ' · 🌨️ Priorizando looks de <strong>inverno</strong>.'
     : season === 'verao' ? ' · ☀️ Priorizando looks de <strong>verão</strong>.' : '.';
   el.innerHTML = 'Semana de ' + FORECAST[0].date + ' a ' + FORECAST[FORECAST.length-1].date
-    + ' · São Paulo · Previsão ' + rangeTxt + seasonTxt + ' Selecione as peças que quer usar.';
+    + ' · São Paulo · Previsão ' + rangeTxt + seasonTxt + ' Selecione peças pra focar nelas, ou deixe em branco pra sugestão livre.';
 }
 
 function selectForgottenPieces() {
@@ -4171,8 +4175,8 @@ function updatePieceSelHint() {
   var n = selectedPieces.size;
   var btn = document.getElementById('btnStep2');
   var hint = document.getElementById('pieceSelHint');
-  btn.disabled = n === 0;
-  hint.textContent = n === 0 ? 'Selecione ao menos 1 peça' : n + ' peça' + (n>1?'s selecionadas':' selecionada') + ' — clique em "Ver looks"';
+  btn.disabled = false;
+  hint.textContent = n === 0 ? 'Nenhuma peça selecionada — sugestão livre por clima e novidade' : n + ' peça' + (n>1?'s selecionadas':' selecionada') + ' — clique em "Ver looks"';
 }
 
 function weatherScore(tags, profile) {
@@ -4361,7 +4365,6 @@ function viewTodaySuggestionLook() {
 }
 
 function proceedToStep2() {
-  if(!selectedPieces.size) return;
   var weekSeason = detectWeekSeason();
   var piecesArr = Array.from(selectedPieces);
 
@@ -4435,9 +4438,15 @@ function proceedToStep2() {
       return pieceMatchScore(p, piecesArr) * 4 + weatherScore(p.tags, ta.profile) + seasonScore(p.tags, weekSeason) + recencyBonus(p) + noveltyScore(p, wizardIdRange) * 2;
     }
 
-    var pieceLabel = outerPiece || (piecesArr.find(function(sp){
-      return (best.tags||[]).some(function(t){ return t.trim()===sp; });
-    }) || piecesArr[0]);
+    var pieceLabel = outerPiece
+      || (piecesArr.length ? (piecesArr.find(function(sp){
+           return (best.tags||[]).some(function(t){ return t.trim()===sp; });
+         }) || piecesArr[0]) : null)
+      || (best.tags||[]).find(function(t){
+           var cat = t.split(':')[0].trim().toLowerCase();
+           return t.indexOf(':') !== -1 && cat !== 'marca';
+         })
+      || 'peça: destaque do look';
 
     // All looks with the assigned piece (excluding only this day's own best)
     var altsWithPiece = data.filter(function(p){
