@@ -389,6 +389,16 @@ body.week-pick-mode .card-week-btn { display: block; }
 .day-ocasiao-btn { border: 1px solid #e0d8ce; background: #fff; border-radius: 6px; font-size: .68rem; padding: 2px 5px; cursor: pointer; line-height: 1.3; color: #999; }
 .day-ocasiao-btn.active { background: #2d2d2d; border-color: #2d2d2d; color: #fff; }
 .assign-day-ocasiao { display: flex; gap: 3px; justify-content: center; padding: 4px 4px 0; flex-wrap: wrap; }
+.setup-block { margin-bottom: 18px; }
+.setup-q-label { font-size: .82rem; font-weight: 600; color: #444; margin-bottom: 8px; }
+.setup-day-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.setup-day-pill { border: 1px solid #e0dbd4; background: #fff; border-radius: 20px; padding: 6px 12px; font-size: .78rem; cursor: pointer; color: #555; font-family: inherit; min-width: 46px; text-align: center; }
+.setup-day-pill.is-home { background: #f5f0e8; border-color: #c8b89a; color: #9a7f5a; }
+.setup-ocasiao-grid { display: flex; flex-direction: column; gap: 6px; }
+.setup-ocasiao-day { display: flex; align-items: center; gap: 8px; }
+.setup-ocasiao-day-label { font-size: .76rem; color: #888; width: 34px; flex-shrink: 0; }
+.setup-toggle-label { display: flex; align-items: center; gap: 8px; font-size: .82rem; color: #444; cursor: pointer; }
+.setup-toggle-label input { width: 16px; height: 16px; cursor: pointer; }
 .week-templates-card { display: flex; align-items: center; gap: 8px; background: #faf9f7; border-radius: 10px; padding: 8px 10px; margin-bottom: 6px; cursor: pointer; }
 .week-templates-card:hover { background: #f0ece6; }
 .week-templates-info { flex: 1; min-width: 0; }
@@ -627,8 +637,40 @@ body.compare-mode .card-compare-btn { display: flex; }
   <!-- AI Suggestion Wizard -->
   <div class="suggest-panel" id="suggestPanel" style="display:none">
 
+    <!-- Step 0: Quick setup (3 perguntas rápidas) -->
+    <div class="suggest-step active" id="suggestStepSetup">
+      <div class="suggest-header">
+        <span style="font-size:1.2rem">🧭</span>
+        <h3>Antes de montar a semana...</h3>
+        <button class="btn-dismiss" onclick="document.getElementById('suggestPanel').style.display='none'" style="margin-left:auto">✕</button>
+      </div>
+      <div class="suggest-subtitle">3 perguntas rápidas pra deixar a sugestão mais certeira.</div>
+
+      <div class="setup-block">
+        <div class="setup-q-label">📆 Quais dias você vai sair de casa essa semana?</div>
+        <div class="setup-day-row" id="setupOutDaysRow"></div>
+      </div>
+
+      <div class="setup-block">
+        <div class="setup-q-label">🎯 Algum dia tem plano especial?</div>
+        <div class="setup-ocasiao-grid" id="setupOcasiaoGrid"></div>
+      </div>
+
+      <div class="setup-block">
+        <label class="setup-toggle-label">
+          <input type="checkbox" id="setupPrioritizeOld">
+          <span>💤 Priorizar peças que estão paradas há mais tempo essa semana</span>
+        </label>
+      </div>
+
+      <div class="suggest-actions">
+        <button class="btn-next" onclick="applySetupAndGenerate()">Gerar sugestão →</button>
+        <button class="btn-dismiss" onclick="document.getElementById('suggestPanel').style.display='none'">Cancelar</button>
+      </div>
+    </div>
+
     <!-- Step 1: Choose pieces -->
-    <div class="suggest-step active" id="suggestStep1">
+    <div class="suggest-step" id="suggestStep1">
       <div class="suggest-header">
         <span style="font-size:1.2rem">🎯</span>
         <h3>Refinar por peças específicas (opcional)</h3>
@@ -1797,6 +1839,7 @@ function setDayOcasiao(day, key) {
   if (!weekDayOcasiao[day]) delete weekDayOcasiao[day];
   lsSet('looks_tina_dayocasiao_v1', JSON.stringify(weekDayOcasiao));
   renderWeek();
+  if (document.getElementById('setupOcasiaoGrid')) renderSetupStep();
   if (assignedLooks && assignedLooks[day]) {
     regenerateAssignedDay(day);
   }
@@ -4145,21 +4188,90 @@ var wizardActiveCat = 'casaco';
 var selectedPieces = new Set(); // tag strings e.g. "casaco: caramelo"
 var assignedLooks = {}; // {day: {id, thumb, tags, alts: [...], altIdx}}
 
+var wizardPrioritizeStale = false; // ligado pela telinha de setup rápido; reforça peças paradas há tempo
+var forecastReadyPromise = null;
+
 function showSuggestions() {
   selectedPieces = new Set();
   assignedLooks = {};
-  // Vai direto pro resultado (Passo 2). O Passo 1 (peças específicas) fica disponível
-  // como refinamento opcional, acessível pelo botão "Refinar peças" no resultado.
+  wizardPrioritizeStale = false;
+  var stale = document.getElementById('setupPrioritizeOld');
+  if (stale) stale.checked = false;
+  // Primeiro uma telinha rápida de 3 perguntas (Passo 0), depois vai pro resultado.
+  // O Passo 1 (peças específicas) fica disponível como refinamento opcional,
+  // acessível pelo botão "Refinar peças" no resultado.
+  document.getElementById('suggestStepSetup').classList.add('active');
   document.getElementById('suggestStep1').classList.remove('active');
   document.getElementById('suggestStep2').classList.remove('active');
   document.getElementById('suggestPanel').style.display = 'block';
   document.getElementById('suggestPanel').scrollIntoView({behavior:'smooth', block:'nearest'});
+  renderSetupStep();
+  // Já dispara a busca da previsão em paralelo, pra estar pronta quando ela
+  // terminar de responder e clicar em "Gerar sugestão".
+  forecastReadyPromise = loadForecast();
+}
+
+function setupToggleOutDay(day) {
+  if (weekCasaDays[day]) {
+    delete weekCasaDays[day];
+  } else {
+    weekCasaDays[day] = true;
+    data.forEach(function(p){ if (p.weekday === day) p.weekday = null; });
+    saveToStorage();
+  }
+  lsSet('looks_tina_casadays_v1', JSON.stringify(weekCasaDays));
+  renderSetupStep();
+}
+
+function renderSetupStep() {
+  var outRow = document.getElementById('setupOutDaysRow');
+  if (outRow) {
+    outRow.innerHTML = '';
+    DAYS.forEach(function(day){
+      var pill = document.createElement('button');
+      pill.type = 'button';
+      pill.className = 'setup-day-pill' + (weekCasaDays[day] ? ' is-home' : '');
+      pill.textContent = weekCasaDays[day] ? (day + ' 🏠') : day;
+      pill.title = weekCasaDays[day] ? 'Marcado como "fico em casa" — clique pra dizer que vai sair' : 'Clique se for ficar em casa nesse dia';
+      pill.onclick = (function(d){ return function(){ setupToggleOutDay(d); }; })(day);
+      outRow.appendChild(pill);
+    });
+  }
+
+  var ocGrid = document.getElementById('setupOcasiaoGrid');
+  if (ocGrid) {
+    ocGrid.innerHTML = '';
+    var outDays = DAYS.filter(function(d){ return !weekCasaDays[d]; });
+    if (!outDays.length) {
+      ocGrid.innerHTML = '<div style="font-size:.76rem;color:#aaa;">Nenhum dia marcado pra sair essa semana.</div>';
+    } else {
+      outDays.forEach(function(day){
+        var row = document.createElement('div'); row.className = 'setup-ocasiao-day';
+        var label = document.createElement('span'); label.className = 'setup-ocasiao-day-label'; label.textContent = day;
+        row.appendChild(label);
+        DAY_OCASIAO_OPTS.forEach(function(opt){
+          var b = document.createElement('button'); b.type = 'button'; b.className = 'day-ocasiao-btn';
+          b.textContent = opt.emoji; b.title = opt.label;
+          if (weekDayOcasiao[day] === opt.key) b.classList.add('active');
+          b.onclick = (function(d, k){ return function(){ setDayOcasiao(d, k); }; })(day, opt.key);
+          row.appendChild(b);
+        });
+        ocGrid.appendChild(row);
+      });
+    }
+  }
+}
+
+function applySetupAndGenerate() {
+  wizardPrioritizeStale = !!(document.getElementById('setupPrioritizeOld') && document.getElementById('setupPrioritizeOld').checked);
+
+  document.getElementById('suggestStepSetup').classList.remove('active');
   var wxBar = document.getElementById('suggestWxBar');
   wxBar.innerHTML = '<div style="font-size:.78rem;color:#888;">Carregando previsão do tempo real…</div>';
   var grid = document.getElementById('assignGrid');
   if (grid) grid.innerHTML = '<div style="padding:24px;color:#888;font-size:.85rem;">Carregando previsão do tempo e montando os looks da semana…</div>';
 
-  loadForecast().then(function(){
+  (forecastReadyPromise || loadForecast()).then(function(){
     renderWeatherBar();
     updateSuggestSubtitle();
     buildPieceCatBar();
@@ -5026,14 +5138,16 @@ function proceedToStep2() {
   var tempAssign = {};
 
   var wizardIdRange = catalogIdRange();
+  var staleFactor = wizardPrioritizeStale ? 3 : 1; // ligado na telinha de setup rápido
   FORECAST.forEach(function(f){
+    if (weekCasaDays[f.day]) return; // marcado como "fico em casa" no setup — sem look esse dia
     var outerPiece = outerForDay[f.day] || null;
 
     function score(p) {
       return pieceMatchScore(p, piecesArr) * 6
            + weatherScore(p.tags, f.profile) * 2
            + seasonScore(p.tags, weekSeason)
-           + recencyBonus(p) * 2
+           + recencyBonus(p) * 2 * staleFactor
            + noveltyScore(p, wizardIdRange) * 4
            + ocasiaoBoost(p, f.day)
            - diversityPenalty(p.tags, usedTagFreq);
@@ -5074,7 +5188,7 @@ function proceedToStep2() {
     var outerPiece = ta.outerPiece;
 
     function scoreForPool(p) {
-      return pieceMatchScore(p, piecesArr) * 4 + weatherScore(p.tags, ta.profile) + seasonScore(p.tags, weekSeason) + recencyBonus(p) + noveltyScore(p, wizardIdRange) * 2;
+      return pieceMatchScore(p, piecesArr) * 4 + weatherScore(p.tags, ta.profile) + seasonScore(p.tags, weekSeason) + recencyBonus(p) * staleFactor + noveltyScore(p, wizardIdRange) * 2;
     }
 
     var pieceLabel = outerPiece
@@ -5136,11 +5250,12 @@ function regenerateAssignedDay(day) {
     (other.curTags||[]).forEach(function(t){ usedTagFreq[t.trim()] = (usedTagFreq[t.trim()]||0) + 1; });
   });
 
+  var staleFactor = wizardPrioritizeStale ? 3 : 1;
   function score(p) {
     return pieceMatchScore(p, piecesArr) * 6
          + weatherScore(p.tags, f.profile) * 2
          + seasonScore(p.tags, weekSeason)
-         + recencyBonus(p) * 2
+         + recencyBonus(p) * 2 * staleFactor
          + noveltyScore(p, wizardIdRange) * 4
          + ocasiaoBoost(p, day) * 3
          - diversityPenalty(p.tags, usedTagFreq);
@@ -5239,16 +5354,18 @@ function renderAssignGrid() {
     wx.innerHTML = f.cond + '<br><span class="assign-day-temp">' + f.temp + '</span>';
     col.appendChild(wx);
 
-    var ocRow = document.createElement('div'); ocRow.className = 'assign-day-ocasiao';
-    DAY_OCASIAO_OPTS.forEach(function(opt){
-      var b = document.createElement('button'); b.className = 'day-ocasiao-btn';
-      b.textContent = opt.emoji;
-      b.title = opt.label + ' (prioriza esse estilo pra este dia)';
-      if (weekDayOcasiao[f.day] === opt.key) b.classList.add('active');
-      b.onclick = (function(d, k){ return function(e){ e.stopPropagation(); setDayOcasiao(d, k); }; })(f.day, opt.key);
-      ocRow.appendChild(b);
-    });
-    col.appendChild(ocRow);
+    if (!weekCasaDays[f.day]) {
+      var ocRow = document.createElement('div'); ocRow.className = 'assign-day-ocasiao';
+      DAY_OCASIAO_OPTS.forEach(function(opt){
+        var b = document.createElement('button'); b.className = 'day-ocasiao-btn';
+        b.textContent = opt.emoji;
+        b.title = opt.label + ' (prioriza esse estilo pra este dia)';
+        if (weekDayOcasiao[f.day] === opt.key) b.classList.add('active');
+        b.onclick = (function(d, k){ return function(e){ e.stopPropagation(); setDayOcasiao(d, k); }; })(f.day, opt.key);
+        ocRow.appendChild(b);
+      });
+      col.appendChild(ocRow);
+    }
 
     if(a) {
       var wrap = document.createElement('div'); wrap.className = 'assign-look';
@@ -5299,8 +5416,8 @@ function renderAssignGrid() {
       }
     } else {
       var empty = document.createElement('div');
-      empty.style.cssText='height:120px;display:flex;align-items:center;justify-content:center;color:#ccc;font-size:.75rem';
-      empty.textContent='sem look';
+      empty.style.cssText='height:120px;display:flex;align-items:center;justify-content:center;color:#ccc;font-size:.75rem;flex-direction:column;gap:4px;';
+      empty.innerHTML = weekCasaDays[f.day] ? '<span style="font-size:1.4rem;">🏠</span><span>em casa</span>' : 'sem look';
       col.appendChild(empty);
     }
     grid.appendChild(col);
