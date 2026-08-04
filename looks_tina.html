@@ -4519,7 +4519,16 @@ function diversityPenalty(tags, usedTagFreq) {
 
 function recencyBonus(p) {
   // Bonus for looks not used recently: max 3 pts for never used, scales down
-  if(!p.lastWorn) return 3;
+  if(!p.lastWorn) {
+    // Sem data de "usado em" registrada (comum pro catálogo inteiro, já que isso
+    // é marcado manualmente): usa a contagem de vezes usada como substituto —
+    // nunca marcada como usada fica no topo, cada uso registrado reduz a prioridade.
+    var wc = p.wornCount || 0;
+    if (wc === 0) return 3;
+    if (wc === 1) return 1.5;
+    if (wc <= 3)  return 0.5;
+    return 0;
+  }
   var today = new Date().toISOString().split('T')[0];
   var days = Math.round((new Date(today) - new Date(p.lastWorn)) / (1000*60*60*24));
   if(days >= 60) return 3;
@@ -5400,8 +5409,10 @@ function renderAssignGrid() {
       if(curLook) {
         var reason = '';
         var today = new Date().toISOString().split('T')[0];
-        if(!curLook.lastWorn) reason = '✨ nunca usada';
-        else {
+        if(!curLook.lastWorn) {
+          var wc = curLook.wornCount || 0;
+          reason = wc === 0 ? '✨ nunca marcada como usada' : '👗 marcada ' + wc + 'x (sem data)';
+        } else {
           var days = Math.round((new Date(today)-new Date(curLook.lastWorn))/(1000*60*60*24));
           if(days >= 60) reason = '💤 há ' + days + 'd sem usar';
           else if(days >= 30) reason = '🔄 há ' + days + 'd';
