@@ -407,6 +407,17 @@ body.week-pick-mode .card-week-btn { display: block; }
 .week-templates-del { border: none; background: none; color: #bbb; cursor: pointer; font-size: .9rem; padding: 4px 6px; flex-shrink: 0; }
 .week-templates-del:hover { color: #c0392b; }
 .week-templates-empty { font-size: .78rem; color: #aaa; }
+.week-history-card { display: flex; align-items: center; gap: 10px; background: #faf9f7; border-radius: 10px; padding: 8px 10px; margin-bottom: 6px; }
+.week-history-thumbs { display: flex; gap: 3px; flex-shrink: 0; }
+.week-history-thumbs img { width: 26px; height: 26px; object-fit: cover; border-radius: 5px; border: 1px solid #eee; }
+.week-history-thumbs .wh-empty { width: 26px; height: 26px; border-radius: 5px; border: 1px dashed #ddd; background: #f5f5f5; }
+.week-history-info { flex: 1; min-width: 0; }
+.week-history-label { font-size: .82rem; font-weight: 600; color: #2d2d2d; }
+.week-history-meta { font-size: .68rem; color: #888; margin-top: 1px; }
+.week-history-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.week-history-restore { border: none; background: none; color: #2d5ccc; cursor: pointer; font-size: .78rem; padding: 4px 6px; }
+.week-history-del { border: none; background: none; color: #bbb; cursor: pointer; font-size: .9rem; padding: 4px 6px; }
+.week-history-del:hover { color: #c0392b; }
 .assign-look { position: relative; }
 .assign-look img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
 .assign-look-nav { position: absolute; bottom: 0; left: 0; right: 0; display: flex; justify-content: space-between; background: rgba(0,0,0,.45); }
@@ -623,9 +634,11 @@ body.compare-mode .card-compare-btn { display: flex; }
     <h2>📅 Looks da Semana</h2>
     <button class="btn btn-week" id="weekPickBtn" onclick="toggleWeekPickMode()">➕ Selecionar looks</button>
     <button class="btn btn-ghost" onclick="clearWeek()">🗑 Limpar semana</button>
+    <button class="btn btn-ghost" onclick="saveWeekToHistoryNow()" style="background:#fff8f0;color:#b06a1a;border-color:#f0dcc0;">💾 Salvar semana no histórico</button>
     <button class="btn btn-ghost" onclick="showSuggestions()" style="background:#f0f6ff;color:#2d5ccc;border-color:#c8d8f0">🌤️ Sugestão IA</button>
     <button class="btn btn-ghost" onclick="openTripWizard()" style="background:#fff4f0;color:#c2410c;border-color:#f0d0c0;">🧳 Mala de viagem</button>
     <button class="btn btn-ghost" onclick="openWeekTemplates()" style="background:#f5f0ff;color:#6a3fc2;border-color:#ddd0f0;">📋 Semanas modelo</button>
+    <button class="btn btn-ghost" onclick="openWeekHistory()" style="background:#fff8f0;color:#b06a1a;border-color:#f0dcc0;">📚 Histórico de semanas</button>
     <button class="btn btn-ghost" onclick="saveWeekPhotos()" style="margin-left:auto;background:#f0fff4;color:#22a06b;border-color:#b2dfdb;">📁 Salvar fotos</button>
     <button class="btn btn-ghost" onclick="printWeekPlanFromWeek()">🖨️ Gerar PDF</button>
     <button class="btn btn-ghost" onclick="exportWeekToICS()" style="background:#f0f0ff;color:#5c35cc;border-color:#c8c0f0;">📅 Exportar .ics</button>
@@ -725,6 +738,7 @@ body.compare-mode .card-compare-btn { display: flex; }
 <div class="overlay" id="viewOverlay" onclick="closeView(event)">
   <div class="modal" id="viewModal">
     <button class="close-btn" onclick="closeViewModal()">✕</button>
+    <button id="viewRotateBtn" onclick="rotateCurrentView()" title="Girar a foto 90°" style="position:absolute;top:12px;left:14px;background:rgba(0,0,0,.55);color:#fff;border:none;border-radius:50%;width:36px;height:36px;cursor:pointer;font-size:1.05rem;display:flex;align-items:center;justify-content:center;z-index:20;">🔄</button>
     <img id="viewImg" src="" alt="">
     <div class="modal-body">
       <h3>Peças do look</h3>
@@ -879,6 +893,18 @@ body.compare-mode .card-compare-btn { display: flex; }
         <div style="font-size:.78rem;font-weight:700;color:#666;margin-bottom:8px;">📂 Modelos salvos</div>
         <div id="weekTemplatesList"></div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Histórico automático de semanas -->
+<div class="overlay" id="weekHistoryOverlay" onclick="if(event.target===this) closeWeekHistory()">
+  <div class="modal trip-modal">
+    <button class="close-btn" onclick="closeWeekHistory()">✕</button>
+    <div class="modal-body">
+      <h3 style="margin-bottom:4px;">📚 Histórico de semanas</h3>
+      <p style="font-size:.82rem;color:#888;margin:6px 0 14px;">Toda semana que passa fica guardada aqui automaticamente com a data — sem precisar salvar nada na mão. Também guarda quando você clica em "🗑 Limpar semana".</p>
+      <div id="weekHistoryList"></div>
     </div>
   </div>
 </div>
@@ -1786,6 +1812,31 @@ function saveToStorage() {
   }
 }
 
+// ── Rotação de fotos ──
+// Algumas fotos foram salvas de lado (upload do celular na orientação errada).
+// Em vez de reprocessar o arquivo em disco, guardamos um ângulo (0/90/180/270)
+// por look e aplicamos como transform CSS em toda foto renderizada — funciona
+// bem porque quase todas as miniaturas do app são exibidas em caixas quadradas
+// (aspect-ratio:1), então girar não corta nem distorce a imagem.
+function getRotation(p) { return (p && p.rotation) || 0; }
+function applyRotation(imgEl, p) {
+  if (!imgEl) return;
+  var r = getRotation(p);
+  imgEl.style.transform = r ? 'rotate(' + r + 'deg)' : '';
+}
+function setRotation(pid, deg) {
+  var look = data.find(function(p){ return p.id === pid; });
+  if (!look) return 0;
+  look.rotation = ((deg % 360) + 360) % 360;
+  saveToStorage();
+  return look.rotation;
+}
+function rotateLookBy(pid, delta) {
+  var look = data.find(function(p){ return p.id === pid; });
+  if (!look) return 0;
+  return setRotation(pid, getRotation(look) + delta);
+}
+
 function loadFromStorage() {
   try {
     var saved = lsGet(STORAGE_KEY);
@@ -1796,8 +1847,8 @@ function loadFromStorage() {
     savedData.forEach(function(p){ savedMap[p.id] = p; });
     var catalogMerged = CATALOG.map(function(p) {
       var s = savedMap[p.id];
-      if (s) return {id:p.id, thumb:p.thumb, tags:(s.tags&&s.tags.length>0)?s.tags:p.tags.slice(), archived:s.archived||false, weekday:s.weekday||null, favorite:s.favorite||false, wornCount:s.wornCount||0, lastWorn:s.lastWorn||null, note:s.note||'', palette:s.palette||null};
-      return {id:p.id, thumb:p.thumb, tags:p.tags.slice(), archived:p.archived||false, weekday:p.weekday||null, favorite:false, wornCount:0, lastWorn:null, note:'', palette:null};
+      if (s) return {id:p.id, thumb:p.thumb, tags:(s.tags&&s.tags.length>0)?s.tags:p.tags.slice(), archived:s.archived||false, weekday:s.weekday||null, favorite:s.favorite||false, wornCount:s.wornCount||0, lastWorn:s.lastWorn||null, note:s.note||'', palette:s.palette||null, rotation:s.rotation||0};
+      return {id:p.id, thumb:p.thumb, tags:p.tags.slice(), archived:p.archived||false, weekday:p.weekday||null, favorite:false, wornCount:0, lastWorn:null, note:'', palette:null, rotation:0};
     });
     // Also restore imported looks (isImported:true) that were saved to localStorage
     var importedRestored = savedData.filter(function(p){ return p.isImported; });
@@ -1807,7 +1858,7 @@ function loadFromStorage() {
 
 // State
 var data = loadFromStorage() || CATALOG.map(function(p) {
-  return {id:p.id, thumb:p.thumb, tags:p.tags.slice(), archived:p.archived||false, weekday:p.weekday||null};
+  return {id:p.id, thumb:p.thumb, tags:p.tags.slice(), archived:p.archived||false, weekday:p.weekday||null, rotation:0};
 });
 var _lastSavedSnapshot = JSON.stringify(data); // baseline: only stamp "última edição" when data actually changes this session
 var activeChip = null;
@@ -1820,6 +1871,12 @@ var currentViewId = null;
 var currentEditId = null;
 var currentTab = 'catalog';
 var DAYS = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
+// Declarados aqui (além de mais abaixo, perto da previsão do tempo) porque
+// checkWeekRollover() já usa brDate()/mondayOfCurrentWeek() dentro de init(),
+// que roda antes da declaração original — sem isso, MESES_PT estaria undefined
+// nesse ponto e quebraria o init() inteiro.
+var DAYS_PT = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
+var MESES_PT = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
 var dragSourceDay = null;
 function safeParse(json, fallback) { try { return JSON.parse(json); } catch(e) { return fallback; } }
 var weekNotes = safeParse(lsGet('looks_tina_weeknotes_v1'), {}) || {};
@@ -1827,6 +1884,8 @@ var weekCasaDays = safeParse(lsGet('looks_tina_casadays_v1'), {}) || {};
 var savedTrips = safeParse(lsGet('looks_tina_trips_v1'), []) || [];
 var weekDayOcasiao = safeParse(lsGet('looks_tina_dayocasiao_v1'), {}) || {}; // {day: 'casual'|'trabalho'|'festa'|'viagem'}
 var weekTemplates = safeParse(lsGet('looks_tina_weektemplates_v1'), []) || [];
+var weekHistory = safeParse(lsGet('looks_tina_weekhistory_v1'), []) || [];
+var WEEK_HISTORY_MAX = 30; // ~7 meses de semanas guardadas, evita crescer sem limite
 var DAY_OCASIAO_OPTS = [
   {key:'casual', emoji:'👟', label:'Casual'},
   {key:'trabalho', emoji:'💼', label:'Trabalho'},
@@ -1928,6 +1987,7 @@ function goHome() {
 }
 
 function init() {
+  checkWeekRollover();
   buildChips();
   renderGrid();
   renderWeek();
@@ -2221,6 +2281,7 @@ function renderGrid() {
     
     var img = document.createElement('img');
     img.src = p.isImported ? (p.src || p.thumb) : p.thumb; img.alt = ''; img.loading = 'lazy';
+    applyRotation(img, p);
     img.onerror = function(){ this.style.background='#f0ece6'; };
     img.addEventListener('click', (function(pid){ return function(){ openView(pid); }; })(p.id));
     card.appendChild(img);
@@ -2397,6 +2458,7 @@ function renderWeek() {
       });
       var img = document.createElement('img'); img.src = look.thumb; img.alt = '';
       img.loading = 'lazy'; img.onerror = function(){ this.style.background='#f0ece6'; };
+      applyRotation(img, look);
       img.onclick = (function(pid){ return function(){ openView(pid); }; })(look.id);
       var rm = document.createElement('button'); rm.className = 'day-look-remove'; rm.textContent = '✕';
       rm.onclick = (function(d){ return function(e){ e.stopPropagation(); removeFromWeek(d); }; })(day);
@@ -2490,18 +2552,36 @@ function openDayPicker(day) {
   var overlay = document.getElementById('dayPickerOverlay');
   var title = document.getElementById('dayPickerTitle');
   var subtitle = document.getElementById('dayPickerSubtitle');
-  var grid = document.getElementById('dayPickerGrid');
-  if(!overlay || !grid) return;
+  var searchInput = document.getElementById('dayPickerSearch');
+  if(!overlay) return;
 
   title.textContent = '🔄 Trocar o look de ' + day;
   subtitle.textContent = 'Clique em um look para colocar em ' + day + '. O look atual desse dia é liberado.';
+  if(searchInput) searchInput.value = '';
+
+  renderDayPickerGrid(day, '');
+
+  overlay.classList.add('open');
+  if(searchInput) setTimeout(function(){ searchInput.focus(); }, 50);
+}
+
+function renderDayPickerGrid(day, filterText) {
+  var grid = document.getElementById('dayPickerGrid');
+  if(!grid) return;
+  var q = (filterText || '').trim().toLowerCase();
 
   var pool = data.filter(function(p){ return !p.archived; })
+    .filter(function(p){
+      if(!q) return true;
+      var inTags = (p.tags||[]).some(function(t){ return t.toLowerCase().indexOf(q) !== -1; });
+      var inName = (p.name||'').toLowerCase().indexOf(q) !== -1;
+      return inTags || inName;
+    })
     .slice().sort(function(a,b){ return b.id - a.id; });
 
   grid.innerHTML = '';
   if(!pool.length) {
-    grid.innerHTML = '<p style="color:#aaa;font-size:.85rem;grid-column:1/-1;">Nenhum look disponível.</p>';
+    grid.innerHTML = '<p style="color:#aaa;font-size:.85rem;grid-column:1/-1;">Nenhum look encontrado' + (q ? ' pra "' + filterText + '"' : '') + '.</p>';
   }
   pool.forEach(function(p){
     var card = document.createElement('div');
@@ -2509,6 +2589,7 @@ function openDayPicker(day) {
     var img = document.createElement('img');
     img.loading = 'lazy';
     img.src = p.isImported ? (p.src || p.thumb) : p.thumb;
+    applyRotation(img, p);
     card.appendChild(img);
     var label = document.createElement('div');
     label.className = 'daypick-card-label';
@@ -2517,9 +2598,8 @@ function openDayPicker(day) {
     card.onclick = (function(pid){ return function(){ assignDay(pid, day); closeDayPicker(); }; })(p.id);
     grid.appendChild(card);
   });
-
-  overlay.classList.add('open');
 }
+
 function closeDayPicker() {
   var overlay = document.getElementById('dayPickerOverlay');
   if(overlay) overlay.classList.remove('open');
@@ -2833,6 +2913,7 @@ function printLookCard() {
   // Use overlay inside the page (avoids file:// cross-window image block)
   var overlay = document.getElementById('lookCardOverlay');
   document.getElementById('lookCardImg').src = imgSrc;
+  applyRotation(document.getElementById('lookCardImg'), p);
   document.getElementById('lookCardId').textContent = 'LOOK #' + p.id;
   document.getElementById('lookCardName').textContent = p.name || '';
   document.getElementById('lookCardStars').textContent = p.rating ? '★'.repeat(p.rating)+'☆'.repeat(5-p.rating) : '';
@@ -3034,8 +3115,25 @@ function _saveWeekFallback(weekLooks, err) {
 
 function clearWeek() {
   if (!confirm('Limpar todos os looks da semana?')) return;
+  var snap = buildWeekSnapshot();
+  var archived = archiveWeekToHistory(isoDate(mondayOfCurrentWeek()), snap);
   data.forEach(function(p){ p.weekday = null; });
   renderGrid(); renderWeek();
+  if (archived) showHistoryToast('🗑 Semana limpa · guardada no histórico');
+  else showSavedToast();
+}
+
+// Salva a semana atual no histórico sem limpar nada — pra quando você já montou
+// a semana e quer guardar esse registro, mas continua usando a grade normalmente
+// (diferente do "Limpar semana", que arquiva e some com tudo).
+function saveWeekToHistoryNow() {
+  var snap = buildWeekSnapshot();
+  if (!snap.some(function(d){ return d.pieceId || d.casa; })) {
+    alert('A semana está vazia — monte os looks antes de salvar no histórico.');
+    return;
+  }
+  archiveWeekToHistory(isoDate(mondayOfCurrentWeek()), snap);
+  showHistoryToast('📚 Semana salva no histórico!');
 }
 
 function assignDay(pid, day) {
@@ -3231,6 +3329,7 @@ function renderAdmin() {
       photos.slice(0, 8).forEach(function(p) {
         var img = document.createElement('img'); img.className='admin-thumb';
         img.src = p.thumb;
+        applyRotation(img, p);
         img.title = p.tags ? p.tags.join(' | ') : '';
         img.onclick = (function(pid){ return function(){ openView(pid); }; })(p.id);
         thumbs.appendChild(img);
@@ -3464,10 +3563,21 @@ function renderViewTags(p) {
   }
 }
 
+function rotateCurrentView() {
+  if (currentViewId == null) return;
+  rotateLookBy(currentViewId, 90);
+  var p = data.find(function(x){ return x.id === currentViewId; });
+  applyRotation(document.getElementById('viewImg'), p);
+  showSavedToast();
+  renderGrid();
+  renderWeek();
+}
+
 function openView(pid) {
   currentViewId = pid;
   var p = data.find(function(x){ return x.id===pid; });
   document.getElementById('viewImg').src = p.isImported ? (p.src || p.thumb) : p.thumb;
+  applyRotation(document.getElementById('viewImg'), p);
   renderViewTags(p);
   document.getElementById('viewTagInput').value = '';
   hideTagSuggestions();
@@ -3586,6 +3696,7 @@ function openView(pid) {
       var img = document.createElement('img');
       img.src = x.p.thumb;
       img.style.cssText = 'width:62px;height:62px;object-fit:cover;border-radius:8px;cursor:pointer;flex-shrink:0;border:2px solid #eee;display:block;';
+      applyRotation(img, x.p);
       var commonLabels = x.common.map(function(t){ return t.split(':').slice(1).join(':').trim(); }).join(', ');
       img.title = x.common.length + ' pe\u00e7a' + (x.common.length>1?'s':'') + ' em comum: ' + commonLabels;
       img.onclick = (function(pid2){ return function(){ openView(pid2); }; })(x.p.id);
@@ -3766,6 +3877,7 @@ function renderCompareBar() {
       var p = data.find(function(x){ return x.id === pid; });
       var wrap = document.createElement('div'); wrap.className = 'compare-thumb-wrap';
       var img = document.createElement('img'); img.className = 'compare-thumb'; img.src = p ? p.thumb : '';
+      if (p) applyRotation(img, p);
       var rm = document.createElement('button'); rm.className = 'compare-thumb-rm'; rm.textContent = '\u00d7';
       rm.onclick = (function(id){ return function(e){ e.stopPropagation(); addToCompare(id); }; })(pid);
       wrap.appendChild(img); wrap.appendChild(rm); slots.appendChild(wrap);
@@ -3797,6 +3909,7 @@ function openCompareOverlay() {
     if (!p) return;
     var card = document.createElement('div'); card.className = 'cmp-card';
     var img = document.createElement('img'); img.src = p.thumb; img.alt = '';
+    applyRotation(img, p);
     img.onclick = (function(id){ return function(){ closeCompareOverlay(); openView(id); }; })(pid);
     var tagDiv = document.createElement('div'); tagDiv.className = 'cmp-card-tags';
     (p.tags||[]).filter(function(t){ return t.split(':')[0].trim().toLowerCase() !== 'marca'; }).forEach(function(t){
@@ -4596,6 +4709,7 @@ function renderTodaySuggestion() {
     .map(function(t){ return t.split(':').slice(1).join(':').trim(); }).join(' · ');
 
   document.getElementById('todaySuggestImg').src = imgSrc;
+  applyRotation(document.getElementById('todaySuggestImg'), p);
   document.getElementById('todaySuggestMeta').textContent = '✨ LOOK SUGERIDO PRA HOJE' + (fc ? (' · ' + fc.cond + ' ' + fc.temp) : '');
   document.getElementById('todaySuggestTags').textContent = mainTags || 'sem tags';
   renderTodaySuggestDayBtns(p);
@@ -4790,7 +4904,8 @@ function renderTripDayList() {
   tripAssigned.forEach(function(a, idx){
     var card = document.createElement('div'); card.className = 'trip-day-card';
     var img = document.createElement('img'); img.src = a.curThumb; img.alt = a.day;
-    img.onclick = (function(thumb, tags){ return function(){ openZoom(thumb, tags); }; })(a.curThumb, a.curTags);
+    applyRotation(img, data.find(function(pp){ return pp.id === a.curId; }));
+    img.onclick = (function(thumb, tags, rot){ return function(){ openZoom(thumb, tags, rot); }; })(a.curThumb, a.curTags, getRotation(data.find(function(pp){ return pp.id === a.curId; })));
     card.appendChild(img);
 
     var info = document.createElement('div'); info.className = 'trip-day-info';
@@ -4956,11 +5071,79 @@ function buildWeekSnapshot() {
     return {
       day: day,
       pieceId: look ? look.id : null,
+      thumb: look ? (look.isImported ? (look.src || look.thumb) : look.thumb) : null,
+      tags: look ? (look.tags || []).slice() : null,
       casa: !!weekCasaDays[day],
       note: weekNotes[day] || '',
       ocasiao: weekDayOcasiao[day] || null
     };
   });
+}
+
+// ── Histórico automático de semanas ──
+// Toda vez que uma semana "vira" (chega uma nova segunda-feira) ou que a semana
+// é limpa manualmente, a semana anterior é guardada aqui com a data — sem precisar
+// fazer nada. Guarda thumb/tags junto (não só o id) pra continuar mostrando a foto
+// mesmo que o look seja arquivado ou apagado do catálogo depois.
+function archiveWeekToHistory(weekStartIso, snapshotDays) {
+  if (!snapshotDays.some(function(d){ return d.pieceId || d.casa; })) return false;
+  var monday = new Date(weekStartIso + 'T00:00:00');
+  var sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
+  var entry = {
+    weekStart: weekStartIso,
+    label: brDate(monday) + ' – ' + brDate(sunday),
+    savedAt: new Date().toISOString(),
+    days: snapshotDays
+  };
+  var idx = weekHistory.findIndex(function(w){ return w.weekStart === weekStartIso; });
+  if (idx !== -1) weekHistory[idx] = entry;
+  else weekHistory.unshift(entry);
+  weekHistory.sort(function(a,b){ return (b.weekStart||'').localeCompare(a.weekStart||''); });
+  if (weekHistory.length > WEEK_HISTORY_MAX) weekHistory.length = WEEK_HISTORY_MAX;
+  lsSet('looks_tina_weekhistory_v1', JSON.stringify(weekHistory));
+  return true;
+}
+
+function showHistoryToast(msg) {
+  var t = document.getElementById('savedToast');
+  if (!t) return;
+  var orig = t.textContent;
+  t.textContent = msg;
+  t.style.opacity = '1'; t.style.transform = 'translateY(0)';
+  clearTimeout(t._timer);
+  t._timer = setTimeout(function(){
+    t.style.opacity = '0'; t.style.transform = 'translateY(10px)';
+    setTimeout(function(){ t.textContent = orig; }, 300);
+  }, 3200);
+}
+
+// Roda 1x ao carregar a página. Compara a segunda-feira da semana atual com a
+// última segunda-feira registrada — se mudou, uma semana nova começou desde a
+// última visita, então arquiva a semana anterior no histórico e limpa a grade
+// pra montar a semana nova do zero.
+function checkWeekRollover() {
+  var storedMonday = lsGet('looks_tina_weekcurrentmonday_v1');
+  var currentMonday = isoDate(mondayOfCurrentWeek());
+  if (storedMonday && storedMonday !== currentMonday) {
+    var snap = buildWeekSnapshot();
+    var archived = archiveWeekToHistory(storedMonday, snap);
+    DAYS.forEach(function(day){
+      var look = data.find(function(p){ return p.weekday === day; });
+      if (look) look.weekday = null;
+    });
+    weekCasaDays = {}; lsSet('looks_tina_casadays_v1', '{}');
+    weekNotes = {}; lsSet('looks_tina_weeknotes_v1', '{}');
+    weekDayOcasiao = {}; lsSet('looks_tina_dayocasiao_v1', '{}');
+    saveToStorage();
+    if (archived) {
+      var oldMonday = new Date(storedMonday + 'T00:00:00');
+      var oldSunday = new Date(oldMonday); oldSunday.setDate(oldMonday.getDate() + 6);
+      setTimeout(function(){
+        showHistoryToast('📚 Semana de ' + brDate(oldMonday) + '–' + brDate(oldSunday) + ' salva no histórico');
+      }, 700);
+    }
+  }
+  lsSet('looks_tina_weekcurrentmonday_v1', currentMonday);
 }
 
 function saveCurrentWeekTemplate() {
@@ -5052,6 +5235,94 @@ function deleteWeekTemplate(idx) {
   weekTemplates.splice(idx, 1);
   lsSet('looks_tina_weektemplates_v1', JSON.stringify(weekTemplates));
   renderWeekTemplatesList();
+}
+
+// ── Histórico de semanas (visualização) ──
+function openWeekHistory() {
+  document.getElementById('weekHistoryOverlay').classList.add('open');
+  renderWeekHistoryList();
+}
+
+function closeWeekHistory() {
+  document.getElementById('weekHistoryOverlay').classList.remove('open');
+}
+
+function renderWeekHistoryList() {
+  var box = document.getElementById('weekHistoryList');
+  if (!box) return;
+  if (!weekHistory.length) {
+    box.innerHTML = '<div class="week-templates-empty">Nenhuma semana no histórico ainda — assim que uma semana passar (ou você clicar em "Limpar semana"), ela aparece aqui.</div>';
+    return;
+  }
+  var html = '';
+  weekHistory.forEach(function(w, i){
+    var filled = w.days.filter(function(d){ return d.pieceId || d.casa; }).length;
+    var thumbsHtml = w.days.map(function(d){
+      if (d.thumb) return '<img src="' + d.thumb + '" alt="' + d.day + '" title="' + d.day + '">';
+      if (d.casa) return '<div class="wh-empty" title="' + d.day + ': em casa">🏠</div>';
+      return '<div class="wh-empty" title="' + d.day + ': sem look"></div>';
+    }).join('');
+    html += '<div class="week-history-card">'
+      + '<div class="week-history-thumbs">' + thumbsHtml + '</div>'
+      + '<div class="week-history-info">'
+      + '<div class="week-history-label">🗓 ' + w.label + '</div>'
+      + '<div class="week-history-meta">' + filled + ' dia(s) preenchido(s)</div>'
+      + '</div>'
+      + '<div class="week-history-actions">'
+      + '<button class="week-history-restore" onclick="restoreWeekFromHistory(' + i + ')" title="Recolocar essa semana na grade atual">🔁 Restaurar</button>'
+      + '<button class="week-history-del" onclick="deleteWeekHistoryEntry(' + i + ')" title="Excluir do histórico">🗑️</button>'
+      + '</div>'
+      + '</div>';
+  });
+  box.innerHTML = html;
+}
+
+function restoreWeekFromHistory(idx) {
+  var w = weekHistory[idx];
+  if (!w) return;
+  if (!confirm('Restaurar a semana de ' + w.label + '? Isso substitui os looks da semana atual.')) return;
+
+  DAYS.forEach(function(day){
+    var cur = data.find(function(p){ return p.weekday === day; });
+    if (cur) cur.weekday = null;
+  });
+  weekCasaDays = {};
+  weekNotes = {};
+  weekDayOcasiao = {};
+
+  var missing = [];
+  w.days.forEach(function(d){
+    if (d.casa) {
+      weekCasaDays[d.day] = true;
+    } else if (d.pieceId) {
+      var look = data.find(function(p){ return p.id === d.pieceId; });
+      if (look && !look.archived) look.weekday = d.day;
+      else missing.push(d.day);
+    }
+    if (d.note) weekNotes[d.day] = d.note;
+    if (d.ocasiao) weekDayOcasiao[d.day] = d.ocasiao;
+  });
+
+  saveToStorage();
+  lsSet('looks_tina_casadays_v1', JSON.stringify(weekCasaDays));
+  lsSet('looks_tina_weeknotes_v1', JSON.stringify(weekNotes));
+  lsSet('looks_tina_dayocasiao_v1', JSON.stringify(weekDayOcasiao));
+  renderWeek();
+  renderGrid();
+  closeWeekHistory();
+  showSavedToast();
+  if (missing.length) {
+    setTimeout(function(){
+      alert('Algumas peças dessa semana não existem mais no catálogo (arquivadas ou removidas): dia(s) ' + missing.join(', ') + ' ficaram vazios. A foto ainda aparece no histórico porque foi guardada junto.');
+    }, 300);
+  }
+}
+
+function deleteWeekHistoryEntry(idx) {
+  if (!confirm('Excluir esta semana do histórico?')) return;
+  weekHistory.splice(idx, 1);
+  lsSet('looks_tina_weekhistory_v1', JSON.stringify(weekHistory));
+  renderWeekHistoryList();
 }
 
 function tripTitle() {
@@ -5386,11 +5657,23 @@ function renderAssignGrid() {
       var img = document.createElement('img'); img.src = a.curThumb; img.alt = f.day;
       img.style.cursor = 'zoom-in';
       img.title = 'Clique para ampliar';
-      img.onclick = (function(src, tags){ return function(e){
+      applyRotation(img, data.find(function(pp){ return pp.id === a.curId; }));
+      img.onclick = (function(src, tags, rot){ return function(e){
         e.stopPropagation();
-        openZoom(src, tags);
-      }; })(a.curThumb, a.curTags);
+        openZoom(src, tags, rot);
+      }; })(a.curThumb, a.curTags, getRotation(data.find(function(pp){ return pp.id === a.curId; })));
       wrap.appendChild(img);
+
+      var rotA = document.createElement('button'); rotA.className = 'day-look-remove'; rotA.textContent = '🔄';
+      rotA.title = 'Girar a foto 90°';
+      rotA.style.left = '5px'; rotA.style.right = 'auto';
+      rotA.onclick = (function(d){ return function(e){ e.stopPropagation(); rotateAssignedLookDay(d); }; })(f.day);
+      wrap.appendChild(rotA);
+
+      var rmA = document.createElement('button'); rmA.className = 'day-look-remove'; rmA.textContent = '✕';
+      rmA.title = 'Remover look sugerido deste dia';
+      rmA.onclick = (function(d){ return function(e){ e.stopPropagation(); removeAssignedLook(d); }; })(f.day);
+      wrap.appendChild(rmA);
 
       if(a.allPool.length > 1) {
         var nav = document.createElement('div'); nav.className = 'assign-look-nav';
@@ -5440,6 +5723,17 @@ function renderAssignGrid() {
   });
 }
 
+function removeAssignedLook(day) {
+  delete assignedLooks[day];
+  renderAssignGrid();
+}
+
+function rotateAssignedLookDay(day) {
+  var a = assignedLooks[day]; if (!a) return;
+  rotateLookBy(a.curId, 90);
+  renderAssignGrid();
+}
+
 function cycleAssignLook(day, dir) {
   var a = assignedLooks[day]; if(!a) return;
   // Build set of curIds used by OTHER days
@@ -5460,7 +5754,7 @@ function cycleAssignLook(day, dir) {
   renderAssignGrid();
 }
 
-function openZoom(src, tags) {
+function openZoom(src, tags, rotation) {
   var ov = document.getElementById('zoomOverlay');
   if(!ov) {
     ov = document.createElement('div');
@@ -5478,6 +5772,7 @@ function openZoom(src, tags) {
     document.body.appendChild(ov);
   }
   document.getElementById('zoomImg').src = src;
+  document.getElementById('zoomImg').style.transform = rotation ? 'rotate(' + rotation + 'deg)' : '';
   var zt = document.getElementById('zoomTags');
   zt.innerHTML = '';
   (tags||[]).forEach(function(t){
@@ -5714,6 +6009,7 @@ function showQuickCatItem() {
   var p = quickCatList[quickCatIdx];
   if(!p) { closeQuickCat(); return; }
   document.getElementById('qcImg').src = p.thumb || 'thumbs/'+p.id+'.jpg';
+  applyRotation(document.getElementById('qcImg'), p);
   document.getElementById('qcProgress').textContent = (quickCatIdx+1) + ' / ' + quickCatList.length;
   var list = document.getElementById('qcTagList');
   list.innerHTML = '';
@@ -5893,6 +6189,7 @@ function renderCal() {
         var img = document.createElement('img');
         img.src = p.thumb;
         img.style.cssText = 'width:' + (looks.length===1?'100%':'46%') + ';aspect-ratio:1;object-fit:cover;border-radius:5px;cursor:pointer;';
+        applyRotation(img, p);
         img.title = (p.tags||[]).slice(0,2).map(function(t){return t.split(':').pop().trim();}).join(', ');
         img.onclick = (function(pid){ return function(){ switchTab('catalog'); openView(pid); }; })(p.id);
         imgWrap.appendChild(img);
@@ -6255,6 +6552,9 @@ function applySuggestions() {
       <button onclick="closeDayPicker()" style="border:none;background:none;font-size:1.2rem;cursor:pointer">✕</button>
     </div>
     <div style="font-size:.8rem;color:#777;margin-top:4px" id="dayPickerSubtitle"></div>
+    <input type="text" id="dayPickerSearch" placeholder="🔍 Buscar peça (ex: jeans, listrada, azul)..." autocomplete="off"
+      oninput="renderDayPickerGrid(dayPickerCurrentDay, this.value)"
+      style="width:100%;box-sizing:border-box;border:1px solid #ddd;border-radius:8px;padding:7px 10px;font-size:.82rem;font-family:inherit;margin-top:8px;">
     <div id="dayPickerGrid"></div>
   </div>
 </div>
