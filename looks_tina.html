@@ -377,6 +377,14 @@ body.week-pick-mode .card-week-btn { display: block; }
 .trip-pack-title { font-size: .85rem; font-weight: 700; margin-bottom: 6px; }
 .trip-pack-cat { font-size: .7rem; font-weight: 700; color: #8a7c6e; margin: 8px 0 3px; text-transform: uppercase; letter-spacing: .03em; }
 .trip-pack-item { font-size: .8rem; color: #444; padding: 2px 0; }
+.saved-trip-card { display: flex; align-items: center; gap: 8px; background: #faf9f7; border-radius: 10px; padding: 8px 10px; margin-bottom: 6px; cursor: pointer; }
+.saved-trip-card:hover { background: #f0ece6; }
+.saved-trip-info { flex: 1; min-width: 0; }
+.saved-trip-name { font-size: .82rem; font-weight: 600; color: #2d2d2d; }
+.saved-trip-dates { font-size: .68rem; color: #888; margin-top: 1px; }
+.saved-trip-del { border: none; background: none; color: #bbb; cursor: pointer; font-size: .9rem; padding: 4px 6px; flex-shrink: 0; }
+.saved-trip-del:hover { color: #c0392b; }
+.saved-trip-empty { font-size: .78rem; color: #aaa; }
 .assign-look { position: relative; }
 .assign-look img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
 .assign-look-nav { position: absolute; bottom: 0; left: 0; right: 0; display: flex; justify-content: space-between; background: rgba(0,0,0,.45); }
@@ -780,6 +788,10 @@ body.compare-mode .card-compare-btn { display: flex; }
           </div>
         </div>
         <button class="btn-next" onclick="generateTripPlan()">Gerar lista →</button>
+        <div id="savedTripsSection" style="margin-top:22px;padding-top:16px;border-top:1px solid #eee;">
+          <div style="font-size:.78rem;font-weight:700;color:#666;margin-bottom:8px;">📂 Malas salvas</div>
+          <div id="savedTripsList"></div>
+        </div>
       </div>
       <div id="tripResultStep" style="display:none;">
         <div id="tripSubtitle" style="font-size:.78rem;color:#888;margin-bottom:10px;"></div>
@@ -787,6 +799,7 @@ body.compare-mode .card-compare-btn { display: flex; }
         <div class="trip-pack-list" id="tripPackList"></div>
         <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;">
           <button class="btn-back" onclick="backToTripForm()">← Nova busca</button>
+          <button class="btn-back" id="tripSaveBtn" onclick="saveCurrentTrip()">💾 Salvar mala</button>
           <button class="btn-back" onclick="printTripPlan()">🖨️ PDF</button>
           <button class="btn-back" onclick="emailTripPlan()">📧 Email</button>
         </div>
@@ -1736,6 +1749,7 @@ var dragSourceDay = null;
 function safeParse(json, fallback) { try { return JSON.parse(json); } catch(e) { return fallback; } }
 var weekNotes = safeParse(lsGet('looks_tina_weeknotes_v1'), {}) || {};
 var weekCasaDays = safeParse(lsGet('looks_tina_casadays_v1'), {}) || {};
+var savedTrips = safeParse(lsGet('looks_tina_trips_v1'), []) || [];
 var compareList = [];
 var compareMode = false;
 var activeTagFilter = null; // exact full tag filter e.g. "calça: xadrez vichy amarelo verde"
@@ -4440,6 +4454,9 @@ function viewTodaySuggestionLook() {
 var tripAssigned = [];
 var tripHasEstimate = false;
 var tripName = '';
+var tripStartVal = '';
+var tripNumDays = 0;
+var tripViewOnly = false; // true quando visualizando uma mala salva (sem trocar looks)
 var TRIP_TMAX_BY_MONTH = [28,29,27,25,23,21,21,23,24,25,26,27]; // média aproximada de máxima em SP, jan=índice 0
 
 function openTripWizard() {
@@ -4451,6 +4468,7 @@ function openTripWizard() {
     var tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
     dateInput.value = isoDate(tomorrow);
   }
+  renderSavedTripsList();
 }
 
 function closeTripWizard() {
@@ -4460,6 +4478,7 @@ function closeTripWizard() {
 function backToTripForm() {
   document.getElementById('tripFormStep').style.display = 'block';
   document.getElementById('tripResultStep').style.display = 'none';
+  renderSavedTripsList();
 }
 
 function tripSeasonEstimate(date) {
@@ -4511,6 +4530,9 @@ function generateTripPlan() {
   if (!startVal) { alert('Escolhe a data de início da viagem.'); return; }
   var startDate = new Date(startVal + 'T00:00:00');
   tripName = (document.getElementById('tripNameInput').value || '').trim();
+  tripStartVal = startVal;
+  tripNumDays = numDays;
+  tripViewOnly = false;
 
   document.getElementById('tripHeaderTitle').textContent = tripName ? ('🧳 ' + tripName) : '🧳 Mala de viagem';
   document.getElementById('tripFormStep').style.display = 'none';
@@ -4518,6 +4540,9 @@ function generateTripPlan() {
   document.getElementById('tripSubtitle').textContent = 'Montando a mala…';
   document.getElementById('tripDayList').innerHTML = '';
   document.getElementById('tripPackList').innerHTML = '';
+
+  var saveBtn = document.getElementById('tripSaveBtn');
+  if (saveBtn) saveBtn.style.display = 'inline-block';
 
   loadTripForecast(startDate, numDays).then(function(tripForecast){
     buildTripAssignments(tripForecast);
@@ -4579,13 +4604,15 @@ function renderTripDayList() {
       + '<div class="trip-day-tags">' + (mainTags || 'sem tags') + '</div>';
     card.appendChild(info);
 
-    var nav = document.createElement('div'); nav.className = 'trip-day-nav';
-    var prevBtn = document.createElement('button'); prevBtn.textContent = '‹'; prevBtn.title = 'Trocar look';
-    prevBtn.onclick = (function(i){ return function(){ cycleTripLook(i, -1); }; })(idx);
-    var nextBtn = document.createElement('button'); nextBtn.textContent = '›'; nextBtn.title = 'Trocar look';
-    nextBtn.onclick = (function(i){ return function(){ cycleTripLook(i, 1); }; })(idx);
-    nav.appendChild(prevBtn); nav.appendChild(nextBtn);
-    card.appendChild(nav);
+    if (!tripViewOnly) {
+      var nav = document.createElement('div'); nav.className = 'trip-day-nav';
+      var prevBtn = document.createElement('button'); prevBtn.textContent = '‹'; prevBtn.title = 'Trocar look';
+      prevBtn.onclick = (function(i){ return function(){ cycleTripLook(i, -1); }; })(idx);
+      var nextBtn = document.createElement('button'); nextBtn.textContent = '›'; nextBtn.title = 'Trocar look';
+      nextBtn.onclick = (function(i){ return function(){ cycleTripLook(i, 1); }; })(idx);
+      nav.appendChild(prevBtn); nav.appendChild(nextBtn);
+      card.appendChild(nav);
+    }
 
     list.appendChild(card);
   });
@@ -4635,6 +4662,85 @@ function renderTripPackList() {
     });
   }
   document.getElementById('tripPackList').innerHTML = html;
+}
+
+function saveCurrentTrip() {
+  if (!tripAssigned.length || !tripStartVal) return;
+  var entry = {
+    name: tripName || '',
+    startVal: tripStartVal,
+    numDays: tripNumDays,
+    savedAt: new Date().toISOString(),
+    days: tripAssigned.map(function(a){
+      return {
+        day: a.day, dateLabel: a.dateLabel, temp: a.temp, cond: a.cond, estimated: !!a.estimated,
+        curId: a.curId, curThumb: a.curThumb, curTags: a.curTags || []
+      };
+    })
+  };
+  var existingIdx = savedTrips.findIndex(function(t){ return t.startVal === tripStartVal && t.numDays === tripNumDays; });
+  if (existingIdx !== -1) savedTrips[existingIdx] = entry;
+  else savedTrips.push(entry);
+  lsSet('looks_tina_trips_v1', JSON.stringify(savedTrips));
+  renderSavedTripsList();
+  showSavedToast('💾 Mala salva!');
+}
+
+function renderSavedTripsList() {
+  var box = document.getElementById('savedTripsList');
+  if (!box) return;
+  if (!savedTrips.length) {
+    box.innerHTML = '<div class="saved-trip-empty">Nenhuma mala salva ainda.</div>';
+    return;
+  }
+  var sorted = savedTrips.map(function(t, i){ return { t: t, i: i }; })
+    .sort(function(a,b){ return (b.t.savedAt||'').localeCompare(a.t.savedAt||''); });
+  var html = '';
+  sorted.forEach(function(entry){
+    var t = entry.t, i = entry.i;
+    var label = t.name || ('Viagem de ' + t.numDays + ' dia(s)');
+    var firstDay = t.days && t.days[0] ? t.days[0].dateLabel : '';
+    var lastDay = t.days && t.days.length ? t.days[t.days.length - 1].dateLabel : '';
+    html += '<div class="saved-trip-card" onclick="viewSavedTrip(' + i + ')">'
+      + '<div class="saved-trip-info">'
+      + '<div class="saved-trip-name">🧳 ' + label + '</div>'
+      + '<div class="saved-trip-dates">' + firstDay + (lastDay && lastDay !== firstDay ? (' – ' + lastDay) : '') + ' · ' + t.numDays + ' dia(s)</div>'
+      + '</div>'
+      + '<button class="saved-trip-del" onclick="event.stopPropagation();deleteSavedTrip(' + i + ')" title="Excluir">🗑️</button>'
+      + '</div>';
+  });
+  box.innerHTML = html;
+}
+
+function viewSavedTrip(idx) {
+  var t = savedTrips[idx];
+  if (!t) return;
+  tripAssigned = (t.days || []).map(function(d){
+    return { day: d.day, dateLabel: d.dateLabel, temp: d.temp, cond: d.cond, estimated: d.estimated,
+      curId: d.curId, curThumb: d.curThumb, curTags: d.curTags || [], allPool: [], poolIdx: 0 };
+  });
+  tripName = t.name || '';
+  tripStartVal = t.startVal;
+  tripNumDays = t.numDays;
+  tripHasEstimate = tripAssigned.some(function(a){ return a.estimated; });
+  tripViewOnly = true;
+
+  document.getElementById('tripHeaderTitle').textContent = tripName ? ('🧳 ' + tripName) : '🧳 Mala de viagem';
+  document.getElementById('tripFormStep').style.display = 'none';
+  document.getElementById('tripResultStep').style.display = 'block';
+  document.getElementById('tripSubtitle').innerHTML = tripAssigned.length + ' dia(s) de viagem · mala salva'
+    + (tripHasEstimate ? ' · <span style="color:#b35c00;">usava estimativa sazonal</span>' : '');
+  var saveBtn = document.getElementById('tripSaveBtn');
+  if (saveBtn) saveBtn.style.display = 'none';
+  renderTripDayList();
+  renderTripPackList();
+}
+
+function deleteSavedTrip(idx) {
+  if (!confirm('Excluir esta mala salva?')) return;
+  savedTrips.splice(idx, 1);
+  lsSet('looks_tina_trips_v1', JSON.stringify(savedTrips));
+  renderSavedTripsList();
 }
 
 function tripTitle() {
