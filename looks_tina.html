@@ -4569,12 +4569,14 @@ function pickTodaySuggestion() {
     return !p.archived && (p.tags||[]).length && p.lastWorn !== today && p.id !== todaySuggestionExcludeId;
   });
   if(!pool.length) return null;
-  var idRange = catalogIdRange();
+  // Clima é o critério principal; "novidade" aqui é peça que anda parada
+  // (recencyBonus), não peça recém-cadastrada no catálogo — por isso
+  // noveltyScore (que mede isso) não entra no cálculo desse pick diário.
   var scored = pool.map(function(p){
-    var score = weatherScore(p.tags, profile) * 2 + recencyBonus(p) + noveltyScore(p, idRange) * 4 + (p.favorite ? 1.5 : 0) + (p.rating||0) * 0.5;
+    var score = weatherScore(p.tags, profile) * 3 + recencyBonus(p) * 2 + (p.favorite ? 1.5 : 0) + (p.rating||0) * 0.5;
     return {p:p, score:score};
   }).sort(function(a,b){ return b.score - a.score; });
-  var topN = scored.slice(0, Math.min(5, scored.length));
+  var topN = scored.slice(0, Math.min(8, scored.length));
   var pick = topN[Math.floor(Math.random() * topN.length)];
   return {look: pick.p, forecast: fc};
 }
@@ -4756,9 +4758,9 @@ function buildTripAssignments(tripForecast) {
   tripAssigned = [];
 
   function score(p, profile) {
-    return weatherScore(p.tags, profile) * 2
+    return weatherScore(p.tags, profile) * 3
          + recencyBonus(p) * 2
-         + noveltyScore(p, idRange) * 3
+         + noveltyScore(p, idRange) * 0.5
          + ((p.tags||[]).some(function(t){ return t.toLowerCase().indexOf('viagem')!==-1 && t.toLowerCase().indexOf('ocasi')!==-1; }) ? 4 : 0)
          - diversityPenalty(p.tags, usedTagFreq);
   }
@@ -5153,11 +5155,14 @@ function proceedToStep2() {
     var outerPiece = outerForDay[f.day] || null;
 
     function score(p) {
+      // Clima é o critério principal; noveltyScore (id de cadastro no catálogo)
+      // fica só como desempate mínimo — não é isso que deve decidir a escolha,
+      // e competia demais com recencyBonus (peça parada de verdade).
       return pieceMatchScore(p, piecesArr) * 6
-           + weatherScore(p.tags, f.profile) * 2
+           + weatherScore(p.tags, f.profile) * 3
            + seasonScore(p.tags, weekSeason)
            + recencyBonus(p) * 2 * staleFactor
-           + noveltyScore(p, wizardIdRange) * 4
+           + noveltyScore(p, wizardIdRange) * 0.5
            + ocasiaoBoost(p, f.day)
            - diversityPenalty(p.tags, usedTagFreq);
     }
@@ -5197,7 +5202,7 @@ function proceedToStep2() {
     var outerPiece = ta.outerPiece;
 
     function scoreForPool(p) {
-      return pieceMatchScore(p, piecesArr) * 4 + weatherScore(p.tags, ta.profile) + seasonScore(p.tags, weekSeason) + recencyBonus(p) * staleFactor + noveltyScore(p, wizardIdRange) * 2;
+      return pieceMatchScore(p, piecesArr) * 4 + weatherScore(p.tags, ta.profile) * 2 + seasonScore(p.tags, weekSeason) + recencyBonus(p) * staleFactor + noveltyScore(p, wizardIdRange) * 0.5;
     }
 
     var pieceLabel = outerPiece
@@ -5262,10 +5267,10 @@ function regenerateAssignedDay(day) {
   var staleFactor = wizardPrioritizeStale ? 3 : 1;
   function score(p) {
     return pieceMatchScore(p, piecesArr) * 6
-         + weatherScore(p.tags, f.profile) * 2
+         + weatherScore(p.tags, f.profile) * 3
          + seasonScore(p.tags, weekSeason)
          + recencyBonus(p) * 2 * staleFactor
-         + noveltyScore(p, wizardIdRange) * 4
+         + noveltyScore(p, wizardIdRange) * 0.5
          + ocasiaoBoost(p, day) * 3
          - diversityPenalty(p.tags, usedTagFreq);
   }
@@ -5283,7 +5288,7 @@ function regenerateAssignedDay(day) {
   if (!best) return;
 
   function scoreForPool(p) {
-    return pieceMatchScore(p, piecesArr) * 4 + weatherScore(p.tags, f.profile) + seasonScore(p.tags, weekSeason) + recencyBonus(p) + noveltyScore(p, wizardIdRange) * 2 + ocasiaoBoost(p, day) * 2;
+    return pieceMatchScore(p, piecesArr) * 4 + weatherScore(p.tags, f.profile) * 2 + seasonScore(p.tags, weekSeason) + recencyBonus(p) + noveltyScore(p, wizardIdRange) * 0.5 + ocasiaoBoost(p, day) * 2;
   }
 
   var pieceLabel = (piecesArr.length ? (piecesArr.find(function(sp){
