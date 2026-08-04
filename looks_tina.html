@@ -385,6 +385,18 @@ body.week-pick-mode .card-week-btn { display: block; }
 .saved-trip-del { border: none; background: none; color: #bbb; cursor: pointer; font-size: .9rem; padding: 4px 6px; flex-shrink: 0; }
 .saved-trip-del:hover { color: #c0392b; }
 .saved-trip-empty { font-size: .78rem; color: #aaa; }
+.day-ocasiao-row { display: flex; gap: 3px; justify-content: center; padding: 5px 4px; border-top: 1px solid #f0ece6; flex-wrap: wrap; }
+.day-ocasiao-btn { border: 1px solid #e0d8ce; background: #fff; border-radius: 6px; font-size: .68rem; padding: 2px 5px; cursor: pointer; line-height: 1.3; color: #999; }
+.day-ocasiao-btn.active { background: #2d2d2d; border-color: #2d2d2d; color: #fff; }
+.assign-day-ocasiao { display: flex; gap: 3px; justify-content: center; padding: 4px 4px 0; flex-wrap: wrap; }
+.week-templates-card { display: flex; align-items: center; gap: 8px; background: #faf9f7; border-radius: 10px; padding: 8px 10px; margin-bottom: 6px; cursor: pointer; }
+.week-templates-card:hover { background: #f0ece6; }
+.week-templates-info { flex: 1; min-width: 0; }
+.week-templates-name { font-size: .82rem; font-weight: 600; color: #2d2d2d; }
+.week-templates-meta { font-size: .68rem; color: #888; margin-top: 1px; }
+.week-templates-del { border: none; background: none; color: #bbb; cursor: pointer; font-size: .9rem; padding: 4px 6px; flex-shrink: 0; }
+.week-templates-del:hover { color: #c0392b; }
+.week-templates-empty { font-size: .78rem; color: #aaa; }
 .assign-look { position: relative; }
 .assign-look img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
 .assign-look-nav { position: absolute; bottom: 0; left: 0; right: 0; display: flex; justify-content: space-between; background: rgba(0,0,0,.45); }
@@ -603,6 +615,7 @@ body.compare-mode .card-compare-btn { display: flex; }
     <button class="btn btn-ghost" onclick="clearWeek()">🗑 Limpar semana</button>
     <button class="btn btn-ghost" onclick="showSuggestions()" style="background:#f0f6ff;color:#2d5ccc;border-color:#c8d8f0">🌤️ Sugestão IA</button>
     <button class="btn btn-ghost" onclick="openTripWizard()" style="background:#fff4f0;color:#c2410c;border-color:#f0d0c0;">🧳 Mala de viagem</button>
+    <button class="btn btn-ghost" onclick="openWeekTemplates()" style="background:#f5f0ff;color:#6a3fc2;border-color:#ddd0f0;">📋 Semanas modelo</button>
     <button class="btn btn-ghost" onclick="saveWeekPhotos()" style="margin-left:auto;background:#f0fff4;color:#22a06b;border-color:#b2dfdb;">📁 Salvar fotos</button>
     <button class="btn btn-ghost" onclick="printWeekPlanFromWeek()">🖨️ Gerar PDF</button>
     <button class="btn btn-ghost" onclick="exportWeekToICS()" style="background:#f0f0ff;color:#5c35cc;border-color:#c8c0f0;">📅 Exportar .ics</button>
@@ -803,6 +816,26 @@ body.compare-mode .card-compare-btn { display: flex; }
           <button class="btn-back" onclick="printTripPlan()">🖨️ PDF</button>
           <button class="btn-back" onclick="emailTripPlan()">📧 Email</button>
         </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Semanas modelo salvas -->
+<div class="overlay" id="weekTemplatesOverlay" onclick="if(event.target===this) closeWeekTemplates()">
+  <div class="modal trip-modal">
+    <button class="close-btn" onclick="closeWeekTemplates()">✕</button>
+    <div class="modal-body">
+      <h3 style="margin-bottom:4px;">📋 Semanas modelo</h3>
+      <p style="font-size:.82rem;color:#888;margin:6px 0 14px;">Salve a semana atual como modelo (looks, notas, dias em casa e ocasiões) pra reaplicar depois — útil pra rotinas que se repetem.</p>
+      <div style="margin-bottom:14px;">
+        <label for="weekTemplateNameInput" style="font-size:.78rem;color:#666;">Nome do modelo</label><br>
+        <input type="text" id="weekTemplateNameInput" placeholder="Ex: Semana de trabalho padrão" style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:7px;font-size:.85rem;font-family:inherit;margin-top:3px;">
+      </div>
+      <button class="btn-next" onclick="saveCurrentWeekTemplate()">💾 Salvar semana atual como modelo</button>
+      <div style="margin-top:22px;padding-top:16px;border-top:1px solid #eee;">
+        <div style="font-size:.78rem;font-weight:700;color:#666;margin-bottom:8px;">📂 Modelos salvos</div>
+        <div id="weekTemplatesList"></div>
       </div>
     </div>
   </div>
@@ -1750,6 +1783,35 @@ function safeParse(json, fallback) { try { return JSON.parse(json); } catch(e) {
 var weekNotes = safeParse(lsGet('looks_tina_weeknotes_v1'), {}) || {};
 var weekCasaDays = safeParse(lsGet('looks_tina_casadays_v1'), {}) || {};
 var savedTrips = safeParse(lsGet('looks_tina_trips_v1'), []) || [];
+var weekDayOcasiao = safeParse(lsGet('looks_tina_dayocasiao_v1'), {}) || {}; // {day: 'casual'|'trabalho'|'festa'|'viagem'}
+var weekTemplates = safeParse(lsGet('looks_tina_weektemplates_v1'), []) || [];
+var DAY_OCASIAO_OPTS = [
+  {key:'casual', emoji:'👟', label:'Casual'},
+  {key:'trabalho', emoji:'💼', label:'Trabalho'},
+  {key:'festa', emoji:'🎉', label:'Festa'},
+  {key:'viagem', emoji:'✈️', label:'Viagem'}
+];
+
+function setDayOcasiao(day, key) {
+  weekDayOcasiao[day] = (weekDayOcasiao[day] === key) ? null : key;
+  if (!weekDayOcasiao[day]) delete weekDayOcasiao[day];
+  lsSet('looks_tina_dayocasiao_v1', JSON.stringify(weekDayOcasiao));
+  renderWeek();
+  if (assignedLooks && assignedLooks[day]) {
+    regenerateAssignedDay(day);
+  }
+}
+
+// Ocasião específica do dia tem prioridade; se não tiver, cai pro filtro
+// global (opcional) do assistente de sugestão (wizardOcasiao).
+function ocasiaoBoost(p, day) {
+  var oc = weekDayOcasiao[day] || wizardOcasiao;
+  if (!oc) return 0;
+  var isMatch = (p.tags||[]).some(function(t){
+    return t.toLowerCase().indexOf(oc)!==-1 && t.toLowerCase().indexOf('ocasi')!==-1;
+  });
+  return isMatch ? 4 : 0;
+}
 var compareList = [];
 var compareMode = false;
 var activeTagFilter = null; // exact full tag filter e.g. "calça: xadrez vichy amarelo verde"
@@ -2328,6 +2390,18 @@ function renderWeek() {
     nt.addEventListener('input', function(){ nt.style.height = 'auto'; nt.style.height = nt.scrollHeight + 'px'; });
     nt.addEventListener('blur', (function(d){ return function(){ saveWeekNote(d, nt.value.trim()); }; })(day));
     col.appendChild(nt);
+
+    // Ocasião do dia (influencia a Sugestão IA especificamente nesse dia)
+    var ocRow = document.createElement('div'); ocRow.className = 'day-ocasiao-row';
+    DAY_OCASIAO_OPTS.forEach(function(opt){
+      var b = document.createElement('button'); b.className = 'day-ocasiao-btn';
+      b.textContent = opt.emoji;
+      b.title = opt.label;
+      if (weekDayOcasiao[day] === opt.key) b.classList.add('active');
+      b.onclick = (function(d, k){ return function(e){ e.stopPropagation(); setDayOcasiao(d, k); }; })(day, opt.key);
+      ocRow.appendChild(b);
+    });
+    col.appendChild(ocRow);
 
     // Drop target on entire column (works for filled and empty slots)
     col.addEventListener('dragover', function(e) {
@@ -3950,7 +4024,7 @@ function exportData() {
 
 // Keyboard
 document.addEventListener('keydown', function(e){
-  if(e.key==='Escape'){ hideTagSuggestions(); closeViewModal(); closeEditModal(); closeTodaySuggestion(); closeTripWizard(); }
+  if(e.key==='Escape'){ hideTagSuggestions(); closeViewModal(); closeEditModal(); closeTodaySuggestion(); closeTripWizard(); closeWeekTemplates(); }
 });
 
 init();
@@ -4743,6 +4817,120 @@ function deleteSavedTrip(idx) {
   renderSavedTripsList();
 }
 
+// ── Semanas modelo salvas ──
+function openWeekTemplates() {
+  document.getElementById('weekTemplatesOverlay').classList.add('open');
+  renderWeekTemplatesList();
+}
+
+function closeWeekTemplates() {
+  document.getElementById('weekTemplatesOverlay').classList.remove('open');
+}
+
+function buildWeekSnapshot() {
+  return DAYS.map(function(day){
+    var look = data.find(function(p){ return p.weekday === day; });
+    return {
+      day: day,
+      pieceId: look ? look.id : null,
+      casa: !!weekCasaDays[day],
+      note: weekNotes[day] || '',
+      ocasiao: weekDayOcasiao[day] || null
+    };
+  });
+}
+
+function saveCurrentWeekTemplate() {
+  var nameInput = document.getElementById('weekTemplateNameInput');
+  var name = (nameInput.value || '').trim();
+  if (!name) { alert('Dá um nome pra essa semana modelo.'); return; }
+  var snapshot = buildWeekSnapshot();
+  if (!snapshot.some(function(d){ return d.pieceId || d.casa; })) {
+    alert('A semana está vazia — monte os looks antes de salvar como modelo.');
+    return;
+  }
+  var entry = { name: name, savedAt: new Date().toISOString(), days: snapshot };
+  var existingIdx = weekTemplates.findIndex(function(t){ return t.name === name; });
+  if (existingIdx !== -1) weekTemplates[existingIdx] = entry;
+  else weekTemplates.push(entry);
+  lsSet('looks_tina_weektemplates_v1', JSON.stringify(weekTemplates));
+  nameInput.value = '';
+  renderWeekTemplatesList();
+  showSavedToast('💾 Semana modelo salva!');
+}
+
+function renderWeekTemplatesList() {
+  var box = document.getElementById('weekTemplatesList');
+  if (!box) return;
+  if (!weekTemplates.length) {
+    box.innerHTML = '<div class="week-templates-empty">Nenhuma semana modelo salva ainda.</div>';
+    return;
+  }
+  var sorted = weekTemplates.map(function(t, i){ return { t: t, i: i }; })
+    .sort(function(a,b){ return (b.t.savedAt||'').localeCompare(a.t.savedAt||''); });
+  var html = '';
+  sorted.forEach(function(entry){
+    var t = entry.t, i = entry.i;
+    var filled = t.days.filter(function(d){ return d.pieceId || d.casa; }).length;
+    html += '<div class="week-templates-card" onclick="applyWeekTemplate(' + i + ')">'
+      + '<div class="week-templates-info">'
+      + '<div class="week-templates-name">📋 ' + t.name + '</div>'
+      + '<div class="week-templates-meta">' + filled + ' dia(s) preenchido(s)</div>'
+      + '</div>'
+      + '<button class="week-templates-del" onclick="event.stopPropagation();deleteWeekTemplate(' + i + ')" title="Excluir">🗑️</button>'
+      + '</div>';
+  });
+  box.innerHTML = html;
+}
+
+function applyWeekTemplate(idx) {
+  var t = weekTemplates[idx];
+  if (!t) return;
+  if (!confirm('Aplicar "' + t.name + '"? Isso substitui os looks da semana atual.')) return;
+
+  DAYS.forEach(function(day){
+    var cur = data.find(function(p){ return p.weekday === day; });
+    if (cur) cur.weekday = null;
+  });
+  weekCasaDays = {};
+  weekNotes = {};
+  weekDayOcasiao = {};
+
+  var missing = [];
+  t.days.forEach(function(d){
+    if (d.casa) {
+      weekCasaDays[d.day] = true;
+    } else if (d.pieceId) {
+      var look = data.find(function(p){ return p.id === d.pieceId; });
+      if (look && !look.archived) look.weekday = d.day;
+      else missing.push(d.day);
+    }
+    if (d.note) weekNotes[d.day] = d.note;
+    if (d.ocasiao) weekDayOcasiao[d.day] = d.ocasiao;
+  });
+
+  saveToStorage();
+  lsSet('looks_tina_casadays_v1', JSON.stringify(weekCasaDays));
+  lsSet('looks_tina_weeknotes_v1', JSON.stringify(weekNotes));
+  lsSet('looks_tina_dayocasiao_v1', JSON.stringify(weekDayOcasiao));
+  renderWeek();
+  renderGrid();
+  closeWeekTemplates();
+  showSavedToast('✓ Semana aplicada!');
+  if (missing.length) {
+    setTimeout(function(){
+      alert('Algumas peças dessa semana modelo não existem mais (arquivadas ou removidas): dia(s) ' + missing.join(', ') + ' ficaram vazios.');
+    }, 300);
+  }
+}
+
+function deleteWeekTemplate(idx) {
+  if (!confirm('Excluir esta semana modelo?')) return;
+  weekTemplates.splice(idx, 1);
+  lsSet('looks_tina_weektemplates_v1', JSON.stringify(weekTemplates));
+  renderWeekTemplatesList();
+}
+
 function tripTitle() {
   return tripName ? ('🧳 ' + tripName) : '🧳 Mala de Viagem — Tina';
 }
@@ -4847,7 +5035,7 @@ function proceedToStep2() {
            + seasonScore(p.tags, weekSeason)
            + recencyBonus(p) * 2
            + noveltyScore(p, wizardIdRange) * 4
-           + (wizardOcasiao && (p.tags||[]).some(function(t){ return t.toLowerCase().indexOf(wizardOcasiao)!==-1 && t.toLowerCase().indexOf('ocasi')!==-1; }) ? 4 : 0)
+           + ocasiaoBoost(p, f.day)
            - diversityPenalty(p.tags, usedTagFreq);
     }
 
@@ -4929,6 +5117,85 @@ function proceedToStep2() {
   renderAssignGrid();
 }
 
+// Regenera o look sugerido de UM único dia (usado quando a ocasião daquele
+// dia é marcada/trocada), sem mexer nos outros dias já escolhidos.
+function regenerateAssignedDay(day) {
+  var f = FORECAST.find(function(x){ return x.day === day; });
+  if (!f) return;
+  var weekSeason = detectWeekSeason();
+  var piecesArr = Array.from(selectedPieces);
+  var wizardIdRange = catalogIdRange();
+
+  var usedIds = new Set();
+  var usedTagFreq = {};
+  Object.keys(assignedLooks).forEach(function(d){
+    if (d === day) return;
+    var other = assignedLooks[d];
+    if (!other) return;
+    usedIds.add(other.curId);
+    (other.curTags||[]).forEach(function(t){ usedTagFreq[t.trim()] = (usedTagFreq[t.trim()]||0) + 1; });
+  });
+
+  function score(p) {
+    return pieceMatchScore(p, piecesArr) * 6
+         + weatherScore(p.tags, f.profile) * 2
+         + seasonScore(p.tags, weekSeason)
+         + recencyBonus(p) * 2
+         + noveltyScore(p, wizardIdRange) * 4
+         + ocasiaoBoost(p, day) * 3
+         - diversityPenalty(p.tags, usedTagFreq);
+  }
+
+  var pool = data.filter(function(p){
+    if (p.archived || usedIds.has(p.id)) return false;
+    if (piecesArr.length) return (p.tags||[]).some(function(t){ return piecesArr.indexOf(t.trim())!==-1; });
+    return (p.tags||[]).length > 0;
+  });
+  if (!pool.length) {
+    pool = data.filter(function(p){ return !p.archived && !usedIds.has(p.id) && (p.tags||[]).length>0; });
+  }
+  pool.sort(function(a,b){ return score(b)-score(a); });
+  var best = pool[0];
+  if (!best) return;
+
+  function scoreForPool(p) {
+    return pieceMatchScore(p, piecesArr) * 4 + weatherScore(p.tags, f.profile) + seasonScore(p.tags, weekSeason) + recencyBonus(p) + noveltyScore(p, wizardIdRange) * 2 + ocasiaoBoost(p, day) * 2;
+  }
+
+  var pieceLabel = (piecesArr.length ? (piecesArr.find(function(sp){
+        return (best.tags||[]).some(function(t){ return t.trim()===sp; });
+      }) || piecesArr[0]) : null)
+    || (best.tags||[]).find(function(t){
+         var cat = t.split(':')[0].trim().toLowerCase();
+         return t.indexOf(':') !== -1 && cat !== 'marca';
+       })
+    || 'peça: destaque do look';
+
+  var altsWithPiece = data.filter(function(p){
+    if (p.archived || p.id === best.id) return false;
+    if (piecesArr.length) return (p.tags||[]).some(function(t){ return piecesArr.indexOf(t.trim())!==-1; });
+    return true;
+  }).sort(function(a,b){ return scoreForPool(b)-scoreForPool(a); });
+
+  if (altsWithPiece.length < 5) {
+    var altIds = new Set(altsWithPiece.map(function(p){ return p.id; }));
+    altIds.add(best.id);
+    var pad = data.filter(function(p){
+      return !p.archived && !altIds.has(p.id) && (p.tags||[]).length>0;
+    }).sort(function(a,b){ return scoreForPool(b)-scoreForPool(a); }).slice(0, 8 - altsWithPiece.length);
+    altsWithPiece = altsWithPiece.concat(pad);
+  }
+
+  assignedLooks[day] = {
+    origId: best.id, curId: best.id,
+    curThumb: best.thumb || 'thumbs/' + best.id + '.jpg',
+    curTags: best.tags || [], piece: pieceLabel,
+    allPool: [best].concat(altsWithPiece.slice(0, 8)), poolIdx: 0
+  };
+
+  renderAssignGrid();
+}
+
 function renderAssignGrid() {
   var grid = document.getElementById('assignGrid');
   grid.innerHTML = '';
@@ -4971,6 +5238,17 @@ function renderAssignGrid() {
     var wx = document.createElement('div'); wx.className = 'assign-day-wx';
     wx.innerHTML = f.cond + '<br><span class="assign-day-temp">' + f.temp + '</span>';
     col.appendChild(wx);
+
+    var ocRow = document.createElement('div'); ocRow.className = 'assign-day-ocasiao';
+    DAY_OCASIAO_OPTS.forEach(function(opt){
+      var b = document.createElement('button'); b.className = 'day-ocasiao-btn';
+      b.textContent = opt.emoji;
+      b.title = opt.label + ' (prioriza esse estilo pra este dia)';
+      if (weekDayOcasiao[f.day] === opt.key) b.classList.add('active');
+      b.onclick = (function(d, k){ return function(e){ e.stopPropagation(); setDayOcasiao(d, k); }; })(f.day, opt.key);
+      ocRow.appendChild(b);
+    });
+    col.appendChild(ocRow);
 
     if(a) {
       var wrap = document.createElement('div'); wrap.className = 'assign-look';
