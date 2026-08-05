@@ -517,6 +517,16 @@ body.compare-mode .card-compare-btn { display: flex; }
 .pc-card-brand { font-size: .68rem; color: #6a3fc2; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; }
 .pc-card-name { font-size: .78rem; color: #2d2d2d; margin-top: 2px; line-height: 1.3; }
 .pc-card-meta { font-size: .68rem; color: #999; margin-top: 4px; }
+.pc-card.selected-piece { outline: 2px solid #6a3fc2; outline-offset: -2px; }
+.look-chip { position: relative; width: 92px; }
+.look-chip img { width: 92px; height: 92px; object-fit: contain; background: #fff; border-radius: 8px; border: 1px solid #eee; display:block; }
+.look-chip .chip-remove { position: absolute; top: -6px; right: -6px; background: #fff; border: 1px solid #ddd; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: .7rem; }
+.look-chip .chip-label { font-size: .62rem; color: #999; text-align: center; margin-top: 3px; }
+.montado-card { background:#fff;border-radius:12px;overflow:hidden;border:1.5px solid #ede9e4;cursor:pointer;transition:transform .15s, box-shadow .15s; }
+.montado-card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,.09); }
+.montado-collage { display:flex; flex-wrap:wrap; gap:4px; padding:10px; justify-content:center; background:#faf9f7; min-height:80px; align-items:center; }
+.montado-collage img { width:52px;height:52px;object-fit:contain;background:#fff;border-radius:6px;border:1px solid #eee; }
+
 .sim-score { position: absolute; bottom: 2px; right: 2px; background: rgba(0,0,0,.6); color: #fff; font-size: .55rem; border-radius: 4px; padding: 1px 4px; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
@@ -551,6 +561,7 @@ body.compare-mode .card-compare-btn { display: flex; }
   <div class="tab" id="tabCal" onclick="switchTab('cal')">🗓 Calendário</div>
   <div class="tab" id="tabImport" onclick="switchTab('import')">➕ Importar</div>
   <div class="tab" id="tabPecas" onclick="switchTab('pecas')">🧩 Peças (Alta)</div>
+  <div class="tab" id="tabMontados" onclick="switchTab('montados')">👗 Looks Montados</div>
 </div>
 
 <div id="catalogView">
@@ -2146,6 +2157,197 @@ function renderPecas() {
   });
 }
 
+// ── Looks Montados (a partir das Peças do Alta) ──
+var MONTADOS_STORAGE_KEY = 'looks_tina_montados_v1'; // storage separado - não compartilha nada com o catálogo (STORAGE_KEY) nem com PECAS_STORAGE_KEY
+var montagens = [];
+try {
+  montagens = JSON.parse(localStorage.getItem(MONTADOS_STORAGE_KEY)) || [];
+} catch (e) {
+  montagens = [];
+}
+
+var builderPieceIds = [];
+var builderActiveCat = '__all__';
+
+function saveMontagens() {
+  localStorage.setItem(MONTADOS_STORAGE_KEY, JSON.stringify(montagens));
+}
+
+function findPieceById(id) {
+  for (var i = 0; i < PIECES.length; i++) {
+    if (PIECES[i].id === id) return PIECES[i];
+  }
+  return null;
+}
+
+function renderLooksMontados() {
+  var grid = document.getElementById('montadosGrid');
+  var countEl = document.getElementById('montadosCount');
+  if (countEl) {
+    countEl.textContent = montagens.length + (montagens.length === 1 ? ' look montado' : ' looks montados');
+  }
+  if (!grid) return;
+  grid.innerHTML = '';
+  if (montagens.length === 0) {
+    grid.innerHTML = '<div class="no-results" style="grid-column:1/-1;">Nenhum look montado ainda. Clique em "➕ Novo Look" pra começar.</div>';
+    return;
+  }
+  montagens.slice().reverse().forEach(function(m) {
+    var card = document.createElement('div');
+    card.className = 'montado-card';
+    var imgs = m.pieceIds.map(function(id) {
+      var p = findPieceById(id);
+      if (!p) return '';
+      return '<img src="' + p.img + '" alt="" loading="lazy">';
+    }).join('');
+    card.innerHTML =
+      '<div class="montado-collage">' + imgs + '</div>' +
+      '<div class="pc-card-body">' +
+        '<div class="pc-card-name">' + (m.name ? m.name.replace(/</g,'&lt;') : 'Look sem nome') + '</div>' +
+        '<div class="pc-card-meta">' + m.pieceIds.length + (m.pieceIds.length === 1 ? ' peça' : ' peças') + '</div>' +
+      '</div>';
+    card.onclick = function() {
+      if (confirm('Excluir este look montado? (as peças não são afetadas)')) {
+        deleteMontagem(m.id);
+      }
+    };
+    grid.appendChild(card);
+  });
+}
+
+function deleteMontagem(id) {
+  montagens = montagens.filter(function(m) { return m.id !== id; });
+  saveMontagens();
+  renderLooksMontados();
+}
+
+function openLookBuilder() {
+  builderPieceIds = [];
+  builderActiveCat = '__all__';
+  var nameInput = document.getElementById('lookNameInput');
+  var searchInput = document.getElementById('builderSearch');
+  if (nameInput) nameInput.value = '';
+  if (searchInput) searchInput.value = '';
+  document.getElementById('lookBuilderOverlay').style.display = 'flex';
+  renderBuilderCanvas();
+  renderBuilderCatBar();
+  renderBuilderPicker();
+}
+
+function closeLookBuilder() {
+  document.getElementById('lookBuilderOverlay').style.display = 'none';
+}
+
+function renderBuilderCanvas() {
+  var canvas = document.getElementById('builderCanvas');
+  if (!canvas) return;
+  canvas.innerHTML = '';
+  if (builderPieceIds.length === 0) {
+    canvas.innerHTML = '<div style="color:#aaa;font-size:.85rem;padding:22px 10px;width:100%;text-align:center;">Clique nas peças abaixo pra adicionar ao look</div>';
+    return;
+  }
+  builderPieceIds.forEach(function(id) {
+    var p = findPieceById(id);
+    if (!p) return;
+    var chip = document.createElement('div');
+    chip.className = 'look-chip';
+    chip.innerHTML =
+      '<img src="' + p.img + '" alt="">' +
+      '<div class="chip-remove">✕</div>' +
+      '<div class="chip-label">' + p.category + '</div>';
+    chip.querySelector('.chip-remove').onclick = function(e) {
+      e.stopPropagation();
+      removePieceFromBuild(id);
+    };
+    canvas.appendChild(chip);
+  });
+}
+
+function renderBuilderCatBar() {
+  var bar = document.getElementById('builderCatBar');
+  if (!bar) return;
+  var cats = Array.from(new Set(PIECES.map(function(p) { return p.category; }))).sort();
+  bar.innerHTML = '';
+  var allPill = document.createElement('div');
+  allPill.className = 'pc-cat-pill' + (builderActiveCat === '__all__' ? ' active' : '');
+  allPill.textContent = 'Todas';
+  allPill.onclick = function() { builderActiveCat = '__all__'; renderBuilderCatBar(); renderBuilderPicker(); };
+  bar.appendChild(allPill);
+  cats.forEach(function(cat) {
+    var pill = document.createElement('div');
+    pill.className = 'pc-cat-pill' + (builderActiveCat === cat ? ' active' : '');
+    pill.textContent = cat;
+    pill.onclick = (function(c) { return function() { builderActiveCat = c; renderBuilderCatBar(); renderBuilderPicker(); }; })(cat);
+    bar.appendChild(pill);
+  });
+}
+
+function renderBuilderPicker() {
+  var searchEl = document.getElementById('builderSearch');
+  var q = searchEl ? searchEl.value.trim().toLowerCase() : '';
+  var list = PIECES.filter(function(p) {
+    if (builderActiveCat !== '__all__' && p.category !== builderActiveCat) return false;
+    if (q && (p.name + ' ' + p.brand + ' ' + p.color).toLowerCase().indexOf(q) === -1) return false;
+    return true;
+  });
+  var grid = document.getElementById('builderPickerGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  if (list.length === 0) {
+    grid.innerHTML = '<div class="no-results" style="grid-column:1/-1;">Nenhuma peça encontrada</div>';
+    return;
+  }
+  list.forEach(function(p) {
+    var isSelected = builderPieceIds.indexOf(p.id) !== -1;
+    var card = document.createElement('div');
+    card.className = 'pc-card' + (isSelected ? ' selected-piece' : '');
+    card.style.cursor = 'pointer';
+    card.innerHTML =
+      '<img src="' + p.img + '" alt="' + p.name.replace(/"/g,'&quot;') + '" loading="lazy">' +
+      '<div class="pc-card-body">' +
+        '<div class="pc-card-brand">' + p.brand + '</div>' +
+        '<div class="pc-card-name">' + p.name + '</div>' +
+      '</div>';
+    card.onclick = function() { toggleBuilderPiece(p.id); };
+    grid.appendChild(card);
+  });
+}
+
+function toggleBuilderPiece(id) {
+  var idx = builderPieceIds.indexOf(id);
+  if (idx === -1) {
+    builderPieceIds.push(id);
+  } else {
+    builderPieceIds.splice(idx, 1);
+  }
+  renderBuilderCanvas();
+  renderBuilderPicker();
+}
+
+function removePieceFromBuild(id) {
+  builderPieceIds = builderPieceIds.filter(function(x) { return x !== id; });
+  renderBuilderCanvas();
+  renderBuilderPicker();
+}
+
+function saveLookBuild() {
+  if (builderPieceIds.length === 0) {
+    alert('Adicione pelo menos uma peça antes de salvar.');
+    return;
+  }
+  var nameInput = document.getElementById('lookNameInput');
+  var name = nameInput ? nameInput.value.trim() : '';
+  montagens.push({
+    id: 'm_' + Date.now() + '_' + Math.floor(Math.random() * 100000),
+    name: name,
+    pieceIds: builderPieceIds.slice(),
+    createdAt: new Date().toISOString()
+  });
+  saveMontagens();
+  closeLookBuilder();
+  renderLooksMontados();
+}
+
 // ── Persistência local ──
 var STORAGE_KEY = 'looks_tina_catalog_v1';
 
@@ -3539,6 +3741,7 @@ function switchTab(tab) {
   document.getElementById('tabCal').classList.toggle('active', tab==='cal');
   document.getElementById('tabImport').classList.toggle('active', tab==='import');
   document.getElementById('tabPecas').classList.toggle('active', tab==='pecas');
+  document.getElementById('tabMontados').classList.toggle('active', tab==='montados');
   document.getElementById('catalogView').style.display = tab==='catalog' ? '' : 'none';
   document.getElementById('weekView').classList.toggle('show', tab==='week');
   document.getElementById('adminView').classList.toggle('show', tab==='admin');
@@ -3546,12 +3749,14 @@ function switchTab(tab) {
   document.getElementById('calView').style.display = tab==='cal' ? '' : 'none';
   document.getElementById('importView').style.display = tab==='import' ? '' : 'none';
   document.getElementById('pecasView').style.display = tab==='pecas' ? '' : 'none';
+  document.getElementById('montadosView').style.display = tab==='montados' ? '' : 'none';
   if (tab==='week') renderWeek();
   if (tab==='admin') renderAdmin();
   if (tab==='stats') renderStats();
   if (tab==='cal') renderCal();
   if (tab==='import') renderImportView();
   if (tab==='pecas') renderPecas();
+  if (tab==='montados') renderLooksMontados();
 }
 
 // ── Admin View ──
@@ -6941,6 +7146,43 @@ function applySuggestions() {
     <div id="pecasGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px;"></div>
   </div>
 </div>
+<div id="montadosView" style="display:none;padding:24px;">
+  <div style="max-width:1100px;margin:0 auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:4px;">
+      <div style="font-size:1.2rem;font-weight:700;">👗 Looks Montados</div>
+      <button class="btn btn-week" onclick="openLookBuilder()">➕ Novo Look</button>
+    </div>
+    <p style="color:#888;font-size:.82rem;margin-bottom:14px;">Monte looks combinando as peças importadas do Alta. Fica separado do catálogo de looks prontos e da lista de peças — nada aqui mexe no resto do app.</p>
+    <div id="montadosCount" style="font-size:.82rem;color:#888;margin-bottom:14px;"></div>
+    <div id="montadosGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;"></div>
+  </div>
+</div>
+
+<!-- ──── Look Builder Overlay ──── -->
+<div id="lookBuilderOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10001;align-items:flex-start;justify-content:center;padding:30px 16px;overflow-y:auto;" onclick="if(event.target===this)closeLookBuilder()">
+  <div style="background:#fff;max-width:920px;width:100%;border-radius:16px;padding:22px 24px 26px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <div style="font-size:1.1rem;font-weight:700;">Montar novo look</div>
+      <span style="cursor:pointer;font-size:1.4rem;line-height:1;" onclick="closeLookBuilder()">✕</span>
+    </div>
+    <div id="builderCanvas" style="display:flex;flex-wrap:wrap;gap:12px;min-height:110px;background:#faf9f7;border:1.5px dashed #ddd;border-radius:12px;padding:14px;margin-bottom:16px;align-items:flex-start;"></div>
+    <input type="text" id="lookNameInput" placeholder="Nome do look (opcional)" autocomplete="off"
+      style="width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid #ddd;border-radius:8px;margin-bottom:14px;font-family:inherit;font-size:.85rem;">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
+      <div class="search-wrap" style="max-width:280px;">
+        <span class="si">🔍</span>
+        <input type="text" id="builderSearch" placeholder="Buscar peça..." autocomplete="off" oninput="renderBuilderPicker()">
+      </div>
+    </div>
+    <div id="builderCatBar" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;"></div>
+    <div id="builderPickerGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;max-height:320px;overflow-y:auto;padding-right:4px;"></div>
+    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px;">
+      <button class="btn btn-ghost" onclick="closeLookBuilder()">Cancelar</button>
+      <button class="btn btn-week" onclick="saveLookBuild()">💾 Salvar look</button>
+    </div>
+  </div>
+</div>
+
 <!-- ──── Look Card Overlay ──── -->
 <div id="lookCardOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:10000;display:none;align-items:center;justify-content:center;padding:20px;" onclick="if(event.target===this)closeLookCard()">
   <div id="lookCardBox" style="background:#faf9f7;border-radius:16px;overflow:hidden;width:320px;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.4);position:relative;">
