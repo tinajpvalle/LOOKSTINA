@@ -506,6 +506,17 @@ body.compare-mode .card-compare-btn { display: flex; }
 .cmp-card-rm { display: block; width: 100%; background: rgba(255,255,255,.06); color: #888; border: none; font-size: .72rem; padding: 7px; cursor: pointer; font-family: inherit; text-align: center; }
 .cmp-card-rm:hover { background: rgba(255,255,255,.12); color: #fff; }
 .sim-look-wrap { position: relative; display: inline-block; }
+
+/* ── Peças (Alta import) ── */
+.pc-cat-pill { padding: 5px 13px; border-radius: 20px; font-size: .8rem; cursor: pointer; background: #f0ede8; color: #555; border: 1.5px solid transparent; user-select: none; }
+.pc-cat-pill.active { background: #6a3fc2; color: #fff; border-color: #6a3fc2; }
+.pc-card { background: #fff; border-radius: 12px; overflow: hidden; border: 1.5px solid #ede9e4; transition: transform .15s, box-shadow .15s; }
+.pc-card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,.09); }
+.pc-card img { width: 100%; aspect-ratio: 1; object-fit: contain; display: block; background: #faf9f7; }
+.pc-card-body { padding: 8px 10px 10px; }
+.pc-card-brand { font-size: .68rem; color: #6a3fc2; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; }
+.pc-card-name { font-size: .78rem; color: #2d2d2d; margin-top: 2px; line-height: 1.3; }
+.pc-card-meta { font-size: .68rem; color: #999; margin-top: 4px; }
 .sim-score { position: absolute; bottom: 2px; right: 2px; background: rgba(0,0,0,.6); color: #fff; font-size: .55rem; border-radius: 4px; padding: 1px 4px; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
@@ -539,6 +550,7 @@ body.compare-mode .card-compare-btn { display: flex; }
   <div class="tab" id="tabStats" onclick="switchTab('stats')">📊 Relatório</div>
   <div class="tab" id="tabCal" onclick="switchTab('cal')">🗓 Calendário</div>
   <div class="tab" id="tabImport" onclick="switchTab('import')">➕ Importar</div>
+  <div class="tab" id="tabPecas" onclick="switchTab('pecas')">🧩 Peças (Alta)</div>
 </div>
 
 <div id="catalogView">
@@ -1799,6 +1811,340 @@ const TOTAL = 851;
 const PROCESSED = 818;
 
 
+
+var PIECES = [
+  {id:'f489d580-4dac-4d4b-bd84-2e1550d8f736',img:'pecas/f489d580-4dac-4d4b-bd84-2e1550d8f736.png',brand:'A.P.C.',name:'Olive Green Wide Leg Canvas Pants',category:'Bottoms',color:'olive green'},
+  {id:'5c30abc3-6ac8-40b4-ac95-d8e059d644f0',img:'pecas/5c30abc3-6ac8-40b4-ac95-d8e059d644f0.png',brand:'Dior',name:'Olive Green Short Sleeve Jacket',category:'Outerwear',color:'olive green'},
+  {id:'8a770888-19f9-4418-ae74-64b64458c470',img:'pecas/8a770888-19f9-4418-ae74-64b64458c470.png',brand:'Benetton',name:'Navy Quilted V-neck Jacket',category:'Outerwear',color:'navy'},
+  {id:'3eb38420-444a-4a09-beab-564f5e81552a',img:'pecas/3eb38420-444a-4a09-beab-564f5e81552a.png',brand:'we-are',name:'Dark Blue Hooded Blazer',category:'Outerwear',color:'blue'},
+  {id:'b7439508-942b-42e9-acb3-81ac4ba5701c',img:'pecas/b7439508-942b-42e9-acb3-81ac4ba5701c.png',brand:'Christian Dior',name:'Green Canvas Patterned Tote Bag',category:'Bags',color:'green'},
+  {id:'67cadf00-a489-448e-baee-874b002a92be',img:'pecas/67cadf00-a489-448e-baee-874b002a92be.png',brand:'PAULA RAIA',name:'Gray Green Stripe Track Pants',category:'Bottoms',color:'gray'},
+  {id:'b9b3ff78-c132-417d-a327-b5b9af2fe223',img:'pecas/b9b3ff78-c132-417d-a327-b5b9af2fe223.png',brand:'PAULA RAIA',name:'Lime Green Zip Up Jacket',category:'Outerwear',color:'green'},
+  {id:'bf759cae-7f01-4110-a3c5-ea8368d82946',img:'pecas/bf759cae-7f01-4110-a3c5-ea8368d82946.png',brand:'Uniqlo',name:'Green Crewneck Long Sleeve',category:'Tops',color:'green'},
+  {id:'309f53a6-2c86-40f5-8df0-f33e44f21fa3',img:'pecas/309f53a6-2c86-40f5-8df0-f33e44f21fa3.png',brand:'no Brand',name:'Bright Pink Crew Neck Sweater',category:'Tops',color:'pink'},
+  {id:'dacd70a5-b378-47f0-a5a9-9bdf3d4f9e0c',img:'pecas/dacd70a5-b378-47f0-a5a9-9bdf3d4f9e0c.png',brand:'Ganni',name:'Dark Blue Wide Leg Trousers',category:'Bottoms',color:'blue'},
+  {id:'a30e6945-5c2d-4de1-a218-7d2c030e510e',img:'pecas/a30e6945-5c2d-4de1-a218-7d2c030e510e.png',brand:'Studio Nicholson',name:'Olive Green Wide Leg Pants',category:'Bottoms',color:'olive green'},
+  {id:'a3ff8045-b044-421d-a5bc-5756f85f1cff',img:'pecas/a3ff8045-b044-421d-a5bc-5756f85f1cff.png',brand:'UGG',name:'Taupe Velcro Strap Sandals',category:'Shoes',color:'gray'},
+  {id:'17311b43-a5da-45c3-8640-1fea9ed3a689',img:'pecas/17311b43-a5da-45c3-8640-1fea9ed3a689.png',brand:'no Brand',name:'Red White Striped T Shirt',category:'Tops',color:'red'},
+  {id:'948b7625-eed0-49af-b6c2-3db14666d1ff',img:'pecas/948b7625-eed0-49af-b6c2-3db14666d1ff.png',brand:'Bagbag',name:'Orange Leather Crossbody Bag',category:'Bags',color:'orange'},
+  {id:'92ef01a6-f62b-41ba-b840-183d7b447d8a',img:'pecas/92ef01a6-f62b-41ba-b840-183d7b447d8a.png',brand:'Moncler',name:'Navy Blue White Brown Striped Polo Shirt',category:'Tops',color:'navy'},
+  {id:'526eefd9-e8c0-4027-ad75-0f540e2d601a',img:'pecas/526eefd9-e8c0-4027-ad75-0f540e2d601a.png',brand:'Track and Field',name:'Calça Tec casa',category:'Bottoms',color:'gray'},
+  {id:'41dc8ff8-d94d-4edb-a8a5-fa1d03562322',img:'pecas/41dc8ff8-d94d-4edb-a8a5-fa1d03562322.png',brand:'R13',name:'Black and White Striped T-shirt',category:'Tops',color:'black'},
+  {id:'2e17b10a-5216-4b7a-a969-88cf9a52255c',img:'pecas/2e17b10a-5216-4b7a-a969-88cf9a52255c.png',brand:'no Brand',name:'White Ruffled Floral Appliqué Top',category:'Tops',color:'white'},
+  {id:'750d7472-0dd5-4492-8539-8476f10bb28a',img:'pecas/750d7472-0dd5-4492-8539-8476f10bb28a.png',brand:'Polo Ralph Lauren',name:'White Graphic Print Sweatpants',category:'Bottoms',color:'white'},
+  {id:'d1767ed5-1bc5-45fe-a124-7f2c55061577',img:'pecas/d1767ed5-1bc5-45fe-a124-7f2c55061577.png',brand:'no Brand',name:'Orange Flared Sweatpants Cotton Blend',category:'Bottoms',color:'orange'},
+  {id:'fa4f620f-302f-47b9-a581-ac4b03b21bc7',img:'pecas/fa4f620f-302f-47b9-a581-ac4b03b21bc7.png',brand:'no Brand',name:'Grey Wide Leg Sweatpants',category:'Bottoms',color:'gray'},
+  {id:'138ce5b2-d73b-45cc-a275-3e7966eeb197',img:'pecas/138ce5b2-d73b-45cc-a275-3e7966eeb197.png',brand:'PAULA RAIA',name:'Light Blue Green Trim Denim Pants',category:'Bottoms',color:'green'},
+  {id:'1f6945f2-b0bb-4848-aa83-6dedcd70c694',img:'pecas/1f6945f2-b0bb-4848-aa83-6dedcd70c694.png',brand:'De goeye',name:'Tie Dye Sweatpants',category:'Bottoms',color:'orange'},
+  {id:'023132d9-8ffd-4545-a413-1add1c3beb10',img:'pecas/023132d9-8ffd-4545-a413-1add1c3beb10.png',brand:'De goeye',name:'Beige High Waisted Belted Trousers',category:'Bottoms',color:'beige'},
+  {id:'3befe928-59cf-4db1-8a45-1bc757679bd8',img:'pecas/3befe928-59cf-4db1-8a45-1bc757679bd8.png',brand:'De goeye',name:'Cream Cotton Zip Hoodie',category:'Tops',color:'cream'},
+  {id:'9b48b597-ab46-4621-9fdc-ee3cf4dbbf14',img:'pecas/9b48b597-ab46-4621-9fdc-ee3cf4dbbf14.png',brand:'PAULA RAIA',name:'White Hooded Drawstring Jacket',category:'Outerwear',color:'white'},
+  {id:'8b529bc4-af67-445c-b76a-c39410d9c7ad',img:'pecas/8b529bc4-af67-445c-b76a-c39410d9c7ad.png',brand:'PAULA RAIA',name:'Red Ruffled Cotton Jacket',category:'Outerwear',color:'red'},
+  {id:'08302341-b59d-40cd-9510-030ba8136af8',img:'pecas/08302341-b59d-40cd-9510-030ba8136af8.png',brand:'PAULA RAIA',name:'Cream Short Sleeve Collared Shirt',category:'Tops',color:'cream'},
+  {id:'43e215ae-47a6-46da-a877-f8cc1ef2f0a7',img:'pecas/43e215ae-47a6-46da-a877-f8cc1ef2f0a7.png',brand:'PAULA RAIA',name:'Red Black Pink Checkered Shirt',category:'Tops',color:'red'},
+  {id:'a06aaa25-4384-48f7-876e-8cd7095e7d9c',img:'pecas/a06aaa25-4384-48f7-876e-8cd7095e7d9c.png',brand:'PAULA RAIA',name:'Tan Floral Print Long Sleeve Shirt',category:'Tops',color:'tan'},
+  {id:'e350e362-b545-4b3f-b988-83035ee3689f',img:'pecas/e350e362-b545-4b3f-b988-83035ee3689f.png',brand:'PAULA RAIA',name:'Burgundy Lace Cropped Jacket',category:'Outerwear',color:'maroon'},
+  {id:'3a6ecf36-a567-449e-8837-706ae747423e',img:'pecas/3a6ecf36-a567-449e-8837-706ae747423e.png',brand:'PAULA RAIA',name:'Sleeveless Plaid V-neck Blouse',category:'Tops',color:'red'},
+  {id:'1f64f1ab-f9bd-4609-959d-86133eb2a32f',img:'pecas/1f64f1ab-f9bd-4609-959d-86133eb2a32f.png',brand:'PAULA RAIA',name:'White Eyelet Ruffled Crop Shirt',category:'Tops',color:'white'},
+  {id:'3d927afa-41b3-4730-bdbc-1fcb24fb9ea0',img:'pecas/3d927afa-41b3-4730-bdbc-1fcb24fb9ea0.png',brand:'no Brand',name:'Blue Graphic Print Hoodie',category:'Tops',color:'blue'},
+  {id:'94264be9-00d1-490c-b066-965026dcbac2',img:'pecas/94264be9-00d1-490c-b066-965026dcbac2.png',brand:'MOUSSY',name:'Blue Textured Long Sleeve Polo',category:'Tops',color:'blue'},
+  {id:'4e2fa3ce-94e6-4ade-aa54-42d1ebea5e54',img:'pecas/4e2fa3ce-94e6-4ade-aa54-42d1ebea5e54.png',brand:'GREAT',name:'Gray Crewneck Sweatshirt',category:'Tops',color:'gray'},
+  {id:'74aadbc0-22c0-4a8b-9b24-e474fa5f3230',img:'pecas/74aadbc0-22c0-4a8b-9b24-e474fa5f3230.png',brand:'Helena Bordon',name:'Dark Green Sweatpants Drawstring Waist',category:'Bottoms',color:'green'},
+  {id:'9d01386b-afc9-43f0-a1ea-18a4c1977e45',img:'pecas/9d01386b-afc9-43f0-a1ea-18a4c1977e45.png',brand:'no Brand',name:'Gray Quarter Zip Fleece',category:'Outerwear',color:'gray'},
+  {id:'b12b4872-730f-4cef-87ac-e6209e2ff83d',img:'pecas/b12b4872-730f-4cef-87ac-e6209e2ff83d.png',brand:'STELLA NENDO',name:'Striped Long Sleeve Button Up Shirt',category:'Tops',color:'white'},
+  {id:'c0304015-2721-400b-8d04-07a83f018207',img:'pecas/c0304015-2721-400b-8d04-07a83f018207.png',brand:'BODE',name:'Light Green Script Button Up',category:'Tops',color:'green'},
+  {id:'77c04d4c-391d-4a67-8208-8ff481ff7eda',img:'pecas/77c04d4c-391d-4a67-8208-8ff481ff7eda.png',brand:'A niemeyer',name:'Two Tone Plaid Long Sleeve Shirt',category:'Tops',color:'white'},
+  {id:'cad4a53b-48c6-47b7-955e-f2e37ee0186e',img:'pecas/cad4a53b-48c6-47b7-955e-f2e37ee0186e.png',brand:'De goeye',name:'Navy Blue Striped Button Down Shirt',category:'Tops',color:'navy'},
+  {id:'a6eb4f67-a05b-47ed-9e57-fa4c5a6d73b3',img:'pecas/a6eb4f67-a05b-47ed-9e57-fa4c5a6d73b3.png',brand:'PAULA RAIA',name:'Black Ruffled Neck Long Sleeve Blouse',category:'Tops',color:'black'},
+  {id:'d0ee7241-3ba9-41a6-8a86-5983f7093bbd',img:'pecas/d0ee7241-3ba9-41a6-8a86-5983f7093bbd.png',brand:'De goeye',name:'Dark Blue Denim Shirt',category:'Tops',color:'blue'},
+  {id:'4cade22d-8966-463f-9b03-c98ad0228ebe',img:'pecas/4cade22d-8966-463f-9b03-c98ad0228ebe.png',brand:'Uniqlo',name:'Dark Blue Denim Short Sleeve Shirt',category:'Tops',color:'blue'},
+  {id:'edb4a5be-6e28-447d-a0b1-9e360d65c5e2',img:'pecas/edb4a5be-6e28-447d-a0b1-9e360d65c5e2.png',brand:'De goeye',name:'Green Linen Frayed Collar Shirt',category:'Tops',color:'green'},
+  {id:'45316a15-5ce9-45fb-b994-1088d14cd727',img:'pecas/45316a15-5ce9-45fb-b994-1088d14cd727.png',brand:'PAULA RAIA',name:'Red Plaid Short Sleeve Shirt',category:'Tops',color:'red'},
+  {id:'80d906bf-65e4-4ef7-97b0-963908fe5202',img:'pecas/80d906bf-65e4-4ef7-97b0-963908fe5202.png',brand:'A.P.C.',name:'Navy Blue Short Sleeve Button Up',category:'Tops',color:'navy'},
+  {id:'747a650f-4d3a-44b5-8dc9-bfb06461ddf1',img:'pecas/747a650f-4d3a-44b5-8dc9-bfb06461ddf1.png',brand:'De goeye',name:'Grey Plaid Short Sleeve Button Up',category:'Tops',color:'gray'},
+  {id:'d9ac6f39-e5a0-46ed-a690-35f479e9a5ba',img:'pecas/d9ac6f39-e5a0-46ed-a690-35f479e9a5ba.png',brand:'TWP',name:'Red Collared Cropped Button Up',category:'Tops',color:'red'},
+  {id:'021f3f72-3954-4c3d-8ab8-02f840e67638',img:'pecas/021f3f72-3954-4c3d-8ab8-02f840e67638.png',brand:'UGG',name:'Brown Suede Fur Lined Boots',category:'Shoes',color:'brown'},
+  {id:'0854fb49-8ccb-4d40-bb71-924a0da6eb73',img:'pecas/0854fb49-8ccb-4d40-bb71-924a0da6eb73.png',brand:'Massimo Dutti',name:'Brown Leather Bucket Bag',category:'Bags',color:'brown'},
+  {id:'5395ef97-a37e-4780-a99f-e42a2bbc07c4',img:'pecas/5395ef97-a37e-4780-a99f-e42a2bbc07c4.png',brand:'Buck Mason',name:'Olive Green Canvas Jacket',category:'Outerwear',color:'olive green'},
+  {id:'08b17603-f62c-488a-bd45-c75547dbb1b8',img:'pecas/08b17603-f62c-488a-bd45-c75547dbb1b8.png',brand:'Ka Store',name:'Tops',category:'Tops',color:'red'},
+  {id:'f3af88d2-fd09-4eaa-8ab0-e8846ed7f1d4',img:'pecas/f3af88d2-fd09-4eaa-8ab0-e8846ed7f1d4.png',brand:'no Brand',name:'Red Hooded Button Up Jacket',category:'Outerwear',color:'red'},
+  {id:'18b029b7-6543-4fa0-af02-21d640eab078',img:'pecas/18b029b7-6543-4fa0-af02-21d640eab078.png',brand:'Maxmara',name:'Pulôver',category:'Tops',color:'caramel'},
+  {id:'c922c36e-602a-432c-bb51-5a56e44dc058',img:'pecas/c922c36e-602a-432c-bb51-5a56e44dc058.png',brand:'Jumper 1234',name:'Orange Grey Black Camouflage Knit Sweater',category:'Tops',color:'black'},
+  {id:'9ba06882-9fc3-4dda-8df7-a31c17430660',img:'pecas/9ba06882-9fc3-4dda-8df7-a31c17430660.png',brand:'Miu Miu',name:'Beige Technical Fabric Suede Sandals',category:'Shoes',color:'beige'},
+  {id:'d4436d79-a424-440e-8278-1ec6e0901252',img:'pecas/d4436d79-a424-440e-8278-1ec6e0901252.png',brand:'GANNI',name:'Navy White Patterned Knit Sweater',category:'Tops',color:'white'},
+  {id:'ee39ec17-f5c3-4db4-8978-a39c95611a9d',img:'pecas/ee39ec17-f5c3-4db4-8978-a39c95611a9d.png',brand:'PAULA RAIA',name:'Maroon Knit Wrap Sweater',category:'Tops',color:'maroon'},
+  {id:'d2179814-ed74-40e9-8eae-909476cd9ccd',img:'pecas/d2179814-ed74-40e9-8eae-909476cd9ccd.png',brand:'PAULA RAIA',name:'Teal Wide Leg Textured Pants',category:'Bottoms',color:'teal'},
+  {id:'2c462867-15c9-4150-bda0-c5c9f6d1b56d',img:'pecas/2c462867-15c9-4150-bda0-c5c9f6d1b56d.png',brand:'PAULA RAIA',name:'Pink Paisley Wide Leg Pants',category:'Bottoms',color:'pink'},
+  {id:'457bb48e-994c-4dab-b1de-23a0b1a83d4e',img:'pecas/457bb48e-994c-4dab-b1de-23a0b1a83d4e.png',brand:'PAULA RAIA',name:'Green White Patterned Wide Leg Pants',category:'Bottoms',color:'green'},
+  {id:'1da13df5-7e86-433c-991d-01675a51477d',img:'pecas/1da13df5-7e86-433c-991d-01675a51477d.png',brand:'De goeye',name:'Black and White Striped Pants',category:'Bottoms',color:'black'},
+  {id:'0ee0701d-4f21-4a0d-81c7-94f8a9c595c3',img:'pecas/0ee0701d-4f21-4a0d-81c7-94f8a9c595c3.png',brand:'CELINE',name:'Striped Flared Denim Jeans',category:'Bottoms',color:'gray'},
+  {id:'abf045f0-1d42-49c5-ad7d-0ac448ccd3fe',img:'pecas/abf045f0-1d42-49c5-ad7d-0ac448ccd3fe.png',brand:'De goeye',name:'Plaid Tailored Straight Leg Trousers',category:'Bottoms',color:'gray'},
+  {id:'5e62e9f5-8cf4-42db-91ce-abb44ecf7bae',img:'pecas/5e62e9f5-8cf4-42db-91ce-abb44ecf7bae.png',brand:'De goeye',name:'Calça xadrez',category:'Bottoms',color:'yellow'},
+  {id:'5359341e-64c4-422b-8f66-4db89e7620ab',img:'pecas/5359341e-64c4-422b-8f66-4db89e7620ab.png',brand:'PAULA RAIA',name:'Checkered Elastic Waist Pants',category:'Bottoms',color:'red'},
+  {id:'5a8900e1-5c74-4356-bd62-9512fc36d321',img:'pecas/5a8900e1-5c74-4356-bd62-9512fc36d321.png',brand:'PAULA RAIA',name:'Black Pink Plaid Ruffled Culottes',category:'Bottoms',color:'black'},
+  {id:'6f18e3fd-81df-48ee-a446-6a26211dc05e',img:'pecas/6f18e3fd-81df-48ee-a446-6a26211dc05e.png',brand:'De goeye',name:'Striped High Waist Drawstring Pants',category:'Bottoms',color:'navy'},
+  {id:'b2cb66d2-36f1-44af-be53-cb6faa07b4ee',img:'pecas/b2cb66d2-36f1-44af-be53-cb6faa07b4ee.png',brand:'Hercovitch',name:'Green Plaid Wide Leg Pants',category:'Bottoms',color:'green'},
+  {id:'3c3fce6c-f64e-430a-b8de-90332ef5206b',img:'pecas/3c3fce6c-f64e-430a-b8de-90332ef5206b.png',brand:'PAULA RAIA',name:'Purple Wide Leg Pleated Trousers',category:'Bottoms',color:'purple'},
+  {id:'04c38a55-20c6-43e9-9788-f331a0780db5',img:'pecas/04c38a55-20c6-43e9-9788-f331a0780db5.png',brand:'De goeye',name:'Plaid Cutout Zipper Trim Trousers',category:'Bottoms',color:'gray'},
+  {id:'932a6dd1-cdb6-4dea-b763-cc26a011edd7',img:'pecas/932a6dd1-cdb6-4dea-b763-cc26a011edd7.png',brand:'PAULA RAIA',name:'Black Floral Wide Leg Trousers',category:'Bottoms',color:'black'},
+  {id:'1022f6c8-0b58-442b-940f-0698613eac7f',img:'pecas/1022f6c8-0b58-442b-940f-0698613eac7f.png',brand:'De goeye',name:'Brown Striped Wide Leg Pants',category:'Bottoms',color:'brown'},
+  {id:'fc9ea0c0-c7fd-4496-aaa5-5616c08d0ef1',img:'pecas/fc9ea0c0-c7fd-4496-aaa5-5616c08d0ef1.png',brand:'PAULA RAIA',name:'Pink and Cream Checkered Knit Cardigan',category:'Tops',color:'pink'},
+  {id:'98c9dd53-79e1-4064-af87-bdb966351688',img:'pecas/98c9dd53-79e1-4064-af87-bdb966351688.png',brand:'PAULA RAIA',name:'Olive Green Textured Knit Cardigan',category:'Tops',color:'olive green'},
+  {id:'62c9a065-8efb-426e-9d6d-a5fd8530e628',img:'pecas/62c9a065-8efb-426e-9d6d-a5fd8530e628.png',brand:'no Brand',name:'Cream Cable Knit Cardigan',category:'Tops',color:'cream'},
+  {id:'61d749a2-225c-42d2-9003-3695744e087b',img:'pecas/61d749a2-225c-42d2-9003-3695744e087b.png',brand:'PAULA RAIA',name:'Green Patterned Hooded Sweatshirt',category:'Tops',color:'green'},
+  {id:'a135bad4-4e7e-4082-b4f4-9d7b68f8b534',img:'pecas/a135bad4-4e7e-4082-b4f4-9d7b68f8b534.png',brand:'De goeye',name:'Textured Knit Cardigan',category:'Tops',color:'red'},
+  {id:'58e6c439-45d7-4fcf-a48c-322b1d47c6a5',img:'pecas/58e6c439-45d7-4fcf-a48c-322b1d47c6a5.png',brand:'De goeye',name:'Navy Plaid Wide Leg Pants',category:'Bottoms',color:'navy'},
+  {id:'d0836569-37ef-4212-83cf-3960aa8b4178',img:'pecas/d0836569-37ef-4212-83cf-3960aa8b4178.png',brand:'De goeye',name:'Cream Wide Leg Denim Pants',category:'Bottoms',color:'cream'},
+  {id:'b1a6bdbd-d0dc-404b-b512-c092e983c467',img:'pecas/b1a6bdbd-d0dc-404b-b512-c092e983c467.png',brand:'DE GOEYE',name:'Cream Jacket Black Tie Dye',category:'Outerwear',color:'cream'},
+  {id:'7c51e6e5-c1cd-4e1c-84d4-a88c5668e7f0',img:'pecas/7c51e6e5-c1cd-4e1c-84d4-a88c5668e7f0.png',brand:'Ka Store',name:'Red Paisley Quilted Short Sleeve Jacket',category:'Outerwear',color:'red'},
+  {id:'ad28d475-ee99-444c-af56-247013da5bac',img:'pecas/ad28d475-ee99-444c-af56-247013da5bac.png',brand:'PAULA RAIA',name:'Pink Green Plaid Long Sleeve Shirt',category:'Tops',color:'pink'},
+  {id:'b758855c-985f-4611-9af7-0ba752093d39',img:'pecas/b758855c-985f-4611-9af7-0ba752093d39.png',brand:'RALPH LAUREN',name:'Brown Fuzzy Knit Vest',category:'Tops',color:'brown'},
+  {id:'2c34f520-2e7d-4dff-9628-d9dff1ede13a',img:'pecas/2c34f520-2e7d-4dff-9628-d9dff1ede13a.png',brand:'DISTINCTION',name:'Houndstooth Print Cropped Jacket',category:'Outerwear',color:'brown'},
+  {id:'de92e58f-b678-42ab-a337-2d3bbb9cda97',img:'pecas/de92e58f-b678-42ab-a337-2d3bbb9cda97.png',brand:'no Brand',name:'Vest',category:'Tops',color:'pink'},
+  {id:'eeef4844-b99d-4718-ac06-f246999a442a',img:'pecas/eeef4844-b99d-4718-ac06-f246999a442a.png',brand:'LIZ LISA',name:'Black Textured Knit Sweater',category:'Tops',color:'black'},
+  {id:'2d5cc20a-350a-4258-a3c1-f3f4a0b99852',img:'pecas/2d5cc20a-350a-4258-a3c1-f3f4a0b99852.png',brand:'no Brand',name:'Navy Mock Neck Long Sleeve Top',category:'Tops',color:'navy'},
+  {id:'10e8dc60-57f3-45b4-a6db-491d1dbb4260',img:'pecas/10e8dc60-57f3-45b4-a6db-491d1dbb4260.png',brand:'Portugal',name:'Dark Green Plaid Trousers',category:'Bottoms',color:'green'},
+  {id:'2af15325-cbb6-4259-a88b-0bb807c94436',img:'pecas/2af15325-cbb6-4259-a88b-0bb807c94436.png',brand:'MOUSSY',name:'Light Wash Denim Straight Leg Jeans',category:'Bottoms',color:'blue'},
+  {id:'8be3801c-a71c-4bf7-8c4a-7ee7e6d3bdf2',img:'pecas/8be3801c-a71c-4bf7-8c4a-7ee7e6d3bdf2.png',brand:'PAULA RAIA',name:'Orange Textured Ruffle Button Down',category:'Tops',color:'orange'},
+  {id:'8eee435d-ac1c-4e19-9319-daa0885257d8',img:'pecas/8eee435d-ac1c-4e19-9319-daa0885257d8.png',brand:'Waiwai',name:'Brown Leather Crisscross Strap Sandals',category:'Shoes',color:'brown'},
+  {id:'314a7224-0f4c-4db9-8b35-a448e89fd770',img:'pecas/314a7224-0f4c-4db9-8b35-a448e89fd770.png',brand:'PAULA RAIA',name:'Pink Long Sleeve Cotton Crewneck',category:'Tops',color:'pink'},
+  {id:'050b80ed-ab87-4db4-b023-b1c319f40cd2',img:'pecas/050b80ed-ab87-4db4-b023-b1c319f40cd2.png',brand:'Massimo Dutti',name:'Burgundy Woven Leather Shoulder Bag',category:'Bags',color:'maroon'},
+  {id:'f79975ec-f020-485d-9d79-2e6f30ff32fc',img:'pecas/f79975ec-f020-485d-9d79-2e6f30ff32fc.png',brand:'Toteme',name:'White Leather Structured Tote Bag',category:'Bags',color:'white'},
+  {id:'af584c62-d6a8-4c01-ba8c-4f2ac0a5a76d',img:'pecas/af584c62-d6a8-4c01-ba8c-4f2ac0a5a76d.png',brand:'no Brand',name:'Beige Midi Skirt with Buttons',category:'Bottoms',color:'beige'},
+  {id:'cde86e3a-866c-4411-b234-7028947caa3c',img:'pecas/cde86e3a-866c-4411-b234-7028947caa3c.png',brand:'Saint Laurent',name:'Quilted Denim Crossbody Bag',category:'Bags',color:'blue'},
+  {id:'12089db4-e086-465e-a755-7ff0fd54b07f',img:'pecas/12089db4-e086-465e-a755-7ff0fd54b07f.png',brand:'Botti',name:'Gold Metallic Slide Sandals',category:'Shoes',color:'gold'},
+  {id:'792b1766-7a0e-4955-957a-ae46f8267798',img:'pecas/792b1766-7a0e-4955-957a-ae46f8267798.png',brand:'De Goeye',name:'Purple Pleated Wide Leg Shorts',category:'Bottoms',color:'purple'},
+  {id:'974e129b-fe15-40e7-894f-057fa235c777',img:'pecas/974e129b-fe15-40e7-894f-057fa235c777.png',brand:'PAULA RAIA',name:'Mauve Short Sleeve Crewneck Tee',category:'Tops',color:'gray'},
+  {id:'45d81295-a8bc-4416-a2e1-a20541090bd3',img:'pecas/45d81295-a8bc-4416-a2e1-a20541090bd3.png',brand:'Valentino',name:'Tan Suede Studded Belt Bag',category:'Bags',color:'tan'},
+  {id:'81d45ee4-d8fd-4318-94ae-27fd65671d07',img:'pecas/81d45ee4-d8fd-4318-94ae-27fd65671d07.png',brand:'Salvatore Ferragamo',name:'Beige Leather Slip on Loafers',category:'Shoes',color:'beige'},
+  {id:'f42ff22d-c615-44ae-998f-7e2551b245c5',img:'pecas/f42ff22d-c615-44ae-998f-7e2551b245c5.png',brand:'Zara',name:'Cream Textured Boucle Jacket',category:'Outerwear',color:'cream'},
+  {id:'a0c4f8b9-4e86-413b-8458-54286533d846',img:'pecas/a0c4f8b9-4e86-413b-8458-54286533d846.png',brand:'Loewe',name:'Pink Leather Bow Mule Flat',category:'Shoes',color:'pink'},
+  {id:'4a787409-8573-4231-a293-715105f4876f',img:'pecas/4a787409-8573-4231-a293-715105f4876f.png',brand:'Valentino',name:'Black White Patterned Canvas Sneakers',category:'Shoes',color:'white'},
+  {id:'84ce80a4-fe8f-4590-8099-a6f1e4d6cfe5',img:'pecas/84ce80a4-fe8f-4590-8099-a6f1e4d6cfe5.png',brand:'PAULA RAIA',name:'Red Plaid Wide Leg Pants',category:'Bottoms',color:'red'},
+  {id:'cdf3a3ad-3b0e-43de-afc0-ed03e2b1272d',img:'pecas/cdf3a3ad-3b0e-43de-afc0-ed03e2b1272d.png',brand:'Hoka',name:'Black Athletic Running Shoes',category:'Shoes',color:'black'},
+  {id:'0975d9a4-ceed-4f9e-a592-7b8c0264ed38',img:'pecas/0975d9a4-ceed-4f9e-a592-7b8c0264ed38.png',brand:'GANNI',name:'Pink Graphic Print T Shirt',category:'Tops',color:'pink'},
+  {id:'f762c82f-f8c0-4af3-8e43-e94304e10b86',img:'pecas/f762c82f-f8c0-4af3-8e43-e94304e10b86.png',brand:'Ysl',name:'Dark Brown Suede Penny Loafers',category:'Shoes',color:'brown'},
+  {id:'67a52a00-2902-4efc-b6ee-47804c84f9f6',img:'pecas/67a52a00-2902-4efc-b6ee-47804c84f9f6.png',brand:'PAULA RAIA',name:'Red Brown Plaid Textured Blazer',category:'Outerwear',color:'brown'},
+  {id:'39201276-07a7-4508-8c4b-11da14a5c6e2',img:'pecas/39201276-07a7-4508-8c4b-11da14a5c6e2.png',brand:'GANNI',name:'Black Short Sleeve Blazer',category:'Outerwear',color:'black'},
+  {id:'788835b8-7910-4193-9ec2-84977f2717a0',img:'pecas/788835b8-7910-4193-9ec2-84977f2717a0.png',brand:'PAULA RAIA',name:'Black Open Knit Long Sleeve Top',category:'Tops',color:'black'},
+  {id:'2cc09c78-b321-4f2b-b297-959476fb69da',img:'pecas/2cc09c78-b321-4f2b-b297-959476fb69da.png',brand:'DE GOEYE',name:'Purple Short Sleeve Frayed Collar Top',category:'Tops',color:'purple'},
+  {id:'df5b3b12-2ef3-4cf4-a537-e5e570d406cb',img:'pecas/df5b3b12-2ef3-4cf4-a537-e5e570d406cb.png',brand:'Maria',name:'Black Braided Leather Belt',category:'Accessories',color:'black'},
+  {id:'48b8072a-09ac-436e-8983-b39fe88866f1',img:'pecas/48b8072a-09ac-436e-8983-b39fe88866f1.png',brand:'PAULA RAIA',name:'Orange Textured Ruffled Long Sleeve',category:'Tops',color:'orange'},
+  {id:'ef4d5f90-cdd3-41bd-95fc-59938e9c2e86',img:'pecas/ef4d5f90-cdd3-41bd-95fc-59938e9c2e86.png',brand:'BOTTI',name:'Brown Leather Pointed Toe Flats',category:'Shoes',color:'brown'},
+  {id:'c45de0aa-5836-427c-a871-2ea1204be63e',img:'pecas/c45de0aa-5836-427c-a871-2ea1204be63e.png',brand:'LESET',name:'White Crew Neck T-shirt',category:'Tops',color:'white'},
+  {id:'77a69deb-13fe-4495-8017-d46cd7e6170b',img:'pecas/77a69deb-13fe-4495-8017-d46cd7e6170b.png',brand:'Augusta',name:'Black Sleeveless Ribbed Tank Top',category:'Tops',color:'black'},
+  {id:'3e2f198a-b67b-4787-8276-3879966646ec',img:'pecas/3e2f198a-b67b-4787-8276-3879966646ec.png',brand:'PAULA RAIA',name:'Brown Floral Print Wide Leg',category:'Bottoms',color:'brown'},
+  {id:'d8ab3cda-be2d-4932-9701-39be97a369ff',img:'pecas/d8ab3cda-be2d-4932-9701-39be97a369ff.png',brand:'De goeye',name:'Green Corduroy Wide Leg Pants',category:'Bottoms',color:'green'},
+  {id:'588d477c-15a7-4181-8457-4698fc4e261e',img:'pecas/588d477c-15a7-4181-8457-4698fc4e261e.png',brand:'Bottega Veneta',name:'Brown Woven Leather Crossbody Bag',category:'Bags',color:'brown'},
+  {id:'f8d20a1d-08f9-48f4-a609-4fa8ccec4490',img:'pecas/f8d20a1d-08f9-48f4-a609-4fa8ccec4490.png',brand:'Margareth howatt',name:'Brown Plaid Short Sleeve Button Up',category:'Tops',color:'brown'},
+  {id:'177535ab-9186-45a7-94bb-1f2e1b61c2a4',img:'pecas/177535ab-9186-45a7-94bb-1f2e1b61c2a4.png',brand:'BAUM UND PFERDGARTEN',name:'Striped Collared Polo Shirt',category:'Tops',color:'black'},
+  {id:'4b75ffda-04d0-4d97-88b1-e5ea51686026',img:'pecas/4b75ffda-04d0-4d97-88b1-e5ea51686026.png',brand:'COS',name:'Cream Knit Sleeveless Top',category:'Tops',color:'cream'},
+  {id:'9fd6d443-c3d1-4357-a62e-42f9e0d4d553',img:'pecas/9fd6d443-c3d1-4357-a62e-42f9e0d4d553.png',brand:'Dior',name:'Light Blue Short Sleeve Jacket',category:'Outerwear',color:'blue'},
+  {id:'fe0c0b11-9a77-4fc2-ab9f-48d1e273814e',img:'pecas/fe0c0b11-9a77-4fc2-ab9f-48d1e273814e.png',brand:'De goeye',name:'Teal Tie Dye Velvet Maxi Skirt',category:'Bottoms',color:'teal'},
+  {id:'bbc89a5d-2a61-495d-8417-c0cb074a7005',img:'pecas/bbc89a5d-2a61-495d-8417-c0cb074a7005.png',brand:'De Goeye',name:'Navy Blue Cropped Jacket',category:'Outerwear',color:'navy'},
+  {id:'691eca1c-acf3-477e-9000-53b310987847',img:'pecas/691eca1c-acf3-477e-9000-53b310987847.png',brand:'Zimerman',name:'Pink White Plaid Cotton Cargo Pants',category:'Bottoms',color:'pink'},
+  {id:'382e851c-a54d-4e80-a5b6-cefe7a5b9da9',img:'pecas/382e851c-a54d-4e80-a5b6-cefe7a5b9da9.png',brand:'Marni',name:'Blue Plaid Straight Leg Trousers',category:'Bottoms',color:'blue'},
+  {id:'47790d7c-cf92-431d-bc08-c78f50b68962',img:'pecas/47790d7c-cf92-431d-bc08-c78f50b68962.png',brand:'PAULA RAIA',name:'Cream Polka Dot Jacket',category:'Outerwear',color:'cream'},
+  {id:'720e8e0e-da1a-4d9f-b50e-722a65f3d6eb',img:'pecas/720e8e0e-da1a-4d9f-b50e-722a65f3d6eb.png',brand:'PAULA RAIA',name:'Beige Polka Dot Wide Leg Pants',category:'Bottoms',color:'beige'},
+  {id:'cb7057bc-d727-439f-82ea-1162a438dece',img:'pecas/cb7057bc-d727-439f-82ea-1162a438dece.png',brand:'PAULA RAIA',name:'Cream Long Sleeve Polo',category:'Tops',color:'cream'},
+  {id:'1d844b11-ffe2-4bef-8f2b-8e1dc45d3622',img:'pecas/1d844b11-ffe2-4bef-8f2b-8e1dc45d3622.png',brand:'Gucci',name:'Black Leather Penny Loafers',category:'Shoes',color:'black'},
+  {id:'9626e1c8-699b-4e65-8bee-c6ba575d3b47',img:'pecas/9626e1c8-699b-4e65-8bee-c6ba575d3b47.png',brand:'PAULA RAIA',name:'Black Open Knit Long Sleeve',category:'Tops',color:'black'},
+  {id:'37d0fd3f-10a2-4cdc-979e-ceed880ab4c6',img:'pecas/37d0fd3f-10a2-4cdc-979e-ceed880ab4c6.png',brand:'Giup',name:'Tan Suede Mary Jane Flats',category:'Shoes',color:'tan'},
+  {id:'e44cff01-88e2-4d57-a820-aedcaa021cd8',img:'pecas/e44cff01-88e2-4d57-a820-aedcaa021cd8.png',brand:'Botti',name:'Two Tone Crochet Flat Shoes',category:'Shoes',color:'beige'},
+  {id:'d9d34783-0aa3-4772-b2fc-a855ff29383e',img:'pecas/d9d34783-0aa3-4772-b2fc-a855ff29383e.png',brand:'Barneys New York',name:'Beige Crewneck Cashmere Sweater',category:'Tops',color:'beige'},
+  {id:'66b060f0-a8f4-44fa-bc91-232dff17c244',img:'pecas/66b060f0-a8f4-44fa-bc91-232dff17c244.png',brand:'Loro Piana',name:'Tan Suede Tassel Loafers',category:'Shoes',color:'tan'},
+  {id:'49db6742-992f-4631-8e13-f26e4991a32c',img:'pecas/49db6742-992f-4631-8e13-f26e4991a32c.png',brand:'J.CREW',name:'Cream Textured Knit Sweater',category:'Tops',color:'cream'},
+  {id:'4d4ddad6-15d2-4af7-b423-81644bb2d7b0',img:'pecas/4d4ddad6-15d2-4af7-b423-81644bb2d7b0.png',brand:'DE GOEYE',name:'Striped Metallic Wide Leg Pants',category:'Bottoms',color:'black'},
+  {id:'4681776b-2faa-44a8-aefd-a6300016dadf',img:'pecas/4681776b-2faa-44a8-aefd-a6300016dadf.png',brand:'Nike',name:'Beige Mesh Athletic Sneakers',category:'Shoes',color:'beige'},
+  {id:'b0cb2222-0489-42d5-8d10-50e2aca9c84c',img:'pecas/b0cb2222-0489-42d5-8d10-50e2aca9c84c.png',brand:'Valentino',name:'Brown Leather Gladiator Sandals',category:'Shoes',color:'brown'},
+  {id:'fd498f55-7ed6-4bc6-afcc-06c9c9082e09',img:'pecas/fd498f55-7ed6-4bc6-afcc-06c9c9082e09.png',brand:'ORGANIC',name:'Navy Blue V-neck Cardigan',category:'Tops',color:'navy'},
+  {id:'df3a4479-c48d-470d-80ac-494ca3695881',img:'pecas/df3a4479-c48d-470d-80ac-494ca3695881.png',brand:'Valextra',name:'Tan Leather Shoulder Bag',category:'Bags',color:'tan'},
+  {id:'b9d45d5a-cd98-4732-acee-123eeecd7bda',img:'pecas/b9d45d5a-cd98-4732-acee-123eeecd7bda.png',brand:'PAULA RAIA',name:'Maroon Graphic Pocket T-shirt',category:'Tops',color:'maroon'},
+  {id:'eb04f1b6-6780-46de-bb25-7768f801c07c',img:'pecas/eb04f1b6-6780-46de-bb25-7768f801c07c.png',brand:'Champion',name:'Red Crew Neck T Shirt',category:'Tops',color:'red'},
+  {id:'ab932368-86cf-4e9c-b4c1-f80b1fed6211',img:'pecas/ab932368-86cf-4e9c-b4c1-f80b1fed6211.png',brand:'The Row',name:'Cream Canvas Lace Up Sneakers',category:'Shoes',color:'cream'},
+  {id:'6c61b67e-92f6-4035-851a-17c0b03a56e4',img:'pecas/6c61b67e-92f6-4035-851a-17c0b03a56e4.png',brand:'Goyard',name:'Green Monogram Shoulder Bag',category:'Bags',color:'green'},
+  {id:'bb366c2f-bd8e-4705-b922-217a6b76ca06',img:'pecas/bb366c2f-bd8e-4705-b922-217a6b76ca06.png',brand:'MHL',name:'Red Crew Neck T Shirt',category:'Tops',color:'red'},
+  {id:'442b3b39-b4cc-4d0b-abd6-38c63962dcec',img:'pecas/442b3b39-b4cc-4d0b-abd6-38c63962dcec.png',brand:'Madewell',name:'Black Ribbed Knit Tank Top',category:'Tops',color:'black'},
+  {id:'1e65d4c6-6a12-4bbe-b2d1-188609c04fed',img:'pecas/1e65d4c6-6a12-4bbe-b2d1-188609c04fed.png',brand:'Miu Miu',name:'Tan Suede Lace Up Sneakers',category:'Shoes',color:'tan'},
+  {id:'348010ef-e439-4621-b35b-ccc49b97c96c',img:'pecas/348010ef-e439-4621-b35b-ccc49b97c96c.png',brand:'De goeye',name:'Brown Speckled Wide Leg Pants',category:'Bottoms',color:'brown'},
+  {id:'61cb0671-75d9-4a8f-960f-9d592626cfc9',img:'pecas/61cb0671-75d9-4a8f-960f-9d592626cfc9.png',brand:'PAULA RAIA',name:'Dark Brown Graphic T Shirt',category:'Tops',color:'brown'},
+  {id:'5e0727ee-bbd2-4451-9ed1-34d97f6d541d',img:'pecas/5e0727ee-bbd2-4451-9ed1-34d97f6d541d.png',brand:'De Goeye',name:'White Graphic Print T-shirt',category:'Tops',color:'white'},
+  {id:'f2b6a5f6-5919-4fb1-a233-3967855e2ed2',img:'pecas/f2b6a5f6-5919-4fb1-a233-3967855e2ed2.png',brand:'ANAS',name:'Dark Brown Flat Sandals',category:'Shoes',color:'brown'},
+  {id:'5e61de78-7000-498c-b9fe-42b78bf473b2',img:'pecas/5e61de78-7000-498c-b9fe-42b78bf473b2.png',brand:'Hering',name:'Multicolor Striped Cotton T-shirt',category:'Tops',color:'cream'},
+  {id:'811bc623-847b-45be-9b25-d9fc44cb5e6a',img:'pecas/811bc623-847b-45be-9b25-d9fc44cb5e6a.png',brand:'Camys',name:'Burgundy Striped Mock Neck Top',category:'Tops',color:'maroon'},
+  {id:'cea12d08-da12-451a-905a-508ad618774e',img:'pecas/cea12d08-da12-451a-905a-508ad618774e.png',brand:'PAULA RAIA',name:'Orange Crew Neck T-shirt',category:'Tops',color:'orange'},
+  {id:'6e50b4b7-26fc-40f4-b38e-b7f4f1eb6291',img:'pecas/6e50b4b7-26fc-40f4-b38e-b7f4f1eb6291.png',brand:'Chanel',name:'Tan Leather Chain Sandals',category:'Shoes',color:'tan'},
+  {id:'44e24568-6dd0-487d-a56f-7924987be97a',img:'pecas/44e24568-6dd0-487d-a56f-7924987be97a.png',brand:'Bottega Veneta',name:'Dark Brown Woven Leather Handbag',category:'Bags',color:'brown'},
+  {id:'cca840ff-8b21-4221-89bf-96accbdbde3a',img:'pecas/cca840ff-8b21-4221-89bf-96accbdbde3a.png',brand:'Dior',name:'White Short Sleeve Button Up',category:'Tops',color:'white'},
+  {id:'6e810889-abb2-4cc6-a2ba-c5abfd6a4a6c',img:'pecas/6e810889-abb2-4cc6-a2ba-c5abfd6a4a6c.png',brand:'CHANEL',name:'Tan Leather Chain Sandals',category:'Shoes',color:'tan'},
+  {id:'1fa98fa8-c863-41ab-a4c0-7b2db9c3f228',img:'pecas/1fa98fa8-c863-41ab-a4c0-7b2db9c3f228.png',brand:'MARNI',name:'Light Blue Collared V-neck Top',category:'Tops',color:'blue'},
+  {id:'c5558ca4-3d6d-4799-9f2c-f1c9751d3b0c',img:'pecas/c5558ca4-3d6d-4799-9f2c-f1c9751d3b0c.png',brand:'A.P.C.',name:'Navy Blue Short Sleeve Collared Shirt',category:'Tops',color:'navy'},
+  {id:'be7b7fde-b2aa-4e8d-a7c0-b55c572f29c0',img:'pecas/be7b7fde-b2aa-4e8d-a7c0-b55c572f29c0.png',brand:'PAULA RAIA',name:'Red Mock Neck Short Sleeve Top',category:'Tops',color:'red'},
+  {id:'2e128a72-b35b-4238-8300-fadcf0f30ef7',img:'pecas/2e128a72-b35b-4238-8300-fadcf0f30ef7.png',brand:'Dior',name:'Pink Striped Long Sleeve Shirt',category:'Tops',color:'pink'},
+  {id:'dfa2e75f-6fd1-4d3e-bd39-7e9e245608d9',img:'pecas/dfa2e75f-6fd1-4d3e-bd39-7e9e245608d9.png',brand:'Cos',name:'Navy Sleeveless Crew Neck Top',category:'Tops',color:'navy'},
+  {id:'27b91afd-1d5c-48b4-bd20-61cd372dc35e',img:'pecas/27b91afd-1d5c-48b4-bd20-61cd372dc35e.png',brand:'Gallerist',name:'Brown Leather Flat Sandals',category:'Shoes',color:'brown'},
+  {id:'59e0155d-a641-4647-9d8b-62f3a095e169',img:'pecas/59e0155d-a641-4647-9d8b-62f3a095e169.png',brand:'no Brand',name:'Yellow Graphic Print T Shirt',category:'Tops',color:'yellow'},
+  {id:'62ffedaf-24af-412b-aba6-8f72728ea9d2',img:'pecas/62ffedaf-24af-412b-aba6-8f72728ea9d2.png',brand:'Celine',name:'Light Wash Denim Button Up',category:'Tops',color:'blue'},
+  {id:'1816a990-69b1-4d84-a4b6-f356c2092d98',img:'pecas/1816a990-69b1-4d84-a4b6-f356c2092d98.png',brand:'DE GOEYE',name:'Green Ikat Sleeveless Vest',category:'Tops',color:'green'},
+  {id:'c27ca424-867a-4071-ae97-7737c998697b',img:'pecas/c27ca424-867a-4071-ae97-7737c998697b.png',brand:'no Brand',name:'Black Leather Mid Calf Boots',category:'Shoes',color:'black'},
+  {id:'fe35a113-cafb-43b2-a989-0aaedf705756',img:'pecas/fe35a113-cafb-43b2-a989-0aaedf705756.png',brand:'Celine',name:'Light Wash Wide Leg Denim',category:'Bottoms',color:'blue'},
+  {id:'96dd8066-3296-4b0b-84d0-aafafd30c383',img:'pecas/96dd8066-3296-4b0b-84d0-aafafd30c383.png',brand:'Nkstore',name:'Blue White Striped Short Sleeve',category:'Tops',color:'blue'},
+  {id:'4ee5ca2a-98cc-4994-83e3-f54c617c66c5',img:'pecas/4ee5ca2a-98cc-4994-83e3-f54c617c66c5.png',brand:'Marni',name:'Pink Plaid Collared Short Sleeve Top',category:'Tops',color:'pink'},
+  {id:'e3dd4140-4d78-4821-a939-12d25539008d',img:'pecas/e3dd4140-4d78-4821-a939-12d25539008d.png',brand:'Bottega Veneta',name:'Black Woven Leather Pouch',category:'Bags',color:'black'},
+  {id:'57486c25-c757-4b6f-8f39-965b742bbbba',img:'pecas/57486c25-c757-4b6f-8f39-965b742bbbba.png',brand:'De goeye',name:'Purple Linen Frayed Collar Blouse',category:'Tops',color:'purple'},
+  {id:'8f251a91-5c76-4897-ad13-3defb1205910',img:'pecas/8f251a91-5c76-4897-ad13-3defb1205910.png',brand:'PAULA RAIA',name:'Red Embroidered Crewneck T Shirt',category:'Tops',color:'red'},
+  {id:'01fbdb07-ba33-40ee-8773-25db736c8b27',img:'pecas/01fbdb07-ba33-40ee-8773-25db736c8b27.png',brand:'Gianvito Rossi',name:'Brown Suede Boat Shoes',category:'Shoes',color:'brown'},
+  {id:'5803e8c9-0567-450d-8fe6-f8831236ba1b',img:'pecas/5803e8c9-0567-450d-8fe6-f8831236ba1b.png',brand:'Uniqlo',name:'Red Crew Neck Short Sleeve Tee',category:'Tops',color:'red'},
+  {id:'97fd563f-7ed8-42c4-b66d-767f297dff9d',img:'pecas/97fd563f-7ed8-42c4-b66d-767f297dff9d.png',brand:'LA TIERRA',name:'Dark Green Ribbed Knit Top',category:'Tops',color:'green'},
+  {id:'6b9446c8-401c-4053-a931-b0673f82de6e',img:'pecas/6b9446c8-401c-4053-a931-b0673f82de6e.png',brand:'DE GOEYE',name:'Grey Short Sleeve Cotton T Shirt',category:'Tops',color:'gray'},
+  {id:'059caccc-57e9-4e2b-ab9a-2165a0ecb782',img:'pecas/059caccc-57e9-4e2b-ab9a-2165a0ecb782.png',brand:'De goeye',name:'White Collared Button Down Shirt',category:'Tops',color:'white'},
+  {id:'e6506607-445e-4bd2-aeeb-7fa4232512b1',img:'pecas/e6506607-445e-4bd2-aeeb-7fa4232512b1.png',brand:'Sem marca',name:'Orange Leather Ballet Flats',category:'Shoes',color:'orange'},
+  {id:'9086b44b-b356-47a2-8908-439fe515fad5',img:'pecas/9086b44b-b356-47a2-8908-439fe515fad5.png',brand:'VALENTINO',name:'Tan Suede Studded Slide Sandals',category:'Shoes',color:'tan'},
+  {id:'343053d6-c023-4922-9f2d-4d400c4c102a',img:'pecas/343053d6-c023-4922-9f2d-4d400c4c102a.png',brand:'The Row',name:'Gray Leather Structured Tote',category:'Bags',color:'gray'},
+  {id:'962f3517-d912-4130-9f8d-055e31c3af84',img:'pecas/962f3517-d912-4130-9f8d-055e31c3af84.png',brand:'Botti',name:'Black Leather Pointed Toe Flats',category:'Shoes',color:'black'},
+  {id:'b572c479-223b-4888-9949-1518112bd07f',img:'pecas/b572c479-223b-4888-9949-1518112bd07f.png',brand:'Helena Bordon',name:'Black Lace Camisole Top',category:'Tops',color:'black'},
+  {id:'bf7b8541-ac2a-409d-9363-8882920e6b66',img:'pecas/bf7b8541-ac2a-409d-9363-8882920e6b66.png',brand:'Animale',name:'Blue White Striped Cotton T Shirt',category:'Tops',color:'blue'},
+  {id:'28d141a1-daa3-46de-95ec-f59fa7a9583e',img:'pecas/28d141a1-daa3-46de-95ec-f59fa7a9583e.png',brand:'Arche',name:'Red Suede Laser Cut Flats',category:'Shoes',color:'red'},
+  {id:'135fb986-7f54-472f-82e2-b68d396d4193',img:'pecas/135fb986-7f54-472f-82e2-b68d396d4193.png',brand:'Valentink',name:'Yellow Graphic T Shirt',category:'Tops',color:'yellow'},
+  {id:'0ed7dbb1-dac6-46b3-ac55-dfdd5bfacddf',img:'pecas/0ed7dbb1-dac6-46b3-ac55-dfdd5bfacddf.png',brand:'Proenza Schouler',name:'Maroon Leather Slouchy Tote Bag',category:'Bags',color:'maroon'},
+  {id:'4cbbddbf-4500-411e-b90a-934253c509e6',img:'pecas/4cbbddbf-4500-411e-b90a-934253c509e6.png',brand:'Disney',name:'Cream Short Sleeve Polo Shirt',category:'Tops',color:'cream'},
+  {id:'663fd9b7-eb59-4da1-abbe-cf14d8da3b4e',img:'pecas/663fd9b7-eb59-4da1-abbe-cf14d8da3b4e.png',brand:'COS',name:'Black and White Striped Cotton T Shirt',category:'Tops',color:'white'},
+  {id:'80f5b079-8d3e-4a9e-82e4-fbacd23f96e7',img:'pecas/80f5b079-8d3e-4a9e-82e4-fbacd23f96e7.png',brand:'PAULA RAIA',name:'White Long Sleeve Tie Cuff Shirt',category:'Tops',color:'white'},
+  {id:'62008506-0b95-4c5c-9759-a73354fffa92',img:'pecas/62008506-0b95-4c5c-9759-a73354fffa92.png',brand:'no Brand',name:'Gray Pleated Midi Skirt',category:'Bottoms',color:'gray'},
+  {id:'708cfecb-d46b-41d7-adca-cb21f5f41d3b',img:'pecas/708cfecb-d46b-41d7-adca-cb21f5f41d3b.png',brand:'Massimo Dutti',name:'Brown Ribbed Knit Tank',category:'Tops',color:'brown'},
+  {id:'4c05deaf-2b96-49da-892d-929202a1e453',img:'pecas/4c05deaf-2b96-49da-892d-929202a1e453.png',brand:'MARNI',name:'Light Blue Collared Shirt',category:'Tops',color:'blue'},
+  {id:'a0626210-a19a-469c-8fdd-5ade277d531b',img:'pecas/a0626210-a19a-469c-8fdd-5ade277d531b.png',brand:'Stella Nova',name:'White and Black Striped Shirt',category:'Tops',color:'white'},
+  {id:'59cecd7e-a501-418a-aecd-ac57d2c9b816',img:'pecas/59cecd7e-a501-418a-aecd-ac57d2c9b816.png',brand:'Gucci',name:'Beige Leather Horsebit Mules',category:'Shoes',color:'beige'},
+  {id:'7a2d2567-1178-48fe-9ca0-bc26397f9217',img:'pecas/7a2d2567-1178-48fe-9ca0-bc26397f9217.png',brand:'Laroude',name:'Brown Suede Lace Up Sneakers',category:'Shoes',color:'brown'},
+  {id:'87f04c16-dc94-42b8-b9ec-4325a30a40fb',img:'pecas/87f04c16-dc94-42b8-b9ec-4325a30a40fb.png',brand:'Bella Dahl',name:'Taupe Distressed Short Sleeve Tee',category:'Tops',color:'gray'},
+  {id:'dd3817f3-dc72-4916-a1a2-ec7649f830cd',img:'pecas/dd3817f3-dc72-4916-a1a2-ec7649f830cd.png',brand:'Phoebe Philo',name:'Taupe Leather Crossbody Bag',category:'Bags',color:'gray'},
+  {id:'b25b5a59-2614-474a-8e8c-1c75a7c7a621',img:'pecas/b25b5a59-2614-474a-8e8c-1c75a7c7a621.png',brand:'no Brand',name:'Black Textured Button Up Shirt',category:'Tops',color:'black'},
+  {id:'d27bb992-16bd-4484-96e2-424cb4511b4f',img:'pecas/d27bb992-16bd-4484-96e2-424cb4511b4f.png',brand:'no Brand',name:'Brown Braided Leather Belt',category:'Accessories',color:'brown'},
+  {id:'e1dd3d16-d3e0-4627-8b96-d3d63d84ade2',img:'pecas/e1dd3d16-d3e0-4627-8b96-d3d63d84ade2.png',brand:'BOTTI',name:'Brown Suede Fringed Loafers',category:'Shoes',color:'brown'},
+  {id:'1f81e2dc-91eb-46c3-ba23-124bd41e20d1',img:'pecas/1f81e2dc-91eb-46c3-ba23-124bd41e20d1.png',brand:'Prada',name:'Brown Leather Shoulder Bag',category:'Bags',color:'brown'},
+  {id:'15c0f002-3839-46e4-ba23-0ecefa14f7ce',img:'pecas/15c0f002-3839-46e4-ba23-0ecefa14f7ce.png',brand:'Flabelus',name:'Pink Ballet Flats',category:'Shoes',color:'pink'},
+  {id:'17793d0a-9e45-43c6-8782-fa0775f1529c',img:'pecas/17793d0a-9e45-43c6-8782-fa0775f1529c.png',brand:'COS',name:'Orange Sleeveless Crew Neck Top',category:'Tops',color:'orange'},
+  {id:'d07afea0-a167-42fc-a90a-e0bdb855c760',img:'pecas/d07afea0-a167-42fc-a90a-e0bdb855c760.png',brand:'MOUSSY',name:'Blue Denim Straight Leg Jeans',category:'Bottoms',color:'blue'},
+  {id:'07ce6501-8841-40a5-bd87-7ba8c570daae',img:'pecas/07ce6501-8841-40a5-bd87-7ba8c570daae.png',brand:'Yves Saint Laurent',name:'Black Leather Hobo Shoulder Bag',category:'Bags',color:'black'},
+  {id:'8a46708f-d3ad-47ad-ab2c-41e81a52b29d',img:'pecas/8a46708f-d3ad-47ad-ab2c-41e81a52b29d.png',brand:'Greek Ancient',name:'Black Leather Flat Sandals',category:'Shoes',color:'black'},
+  {id:'601c214e-65c4-4951-9755-40b1b5b6556e',img:'pecas/601c214e-65c4-4951-9755-40b1b5b6556e.png',brand:'Polo Ralph Lauren',name:'Blue Long Sleeve Button Down Shirt',category:'Tops',color:'blue'},
+  {id:'6655a6ea-1fc3-4a19-acab-e3b7683db7c5',img:'pecas/6655a6ea-1fc3-4a19-acab-e3b7683db7c5.png',brand:'NV',name:'Brown Snakeskin Leather Belt',category:'Accessories',color:'brown'},
+  {id:'ed31d509-acaf-452a-b746-804010f6696d',img:'pecas/ed31d509-acaf-452a-b746-804010f6696d.png',brand:'Corello',name:'Brown Leather Flat Sandals',category:'Shoes',color:'brown'},
+  {id:'186f0bbe-07a4-44ec-8864-3fadb8827ce1',img:'pecas/186f0bbe-07a4-44ec-8864-3fadb8827ce1.png',brand:'PAULA RAIA',name:'Navy Blue Wide Leg Shorts',category:'Bottoms',color:'navy'},
+  {id:'62569c96-1575-4f37-9dad-09215acf4c87',img:'pecas/62569c96-1575-4f37-9dad-09215acf4c87.png',brand:'COS',name:'Green Short Sleeve Knit Polo',category:'Tops',color:'green'},
+  {id:'8bfa8e66-f2b2-4c02-8eb3-0f630bdfc095',img:'pecas/8bfa8e66-f2b2-4c02-8eb3-0f630bdfc095.png',brand:'PRADA',name:'Dark Blue Suede Loafers',category:'Shoes',color:'blue'},
+  {id:'4074bb5e-2088-423e-923e-76f2b535d923',img:'pecas/4074bb5e-2088-423e-923e-76f2b535d923.png',brand:'De Goeye',name:'Blue White Striped Button Up',category:'Tops',color:'blue'},
+  {id:'250e10a3-bbbf-4518-831a-db1c35f35048',img:'pecas/250e10a3-bbbf-4518-831a-db1c35f35048.png',brand:'Celine',name:'Blue Denim Cropped Jacket',category:'Outerwear',color:'blue'},
+  {id:'a17c9401-84e1-4254-beb1-4b86fabc9aad',img:'pecas/a17c9401-84e1-4254-beb1-4b86fabc9aad.png',brand:'COS',name:'Striped Tank with Lace Overlay',category:'Tops',color:'beige'},
+  {id:'d32c1ae9-24be-4066-920c-58021b08b072',img:'pecas/d32c1ae9-24be-4066-920c-58021b08b072.png',brand:'Gucci',name:'Black Patent Leather Loafers',category:'Shoes',color:'black'},
+  {id:'1795606f-c718-469f-9cbf-45ca302d7f9f',img:'pecas/1795606f-c718-469f-9cbf-45ca302d7f9f.png',brand:'Stella Nova',name:'Gray Pinstripe Button Down Shirt',category:'Tops',color:'gray'},
+  {id:'1155d352-d9c8-43ba-b803-3e66f9b0dc99',img:'pecas/1155d352-d9c8-43ba-b803-3e66f9b0dc99.png',brand:'Adidas',name:'Brown Suede Low Top Sneakers',category:'Shoes',color:'brown'},
+  {id:'47c0f1ca-89c4-4f3e-81c7-e4c08e0836fc',img:'pecas/47c0f1ca-89c4-4f3e-81c7-e4c08e0836fc.png',brand:'GANNI',name:'Pink Graphic Tee Short Sleeve',category:'Tops',color:'pink'},
+  {id:'e8fb5254-ec14-410b-9c5b-241475552e81',img:'pecas/e8fb5254-ec14-410b-9c5b-241475552e81.png',brand:'Uniqlo',name:'Red Ribbed Knit Polo',category:'Tops',color:'red'},
+  {id:'8e7269fb-6773-4924-b948-4c58d550797f',img:'pecas/8e7269fb-6773-4924-b948-4c58d550797f.png',brand:'Loro Piana',name:'Dark Brown Suede Loafers',category:'Shoes',color:'brown'},
+  {id:'761bc166-2bb8-4129-b4cd-7c83a4a75c8a',img:'pecas/761bc166-2bb8-4129-b4cd-7c83a4a75c8a.png',brand:'JOWIS',name:'Dark Green Crew Neck Tee',category:'Tops',color:'green'},
+  {id:'6b7abd7f-605c-41e5-96da-5146d4ea077d',img:'pecas/6b7abd7f-605c-41e5-96da-5146d4ea077d.png',brand:'Issey Miyake',name:'Royal Blue Pleated Wide Leg Pants',category:'Bottoms',color:'blue'},
+  {id:'4a5278a0-ff2a-49af-88ee-720a2bd01d88',img:'pecas/4a5278a0-ff2a-49af-88ee-720a2bd01d88.png',brand:'Sem marca',name:'Brown Blue Striped Long Sleeve Polo',category:'Tops',color:'brown'},
+  {id:'ccfbad2d-a7e0-4d28-9d20-546e4e4a67e9',img:'pecas/ccfbad2d-a7e0-4d28-9d20-546e4e4a67e9.png',brand:'O',name:'White and Navy Striped Knit Sweater',category:'Tops',color:'white'},
+  {id:'6efd0e33-2b5e-489e-950e-07e04887e0fa',img:'pecas/6efd0e33-2b5e-489e-950e-07e04887e0fa.png',brand:'Celine',name:'Blue Denim Wide Leg Jeans',category:'Bottoms',color:'blue'},
+  {id:'15f6dad5-187d-46be-adaa-264ef18f0955',img:'pecas/15f6dad5-187d-46be-adaa-264ef18f0955.png',brand:'COS',name:'Charcoal Grey Collared Jacket',category:'Outerwear',color:'gray'},
+  {id:'132d0f95-871b-4e6a-8d4c-85a8ee656ae3',img:'pecas/132d0f95-871b-4e6a-8d4c-85a8ee656ae3.png',brand:'PAULA RAIA',name:'Brown Textured Collared Jacket',category:'Outerwear',color:'brown'},
+  {id:'2d75d18d-8e17-46f9-a675-26a236e89406',img:'pecas/2d75d18d-8e17-46f9-a675-26a236e89406.png',brand:'Sem marca',name:'Navy Blue Short Sleeve Polo',category:'Tops',color:'navy'},
+  {id:'9dd9995c-94e8-417f-bd4b-1813b941e3c0',img:'pecas/9dd9995c-94e8-417f-bd4b-1813b941e3c0.png',brand:'Sem marca',name:'Red Graphic T-shirt',category:'Tops',color:'red'},
+  {id:'669e98da-9550-4771-b9fb-6623813f585f',img:'pecas/669e98da-9550-4771-b9fb-6623813f585f.png',brand:'Uniqlo',name:'Olive Green Crewneck Long Sleeve',category:'Tops',color:'olive green'},
+  {id:'bb87a207-205e-4bb1-9d9d-2ea863e44696',img:'pecas/bb87a207-205e-4bb1-9d9d-2ea863e44696.png',brand:'Sem marca',name:'Brown Striped Long Sleeve Polo',category:'Tops',color:'brown'},
+  {id:'c4c3e4e4-7e89-4782-b154-774a416616fe',img:'pecas/c4c3e4e4-7e89-4782-b154-774a416616fe.png',brand:'Dior',name:'Black Leather Flap Satchel Bag',category:'Bags',color:'black'},
+  {id:'15a7964f-7389-487d-9258-c06e95976277',img:'pecas/15a7964f-7389-487d-9258-c06e95976277.png',brand:'LESET',name:'White Crew Neck T-shirt',category:'Tops',color:'white'},
+  {id:'881bb40b-0f5b-415c-86c1-8087748aac78',img:'pecas/881bb40b-0f5b-415c-86c1-8087748aac78.png',brand:'Botti',name:'Woven Ombre Ballet Flats',category:'Shoes',color:'beige'},
+  {id:'670e8c0f-f716-45f5-88a0-6a2b4c1c0cbd',img:'pecas/670e8c0f-f716-45f5-88a0-6a2b4c1c0cbd.png',brand:'MAISO',name:'Orange Plaid Long Sleeve Shirt',category:'Tops',color:'orange'},
+  {id:'14d05c87-c5c2-40a4-b256-a633c52916c5',img:'pecas/14d05c87-c5c2-40a4-b256-a633c52916c5.png',brand:'Animale',name:'Blue and White Striped T Shirt',category:'Tops',color:'blue'},
+  {id:'4bf97449-2570-45c9-85b5-e54bd42aa1ec',img:'pecas/4bf97449-2570-45c9-85b5-e54bd42aa1ec.png',brand:'Miu Miu',name:'White Leather Tie-up Boat Shoes',category:'Shoes',color:'white'},
+  {id:'7192c797-45b4-4d7d-8820-c2e5d6ed1e9a',img:'pecas/7192c797-45b4-4d7d-8820-c2e5d6ed1e9a.png',brand:'Muji',name:'Blue White Plaid Short Sleeve',category:'Tops',color:'blue'},
+  {id:'3fd76ec1-9c13-4533-90b5-53102e6e907e',img:'pecas/3fd76ec1-9c13-4533-90b5-53102e6e907e.png',brand:'Phoebe Philo',name:'Brown Leather Crossbody Bag',category:'Bags',color:'brown'},
+  {id:'6b038958-443b-4747-8f6f-d9a97c921b5d',img:'pecas/6b038958-443b-4747-8f6f-d9a97c921b5d.png',brand:'Vince',name:'Brown Short Sleeve Linen Blend Top',category:'Tops',color:'brown'},
+  {id:'a66e21e4-2100-4877-bf2b-3d653da70c9b',img:'pecas/a66e21e4-2100-4877-bf2b-3d653da70c9b.png',brand:'juun.j',name:'Light Blue Zip Up Shirt',category:'Tops',color:'blue'},
+  {id:'24114f60-23ae-4f8e-917e-7e2e7be657a1',img:'pecas/24114f60-23ae-4f8e-917e-7e2e7be657a1.png',brand:'Botti',name:'Pale Yellow Pointed Toe Flats',category:'Shoes',color:'yellow'},
+  {id:'3d71efb8-9a9f-4b55-8408-5865bb377e7d',img:'pecas/3d71efb8-9a9f-4b55-8408-5865bb377e7d.png',brand:'Banana Republic',name:'White Cotton Button Down Shirt',category:'Tops',color:'white'},
+  {id:'d113f763-f498-4566-98ec-b62a4eb3fc69',img:'pecas/d113f763-f498-4566-98ec-b62a4eb3fc69.png',brand:'Porter',name:'Dark Green Nylon Crossbody Bag',category:'Bags',color:'green'},
+  {id:'ee45a501-a3f4-482e-8bb3-a608a6850bdd',img:'pecas/ee45a501-a3f4-482e-8bb3-a608a6850bdd.png',brand:'PAULA RAIA',name:'Light Blue Collared Jacket',category:'Outerwear',color:'blue'},
+  {id:'011bd900-a13e-42c6-860a-4f8bce50e913',img:'pecas/011bd900-a13e-42c6-860a-4f8bce50e913.png',brand:'Toteme',name:'Cream Leather Shoulder Bag',category:'Bags',color:'cream'},
+  {id:'56fe7f58-153a-49c9-8786-f7822bb7c47b',img:'pecas/56fe7f58-153a-49c9-8786-f7822bb7c47b.png',brand:'Sem marca',name:'Black and White Striped Tee',category:'Tops',color:'black'},
+  {id:'d859095f-0de0-4e9c-a341-96e587c6e9d2',img:'pecas/d859095f-0de0-4e9c-a341-96e587c6e9d2.png',brand:'Botti',name:'Black Leather Square Toe Flats',category:'Shoes',color:'black'},
+  {id:'bdd7db67-089a-46c8-bfee-a5656545a555',img:'pecas/bdd7db67-089a-46c8-bfee-a5656545a555.png',brand:'Sem marca',name:'Black Metal Charm Necklace',category:'Jewelry',color:'black'},
+  {id:'c5c98d22-557a-4d42-bdfe-c742e9cf931b',img:'pecas/c5c98d22-557a-4d42-bdfe-c742e9cf931b.png',brand:'PAULA RAIA',name:'Black Lace Trim Long Sleeve Top',category:'Tops',color:'black'},
+  {id:'7027da53-538f-475b-b2a1-04ef24f9cbee',img:'pecas/7027da53-538f-475b-b2a1-04ef24f9cbee.png',brand:'CHANEL',name:'Brown Suede Lace Up Sneakers',category:'Shoes',color:'brown'},
+  {id:'da9dd614-2c57-4ab5-b52a-b6dc9a68ff14',img:'pecas/da9dd614-2c57-4ab5-b52a-b6dc9a68ff14.png',brand:'PAULA RAIA',name:'Green Linen Jacket with Collar',category:'Outerwear',color:'green'},
+  {id:'802f4c1f-50a6-496d-b0ec-5c50e2ee5008',img:'pecas/802f4c1f-50a6-496d-b0ec-5c50e2ee5008.png',brand:'LEAFY',name:'Black Heart Pendant Necklace',category:'Jewelry',color:'black'},
+  {id:'33d287fe-5fb8-486e-a359-268ee5f47203',img:'pecas/33d287fe-5fb8-486e-a359-268ee5f47203.png',brand:'Lewy',name:'White Crew Neck T Shirt',category:'Tops',color:'white'},
+  {id:'a317429e-35e7-4fd7-bdd4-19314787f6b1',img:'pecas/a317429e-35e7-4fd7-bdd4-19314787f6b1.png',brand:'PAULA RAIA',name:'Cream Graphic Rose T-shirt',category:'Tops',color:'cream'},
+  {id:'024058d6-b00e-4f54-9ce5-87343fad0494',img:'pecas/024058d6-b00e-4f54-9ce5-87343fad0494.png',brand:'Coreia',name:'Camisa listrada Coreia',category:'Tops',color:'blue'},
+  {id:'2873f22d-7219-4dc3-949a-c212b3ea3cb8',img:'pecas/2873f22d-7219-4dc3-949a-c212b3ea3cb8.png',brand:'Prada',name:'Dark Brown Leather Tote Bag',category:'Bags',color:'brown'},
+  {id:'6657c329-c055-4b29-9a83-48912e54d467',img:'pecas/6657c329-c055-4b29-9a83-48912e54d467.png',brand:'MANGO',name:'Red and White Striped Long Sleeve',category:'Tops',color:'red'},
+  {id:'5284495c-3bc9-4ad8-b6c4-64cc4772160b',img:'pecas/5284495c-3bc9-4ad8-b6c4-64cc4772160b.png',brand:'PAULA RAIA',name:'Pink Long Sleeve Crewneck Tee',category:'Tops',color:'pink'},
+  {id:'1bee3efa-5390-465d-82b7-04fa56825cd7',img:'pecas/1bee3efa-5390-465d-82b7-04fa56825cd7.png',brand:'Pierre',name:'Dark Green Velvet Flats',category:'Shoes',color:'green'},
+  {id:'73abfe01-6e52-4a36-b35a-b959f88123cb',img:'pecas/73abfe01-6e52-4a36-b35a-b959f88123cb.png',brand:'Massimo Dutti',name:'Navy Blue Short Sleeve Polo',category:'Tops',color:'navy'},
+  {id:'38401314-2d98-4a43-9be8-09199dad9032',img:'pecas/38401314-2d98-4a43-9be8-09199dad9032.png',brand:'Ysl',name:'Dark Brown Suede Loafers',category:'Shoes',color:'brown'},
+  {id:'1cf9d67b-0cfc-4b97-8d01-a59872ea3e7b',img:'pecas/1cf9d67b-0cfc-4b97-8d01-a59872ea3e7b.png',brand:'Nili Lotan',name:'Brown Wide Leg Cotton Pants',category:'Bottoms',color:'brown'},
+  {id:'4a58d34c-4d01-4966-aee9-1d51e2c589d3',img:'pecas/4a58d34c-4d01-4966-aee9-1d51e2c589d3.png',brand:'LOFT',name:'Grey Knit Button Down Shirt Coreia',category:'Tops',color:'gray'},
+  {id:'0223f74f-247a-4eef-8e1e-8a48763e859f',img:'pecas/0223f74f-247a-4eef-8e1e-8a48763e859f.png',brand:'LEVI',name:'White Crew Neck T-shirt',category:'Tops',color:'white'},
+  {id:'19b7b034-6d70-41d4-8271-6429f7992eeb',img:'pecas/19b7b034-6d70-41d4-8271-6429f7992eeb.png',brand:'Miu Miu',name:'Cream Velcro Strap Sandals',category:'Shoes',color:'cream'},
+  {id:'662efaac-77a9-4fb5-9999-f6f6c6f4d388',img:'pecas/662efaac-77a9-4fb5-9999-f6f6c6f4d388.png',brand:'Sonneti',name:'Navy Blue Short Sleeve Polo',category:'Tops',color:'navy'}
+];
+
+var PECAS_STORAGE_KEY = 'looks_tina_pecas_alta_v1'; // reservado p/ uso futuro (favoritos etc.), não compartilha nada com o catálogo de looks
+var pecasActiveCat = '__all__';
+
+function renderPecasCatBar() {
+  var bar = document.getElementById('pecasCatBar');
+  if (!bar) return;
+  var cats = Array.from(new Set(PIECES.map(function(p){ return p.category; }))).sort();
+  bar.innerHTML = '';
+  var allPill = document.createElement('div');
+  allPill.className = 'pc-cat-pill' + (pecasActiveCat==='__all__' ? ' active' : '');
+  allPill.textContent = 'Todas (' + PIECES.length + ')';
+  allPill.onclick = function(){ pecasActiveCat = '__all__'; renderPecas(); };
+  bar.appendChild(allPill);
+  cats.forEach(function(cat) {
+    var count = PIECES.filter(function(p){ return p.category === cat; }).length;
+    var pill = document.createElement('div');
+    pill.className = 'pc-cat-pill' + (pecasActiveCat===cat ? ' active' : '');
+    pill.textContent = cat + ' (' + count + ')';
+    pill.onclick = (function(c){ return function(){ pecasActiveCat = c; renderPecas(); }; })(cat);
+    bar.appendChild(pill);
+  });
+}
+
+function renderPecas() {
+  renderPecasCatBar();
+  var searchEl = document.getElementById('pecasSearch');
+  var q = searchEl ? searchEl.value.trim().toLowerCase() : '';
+  var list = PIECES.filter(function(p) {
+    if (pecasActiveCat !== '__all__' && p.category !== pecasActiveCat) return false;
+    if (q && (p.name + ' ' + p.brand + ' ' + p.color).toLowerCase().indexOf(q) === -1) return false;
+    return true;
+  });
+  var grid = document.getElementById('pecasGrid');
+  var countEl = document.getElementById('pecasCount');
+  if (countEl) countEl.textContent = list.length + ' de ' + PIECES.length + ' peças';
+  if (!grid) return;
+  grid.innerHTML = '';
+  if (list.length === 0) {
+    grid.innerHTML = '<div class="no-results" style="grid-column:1/-1;">Nenhuma peça encontrada</div>';
+    return;
+  }
+  list.forEach(function(p) {
+    var card = document.createElement('div');
+    card.className = 'pc-card';
+    card.innerHTML =
+      '<img src="' + p.img + '" alt="' + p.name.replace(/"/g,'&quot;') + '" loading="lazy">' +
+      '<div class="pc-card-body">' +
+        '<div class="pc-card-brand">' + p.brand + '</div>' +
+        '<div class="pc-card-name">' + p.name + '</div>' +
+        '<div class="pc-card-meta">' + p.category + ' · ' + p.color + '</div>' +
+      '</div>';
+    grid.appendChild(card);
+  });
+}
 
 // ── Persistência local ──
 var STORAGE_KEY = 'looks_tina_catalog_v1';
@@ -3192,17 +3538,20 @@ function switchTab(tab) {
   document.getElementById('tabStats').classList.toggle('active', tab==='stats');
   document.getElementById('tabCal').classList.toggle('active', tab==='cal');
   document.getElementById('tabImport').classList.toggle('active', tab==='import');
+  document.getElementById('tabPecas').classList.toggle('active', tab==='pecas');
   document.getElementById('catalogView').style.display = tab==='catalog' ? '' : 'none';
   document.getElementById('weekView').classList.toggle('show', tab==='week');
   document.getElementById('adminView').classList.toggle('show', tab==='admin');
   document.getElementById('statsView').style.display = tab==='stats' ? '' : 'none';
   document.getElementById('calView').style.display = tab==='cal' ? '' : 'none';
   document.getElementById('importView').style.display = tab==='import' ? '' : 'none';
+  document.getElementById('pecasView').style.display = tab==='pecas' ? '' : 'none';
   if (tab==='week') renderWeek();
   if (tab==='admin') renderAdmin();
   if (tab==='stats') renderStats();
   if (tab==='cal') renderCal();
   if (tab==='import') renderImportView();
+  if (tab==='pecas') renderPecas();
 }
 
 // ── Admin View ──
@@ -6577,6 +6926,21 @@ function applySuggestions() {
   <div id="importPreviews" style="margin-top:20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;"></div>
 </div>
 
+<div id="pecasView" style="display:none;padding:24px;">
+  <div style="max-width:1100px;margin:0 auto;">
+    <div style="margin-bottom:4px;font-size:1.2rem;font-weight:700;">🧩 Peças importadas do Alta</div>
+    <p style="color:#888;font-size:.82rem;margin-bottom:18px;">Guarda-roupa peça por peça, importado do Alta. Fica completamente separado do catálogo de looks prontos acima — nada aqui mexe nos seus looks.</p>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px;">
+      <div class="search-wrap" style="max-width:280px;">
+        <span class="si">🔍</span>
+        <input type="text" id="pecasSearch" placeholder="Buscar por nome ou marca..." autocomplete="off" oninput="renderPecas()">
+      </div>
+      <span id="pecasCount" style="font-size:.82rem;color:#888;margin-left:4px;"></span>
+    </div>
+    <div id="pecasCatBar" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px;"></div>
+    <div id="pecasGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px;"></div>
+  </div>
+</div>
 <!-- ──── Look Card Overlay ──── -->
 <div id="lookCardOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:10000;display:none;align-items:center;justify-content:center;padding:20px;" onclick="if(event.target===this)closeLookCard()">
   <div id="lookCardBox" style="background:#faf9f7;border-radius:16px;overflow:hidden;width:320px;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.4);position:relative;">
