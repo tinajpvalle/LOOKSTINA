@@ -522,6 +522,9 @@ body.compare-mode .card-compare-btn { display: flex; }
 .look-chip img { width: 92px; height: 92px; object-fit: contain; background: #fff; border-radius: 8px; border: 1px solid #eee; display:block; }
 .look-chip .chip-remove { position: absolute; top: -6px; right: -6px; background: #fff; border: 1px solid #ddd; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: .7rem; }
 .look-chip .chip-label { font-size: .62rem; color: #999; text-align: center; margin-top: 3px; }
+.sugg-chip-actions { position: absolute; top: -8px; right: -8px; display: flex; gap: 3px; }
+.sugg-action-btn { background: #fff; border: 1px solid #ddd; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: .65rem; }
+
 .montado-card { background:#fff;border-radius:12px;overflow:hidden;border:1.5px solid #ede9e4;cursor:pointer;transition:transform .15s, box-shadow .15s; }
 .montado-card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,.09); }
 .montado-collage { display:flex; flex-wrap:wrap; gap:4px; padding:10px; justify-content:center; background:#faf9f7; min-height:80px; align-items:center; }
@@ -2345,6 +2348,143 @@ function saveLookBuild() {
   });
   saveMontagens();
   closeLookBuilder();
+  renderLooksMontados();
+}
+
+// ── Sugestão automática de looks montados ──
+var SUGGESTION_REQUIRED_CATS = ['Tops', 'Bottoms', 'Shoes'];
+var SUGGESTION_OPTIONAL_CATS = ['Outerwear', 'Bags', 'Jewelry', 'Accessories'];
+var SUGGESTION_OPTIONAL_CHANCE = { Outerwear: 0.5, Bags: 0.6, Jewelry: 0.3, Accessories: 0.2 };
+var suggestionSlots = []; // [{category, pieceId}]
+
+function piecesByCategory(cat) {
+  return PIECES.filter(function(p) { return p.category === cat; });
+}
+
+function randomPieceForCategory(cat, excludeId) {
+  var list = piecesByCategory(cat);
+  if (list.length === 0) return null;
+  var pool = excludeId ? list.filter(function(p) { return p.id !== excludeId; }) : list;
+  if (pool.length === 0) pool = list;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+function generateFullSuggestion() {
+  suggestionSlots = [];
+  SUGGESTION_REQUIRED_CATS.forEach(function(cat) {
+    var p = randomPieceForCategory(cat);
+    if (p) suggestionSlots.push({ category: cat, pieceId: p.id });
+  });
+  SUGGESTION_OPTIONAL_CATS.forEach(function(cat) {
+    var chance = SUGGESTION_OPTIONAL_CHANCE[cat] != null ? SUGGESTION_OPTIONAL_CHANCE[cat] : 0.3;
+    if (Math.random() < chance) {
+      var p = randomPieceForCategory(cat);
+      if (p) suggestionSlots.push({ category: cat, pieceId: p.id });
+    }
+  });
+}
+
+function openSuggestionBuilder() {
+  generateFullSuggestion();
+  var nameInput = document.getElementById('suggestionNameInput');
+  if (nameInput) nameInput.value = '';
+  document.getElementById('suggestionOverlay').style.display = 'flex';
+  renderSuggestionCanvas();
+  renderSuggestionAddBar();
+}
+
+function closeSuggestionBuilder() {
+  document.getElementById('suggestionOverlay').style.display = 'none';
+}
+
+function renderSuggestionCanvas() {
+  var canvas = document.getElementById('suggestionCanvas');
+  if (!canvas) return;
+  canvas.innerHTML = '';
+  if (suggestionSlots.length === 0) {
+    canvas.innerHTML = '<div style="color:#aaa;font-size:.85rem;padding:22px 10px;width:100%;text-align:center;">Nenhuma peça no momento. Clique em "🎲 Gerar nova sugestão" ou adicione uma categoria abaixo.</div>';
+    return;
+  }
+  suggestionSlots.forEach(function(slot, idx) {
+    var p = findPieceById(slot.pieceId);
+    if (!p) return;
+    var chip = document.createElement('div');
+    chip.className = 'look-chip';
+    chip.innerHTML =
+      '<img src="' + p.img + '" alt="">' +
+      '<div class="sugg-chip-actions">' +
+        '<span class="sugg-action-btn" title="Trocar peça">🔁</span>' +
+        '<span class="sugg-action-btn" title="Remover categoria">✕</span>' +
+      '</div>' +
+      '<div class="chip-label">' + p.category + '</div>';
+    var actions = chip.querySelectorAll('.sugg-action-btn');
+    actions[0].onclick = function(e) { e.stopPropagation(); rerollSlot(idx); };
+    actions[1].onclick = function(e) { e.stopPropagation(); removeSuggestionSlot(idx); };
+    canvas.appendChild(chip);
+  });
+}
+
+function rerollSlot(idx) {
+  var slot = suggestionSlots[idx];
+  if (!slot) return;
+  var p = randomPieceForCategory(slot.category, slot.pieceId);
+  if (p) slot.pieceId = p.id;
+  renderSuggestionCanvas();
+}
+
+function removeSuggestionSlot(idx) {
+  suggestionSlots.splice(idx, 1);
+  renderSuggestionCanvas();
+  renderSuggestionAddBar();
+}
+
+function renderSuggestionAddBar() {
+  var bar = document.getElementById('suggestionAddCatBar');
+  if (!bar) return;
+  var usedCats = suggestionSlots.map(function(s) { return s.category; });
+  var allCats = Array.from(new Set(PIECES.map(function(p) { return p.category; }))).sort();
+  var available = allCats.filter(function(c) { return usedCats.indexOf(c) === -1; });
+  bar.innerHTML = '';
+  if (available.length === 0) return;
+  available.forEach(function(cat) {
+    var pill = document.createElement('div');
+    pill.className = 'pc-cat-pill';
+    pill.textContent = '+ ' + cat;
+    pill.onclick = function() { addSuggestionCategory(cat); };
+    bar.appendChild(pill);
+  });
+}
+
+function addSuggestionCategory(cat) {
+  var p = randomPieceForCategory(cat);
+  if (!p) return;
+  suggestionSlots.push({ category: cat, pieceId: p.id });
+  renderSuggestionCanvas();
+  renderSuggestionAddBar();
+}
+
+function regenerateSuggestion() {
+  generateFullSuggestion();
+  renderSuggestionCanvas();
+  renderSuggestionAddBar();
+}
+
+function saveSuggestionLook() {
+  if (suggestionSlots.length === 0) {
+    alert('Adicione pelo menos uma peça antes de salvar.');
+    return;
+  }
+  var nameInput = document.getElementById('suggestionNameInput');
+  var name = nameInput ? nameInput.value.trim() : '';
+  montagens.push({
+    id: 'm_' + Date.now() + '_' + Math.floor(Math.random() * 100000),
+    name: name,
+    pieceIds: suggestionSlots.map(function(s) { return s.pieceId; }),
+    createdAt: new Date().toISOString(),
+    source: 'auto'
+  });
+  saveMontagens();
+  closeSuggestionBuilder();
   renderLooksMontados();
 }
 
@@ -7150,6 +7290,7 @@ function applySuggestions() {
   <div style="max-width:1100px;margin:0 auto;">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:4px;">
       <div style="font-size:1.2rem;font-weight:700;">👗 Looks Montados</div>
+      <button class="btn btn-ghost" onclick="openSuggestionBuilder()" style="background:#f5f0ff;color:#6a3fc2;border-color:#ddd0f0;">🎲 Sugestão automática</button>
       <button class="btn btn-week" onclick="openLookBuilder()">➕ Novo Look</button>
     </div>
     <p style="color:#888;font-size:.82rem;margin-bottom:14px;">Monte looks combinando as peças importadas do Alta. Fica separado do catálogo de looks prontos e da lista de peças — nada aqui mexe no resto do app.</p>
@@ -7179,6 +7320,28 @@ function applySuggestions() {
     <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px;">
       <button class="btn btn-ghost" onclick="closeLookBuilder()">Cancelar</button>
       <button class="btn btn-week" onclick="saveLookBuild()">💾 Salvar look</button>
+    </div>
+  </div>
+</div>
+
+<!-- ──── Suggestion Builder Overlay ──── -->
+<div id="suggestionOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10001;align-items:flex-start;justify-content:center;padding:30px 16px;overflow-y:auto;" onclick="if(event.target===this)closeSuggestionBuilder()">
+  <div style="background:#fff;max-width:920px;width:100%;border-radius:16px;padding:22px 24px 26px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <div style="font-size:1.1rem;font-weight:700;">🎲 Sugestão automática de look</div>
+      <span style="cursor:pointer;font-size:1.4rem;line-height:1;" onclick="closeSuggestionBuilder()">✕</span>
+    </div>
+    <p style="color:#888;font-size:.8rem;margin:-6px 0 14px;">Combinação sorteada entre as peças do Alta. Clique em 🔁 pra trocar só aquela peça, ✕ pra tirar a categoria do look, ou gere tudo de novo.</p>
+    <div id="suggestionCanvas" style="display:flex;flex-wrap:wrap;gap:14px;min-height:110px;background:#faf9f7;border:1.5px dashed #ddd;border-radius:12px;padding:14px;margin-bottom:14px;align-items:flex-start;"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
+      <div id="suggestionAddCatBar" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+      <button class="btn btn-ghost" onclick="regenerateSuggestion()" style="background:#f5f0ff;color:#6a3fc2;border-color:#ddd0f0;">🎲 Gerar nova sugestão</button>
+    </div>
+    <input type="text" id="suggestionNameInput" placeholder="Nome do look (opcional)" autocomplete="off"
+      style="width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid #ddd;border-radius:8px;margin-bottom:14px;font-family:inherit;font-size:.85rem;">
+    <div style="display:flex;justify-content:flex-end;gap:10px;">
+      <button class="btn btn-ghost" onclick="closeSuggestionBuilder()">Cancelar</button>
+      <button class="btn btn-week" onclick="saveSuggestionLook()">💾 Salvar look</button>
     </div>
   </div>
 </div>
