@@ -518,8 +518,8 @@ body.compare-mode .card-compare-btn { display: flex; }
 .pc-card-name { font-size: .78rem; color: #2d2d2d; margin-top: 2px; line-height: 1.3; }
 .pc-card-meta { font-size: .68rem; color: #999; margin-top: 4px; }
 .pc-card.selected-piece { outline: 2px solid #6a3fc2; outline-offset: -2px; }
-.look-chip { position: relative; width: 92px; }
-.look-chip img { width: 92px; height: 92px; object-fit: contain; background: #fff; border-radius: 8px; border: 1px solid #eee; display:block; }
+.look-chip { position: relative; width: 104px; }
+.look-chip img { width: 104px; height: 104px; object-fit: contain; background: #fff; border-radius: 8px; border: 1px solid #eee; display:block; }
 .look-chip .chip-remove { position: absolute; top: -6px; right: -6px; background: #fff; border: 1px solid #ddd; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: .7rem; }
 .look-chip .chip-label { font-size: .62rem; color: #999; text-align: center; margin-top: 3px; }
 .sugg-chip-actions { position: absolute; top: -8px; right: -8px; display: flex; gap: 3px; }
@@ -2209,11 +2209,7 @@ function renderLooksMontados() {
         '<div class="pc-card-name">' + (m.name ? m.name.replace(/</g,'&lt;') : 'Look sem nome') + '</div>' +
         '<div class="pc-card-meta">' + m.pieceIds.length + (m.pieceIds.length === 1 ? ' peça' : ' peças') + '</div>' +
       '</div>';
-    card.onclick = function() {
-      if (confirm('Excluir este look montado? (as peças não são afetadas)')) {
-        deleteMontagem(m.id);
-      }
-    };
+    card.onclick = function() { openMontadoDetail(m.id); };
     grid.appendChild(card);
   });
 }
@@ -2222,6 +2218,54 @@ function deleteMontagem(id) {
   montagens = montagens.filter(function(m) { return m.id !== id; });
   saveMontagens();
   renderLooksMontados();
+}
+
+// ── Detalhe de look montado ──
+var montadoDetailId = null;
+
+function openMontadoDetail(id) {
+  var m = montagens.find(function(x) { return x.id === id; });
+  if (!m) return;
+  montadoDetailId = id;
+  var nameEl = document.getElementById('montadoDetailName');
+  var metaEl = document.getElementById('montadoDetailMeta');
+  if (nameEl) nameEl.textContent = m.name ? m.name : 'Look sem nome';
+  if (metaEl) {
+    metaEl.textContent = m.pieceIds.length + (m.pieceIds.length === 1 ? ' peça' : ' peças') +
+      (m.source === 'auto' ? ' · gerado por sugestão automática' : ' · montado manualmente');
+  }
+  var grid = document.getElementById('montadoDetailPieces');
+  if (grid) {
+    grid.innerHTML = '';
+    m.pieceIds.forEach(function(pid) {
+      var p = findPieceById(pid);
+      if (!p) return;
+      var card = document.createElement('div');
+      card.className = 'pc-card';
+      card.innerHTML =
+        '<img src="' + p.img + '" alt="' + p.name.replace(/"/g,'&quot;') + '" loading="lazy">' +
+        '<div class="pc-card-body">' +
+          '<div class="pc-card-brand">' + p.brand + '</div>' +
+          '<div class="pc-card-name">' + p.name + '</div>' +
+          '<div class="pc-card-meta">' + p.category + ' · ' + p.color + '</div>' +
+        '</div>';
+      grid.appendChild(card);
+    });
+  }
+  document.getElementById('montadoDetailOverlay').style.display = 'flex';
+}
+
+function closeMontadoDetail() {
+  document.getElementById('montadoDetailOverlay').style.display = 'none';
+  montadoDetailId = null;
+}
+
+function confirmDeleteMontado() {
+  if (!montadoDetailId) return;
+  if (confirm('Excluir este look montado? (as peças não são afetadas)')) {
+    deleteMontagem(montadoDetailId);
+    closeMontadoDetail();
+  }
 }
 
 function openLookBuilder() {
@@ -2361,25 +2405,109 @@ function piecesByCategory(cat) {
   return PIECES.filter(function(p) { return p.category === cat; });
 }
 
-function randomPieceForCategory(cat, excludeId) {
+// ── Inferência de estação e ocasião (estimativa a partir do nome/categoria, não é dado do Alta) ──
+var SEASON_WINTER_KEYWORDS = ['wool','coat','boots','sweater','knit','fleece','puffer','cashmere','thermal','corduroy','velvet','fur','turtleneck','hood','beanie','scarf','flannel','shearling'];
+var SEASON_SUMMER_KEYWORDS = ['linen','shorts','sandal','tank','sleeveless','swim','crop','flip flop','mesh','short sleeve','bikini','espadrille'];
+var DRESSY_KEYWORDS = ['blazer','silk','suit','gown','heel','tailored','satin','sequin','pump','trouser','loafer','oxford','structured','clutch'];
+var SEASON_LABEL_PT = { summer: 'verão', winter: 'inverno', all: 'todas estações' };
+var OCCASION_LABEL_PT = { casual: 'casual', dressy: 'mais arrumado' };
+
+function inferSeason(piece) {
+  var text = (piece.name + ' ' + piece.category).toLowerCase();
+  if (SEASON_WINTER_KEYWORDS.some(function(k) { return text.indexOf(k) !== -1; })) return 'winter';
+  if (SEASON_SUMMER_KEYWORDS.some(function(k) { return text.indexOf(k) !== -1; })) return 'summer';
+  return 'all';
+}
+
+function inferOccasion(piece) {
+  var text = (piece.name + ' ' + piece.brand).toLowerCase();
+  return DRESSY_KEYWORDS.some(function(k) { return text.indexOf(k) !== -1; }) ? 'dressy' : 'casual';
+}
+
+// ── Compatibilidade de cor ──
+var NEUTRAL_COLORS = ['black','white','cream','beige','gray','grey','brown','navy','tan','ivory','nude','off-white'];
+var CLASH_COLOR_PAIRS = [['red','pink'],['red','orange'],['green','red'],['purple','yellow'],['orange','pink'],['orange','red']];
+
+function colorCompatibility(colorA, colorB) {
+  var a = (colorA || '').toLowerCase();
+  var b = (colorB || '').toLowerCase();
+  if (!a || !b) return 0.6;
+  if (a === b) return 1.0;
+  if (NEUTRAL_COLORS.indexOf(a) !== -1 || NEUTRAL_COLORS.indexOf(b) !== -1) return 0.95;
+  var clash = CLASH_COLOR_PAIRS.some(function(pair) {
+    return (pair[0] === a && pair[1] === b) || (pair[0] === b && pair[1] === a);
+  });
+  return clash ? 0.15 : 0.55;
+}
+
+// score 0-1: quanto maior, mais as duas peças combinam (cor + estação + ocasião)
+function compatibilityScore(pieceA, pieceB) {
+  var colorScore = colorCompatibility(pieceA.color, pieceB.color);
+  var seasonA = inferSeason(pieceA), seasonB = inferSeason(pieceB);
+  var seasonScore = (seasonA === 'all' || seasonB === 'all' || seasonA === seasonB) ? 1.0 : 0.25;
+  var occA = inferOccasion(pieceA), occB = inferOccasion(pieceB);
+  var occasionScore = (occA === occB) ? 1.0 : 0.45;
+  return colorScore * 0.5 + seasonScore * 0.3 + occasionScore * 0.2;
+}
+
+// escolha aleatória ponderada: favorece candidatos com score maior sem eliminar variedade
+function weightedRandomPiece(candidates, scoreFn) {
+  if (candidates.length === 0) return null;
+  var scored = candidates.map(function(p) { return { p: p, score: scoreFn(p) }; });
+  scored.sort(function(a, b) { return b.score - a.score; });
+  var keepCount = Math.max(1, Math.ceil(scored.length * 0.5));
+  var pool = scored.slice(0, keepCount);
+  var totalWeight = pool.reduce(function(sum, x) { return sum + x.score; }, 0);
+  if (totalWeight <= 0) return pool[Math.floor(Math.random() * pool.length)].p;
+  var r = Math.random() * totalWeight;
+  for (var i = 0; i < pool.length; i++) {
+    r -= pool[i].score;
+    if (r <= 0) return pool[i].p;
+  }
+  return pool[pool.length - 1].p;
+}
+
+// escolhe uma peça de uma categoria, ponderando por compatibilidade com as peças já escolhidas no look
+function pickPieceForCategory(cat, referencePieces, excludeId) {
   var list = piecesByCategory(cat);
+  if (excludeId) {
+    var filtered = list.filter(function(p) { return p.id !== excludeId; });
+    if (filtered.length > 0) list = filtered;
+  }
   if (list.length === 0) return null;
-  var pool = excludeId ? list.filter(function(p) { return p.id !== excludeId; }) : list;
-  if (pool.length === 0) pool = list;
-  return pool[Math.floor(Math.random() * pool.length)];
+  if (!referencePieces || referencePieces.length === 0) {
+    return list[Math.floor(Math.random() * list.length)];
+  }
+  return weightedRandomPiece(list, function(p) {
+    var total = 0;
+    referencePieces.forEach(function(rp) { total += compatibilityScore(p, rp); });
+    return total / referencePieces.length;
+  });
+}
+
+function randomPieceForCategory(cat, excludeId) {
+  return pickPieceForCategory(cat, null, excludeId);
+}
+
+function currentSuggestionPieces(excludeIdx) {
+  return suggestionSlots
+    .filter(function(s, i) { return i !== excludeIdx; })
+    .map(function(s) { return findPieceById(s.pieceId); })
+    .filter(Boolean);
 }
 
 function generateFullSuggestion() {
   suggestionSlots = [];
+  var chosen = [];
   SUGGESTION_REQUIRED_CATS.forEach(function(cat) {
-    var p = randomPieceForCategory(cat);
-    if (p) suggestionSlots.push({ category: cat, pieceId: p.id });
+    var p = pickPieceForCategory(cat, chosen);
+    if (p) { suggestionSlots.push({ category: cat, pieceId: p.id }); chosen.push(p); }
   });
   SUGGESTION_OPTIONAL_CATS.forEach(function(cat) {
     var chance = SUGGESTION_OPTIONAL_CHANCE[cat] != null ? SUGGESTION_OPTIONAL_CHANCE[cat] : 0.3;
     if (Math.random() < chance) {
-      var p = randomPieceForCategory(cat);
-      if (p) suggestionSlots.push({ category: cat, pieceId: p.id });
+      var p = pickPieceForCategory(cat, chosen);
+      if (p) { suggestionSlots.push({ category: cat, pieceId: p.id }); chosen.push(p); }
     }
   });
 }
@@ -2410,13 +2538,15 @@ function renderSuggestionCanvas() {
     if (!p) return;
     var chip = document.createElement('div');
     chip.className = 'look-chip';
+    var seasonLbl = SEASON_LABEL_PT[inferSeason(p)];
+    var occasionLbl = OCCASION_LABEL_PT[inferOccasion(p)];
     chip.innerHTML =
       '<img src="' + p.img + '" alt="">' +
       '<div class="sugg-chip-actions">' +
         '<span class="sugg-action-btn" title="Trocar peça">🔁</span>' +
         '<span class="sugg-action-btn" title="Remover categoria">✕</span>' +
       '</div>' +
-      '<div class="chip-label">' + p.category + '</div>';
+      '<div class="chip-label">' + p.category + ' · ' + p.color + '<br>' + seasonLbl + ' · ' + occasionLbl + '</div>';
     var actions = chip.querySelectorAll('.sugg-action-btn');
     actions[0].onclick = function(e) { e.stopPropagation(); rerollSlot(idx); };
     actions[1].onclick = function(e) { e.stopPropagation(); removeSuggestionSlot(idx); };
@@ -2427,7 +2557,8 @@ function renderSuggestionCanvas() {
 function rerollSlot(idx) {
   var slot = suggestionSlots[idx];
   if (!slot) return;
-  var p = randomPieceForCategory(slot.category, slot.pieceId);
+  var refs = currentSuggestionPieces(idx);
+  var p = pickPieceForCategory(slot.category, refs, slot.pieceId);
   if (p) slot.pieceId = p.id;
   renderSuggestionCanvas();
 }
@@ -2456,7 +2587,8 @@ function renderSuggestionAddBar() {
 }
 
 function addSuggestionCategory(cat) {
-  var p = randomPieceForCategory(cat);
+  var refs = currentSuggestionPieces();
+  var p = pickPieceForCategory(cat, refs);
   if (!p) return;
   suggestionSlots.push({ category: cat, pieceId: p.id });
   renderSuggestionCanvas();
@@ -7331,7 +7463,7 @@ function applySuggestions() {
       <div style="font-size:1.1rem;font-weight:700;">🎲 Sugestão automática de look</div>
       <span style="cursor:pointer;font-size:1.4rem;line-height:1;" onclick="closeSuggestionBuilder()">✕</span>
     </div>
-    <p style="color:#888;font-size:.8rem;margin:-6px 0 14px;">Combinação sorteada entre as peças do Alta. Clique em 🔁 pra trocar só aquela peça, ✕ pra tirar a categoria do look, ou gere tudo de novo.</p>
+    <p style="color:#888;font-size:.8rem;margin:-6px 0 14px;">Combinação sugerida levando em conta cor, estação e ocasião de cada peça (estimados a partir do nome/categoria — não são dados oficiais do Alta). Clique em 🔁 pra trocar só aquela peça, ✕ pra tirar a categoria do look, ou gere tudo de novo.</p>
     <div id="suggestionCanvas" style="display:flex;flex-wrap:wrap;gap:14px;min-height:110px;background:#faf9f7;border:1.5px dashed #ddd;border-radius:12px;padding:14px;margin-bottom:14px;align-items:flex-start;"></div>
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
       <div id="suggestionAddCatBar" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
@@ -7342,6 +7474,19 @@ function applySuggestions() {
     <div style="display:flex;justify-content:flex-end;gap:10px;">
       <button class="btn btn-ghost" onclick="closeSuggestionBuilder()">Cancelar</button>
       <button class="btn btn-week" onclick="saveSuggestionLook()">💾 Salvar look</button>
+    </div>
+  </div>
+</div>
+
+<!-- ──── Montado Detail Overlay ──── -->
+<div id="montadoDetailOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:10002;align-items:center;justify-content:center;padding:20px;" onclick="if(event.target===this)closeMontadoDetail()">
+  <div style="background:#fff;border-radius:16px;max-width:640px;width:100%;max-height:85vh;overflow-y:auto;padding:24px;position:relative;">
+    <span style="position:absolute;top:16px;right:18px;cursor:pointer;font-size:1.3rem;line-height:1;" onclick="closeMontadoDetail()">✕</span>
+    <div id="montadoDetailName" style="font-size:1.15rem;font-weight:700;margin-bottom:4px;padding-right:24px;"></div>
+    <div id="montadoDetailMeta" style="font-size:.78rem;color:#999;margin-bottom:16px;"></div>
+    <div id="montadoDetailPieces" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:20px;"></div>
+    <div style="display:flex;justify-content:flex-end;">
+      <button class="btn btn-ghost" onclick="confirmDeleteMontado()" style="background:#fff3f0;color:#c00;border-color:#f0c0c0;">🗑 Excluir look</button>
     </div>
   </div>
 </div>
