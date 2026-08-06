@@ -2237,12 +2237,37 @@ function renderFlatLay(container, pieces, opts) {
       wrap.style.left = (pos.left + offset) + '%';
       wrap.style.width = (n > 1 ? pos.width * 0.8 : pos.width) + '%';
       wrap.style.zIndex = String((FLATLAY_Z[cat] || 1) * 10 + i);
-      wrap.title = p.brand + ' — ' + p.name;
+      wrap.title = p.brand + ' — ' + p.name + (opts.zoomable ? ' (clique pra ampliar)' : '');
       wrap.innerHTML = '<img src="' + p.img + '" alt="' + p.name.replace(/"/g,'&quot;') + '" loading="lazy">';
+      if (opts.zoomable) {
+        var img = wrap.querySelector('img');
+        img.style.cursor = 'zoom-in';
+        img.onclick = function(e) { e.stopPropagation(); openPieceZoom(p.id); };
+      }
       if (opts.renderExtra) opts.renderExtra(wrap, p, cat);
       container.appendChild(wrap);
     });
   });
+}
+
+// ── Ampliar peça (zoom) ──
+function openPieceZoom(pieceId) {
+  var p = findPieceById(pieceId);
+  if (!p) return;
+  var img = document.getElementById('pieceZoomImg');
+  var brand = document.getElementById('pieceZoomBrand');
+  var name = document.getElementById('pieceZoomName');
+  var meta = document.getElementById('pieceZoomMeta');
+  if (img) img.src = p.img;
+  if (img) img.alt = p.name;
+  if (brand) brand.textContent = p.brand;
+  if (name) name.textContent = p.name;
+  if (meta) meta.textContent = p.category + ' · ' + p.color;
+  document.getElementById('pieceZoomOverlay').style.display = 'flex';
+}
+
+function closePieceZoom() {
+  document.getElementById('pieceZoomOverlay').style.display = 'none';
 }
 
 function renderLooksMontados() {
@@ -2298,7 +2323,7 @@ function openMontadoDetail(id) {
   }
   var pieces = m.pieceIds.map(findPieceById).filter(Boolean);
   var flatlay = document.getElementById('montadoDetailFlatlay');
-  if (flatlay) renderFlatLay(flatlay, pieces);
+  if (flatlay) renderFlatLay(flatlay, pieces, { zoomable: true });
   var grid = document.getElementById('montadoDetailPieces');
   if (grid) {
     grid.innerHTML = '';
@@ -2312,6 +2337,8 @@ function openMontadoDetail(id) {
           '<div class="pc-card-name">' + p.name + '</div>' +
           '<div class="pc-card-meta">' + p.category + ' · ' + p.color + '</div>' +
         '</div>';
+      card.style.cursor = 'zoom-in';
+      card.onclick = function() { openPieceZoom(p.id); };
       grid.appendChild(card);
     });
   }
@@ -2354,6 +2381,7 @@ function renderBuilderCanvas() {
   var pieces = builderPieceIds.map(findPieceById).filter(Boolean);
   renderFlatLay(canvas, pieces, {
     emptyMessage: 'Clique nas peças abaixo pra adicionar ao look',
+    zoomable: true,
     renderExtra: function(wrap, p) {
       var actions = document.createElement('div');
       actions.className = 'flatlay-icon-actions';
@@ -2588,6 +2616,7 @@ function renderSuggestionCanvas() {
   var pieces = suggestionSlots.map(function(s) { return findPieceById(s.pieceId); }).filter(Boolean);
   renderFlatLay(canvas, pieces, {
     emptyMessage: 'Nenhuma peça no momento. Clique em "🎲 Gerar nova sugestão" ou adicione uma categoria abaixo.',
+    zoomable: true,
     renderExtra: function(wrap, p) {
       var idx = suggestionSlots.findIndex(function(s) { return s.pieceId === p.id; });
       var actions = document.createElement('div');
@@ -7547,6 +7576,19 @@ function applySuggestions() {
     <div id="montadoDetailPieces" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:20px;"></div>
     <div style="display:flex;justify-content:flex-end;">
       <button class="btn btn-ghost" onclick="confirmDeleteMontado()" style="background:#fff3f0;color:#c00;border-color:#f0c0c0;">🗑 Excluir look</button>
+    </div>
+  </div>
+</div>
+
+<!-- ──── Piece Zoom Overlay ──── -->
+<div id="pieceZoomOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:10003;align-items:center;justify-content:center;padding:20px;" onclick="if(event.target===this)closePieceZoom()">
+  <div style="background:#fff;border-radius:16px;max-width:420px;width:100%;max-height:90vh;overflow-y:auto;position:relative;">
+    <span style="position:absolute;top:12px;right:14px;cursor:pointer;font-size:1.4rem;line-height:1;background:rgba(255,255,255,.85);border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;" onclick="closePieceZoom()">✕</span>
+    <img id="pieceZoomImg" src="" alt="" style="width:100%;max-height:60vh;object-fit:contain;background:#faf9f7;display:block;border-radius:16px 16px 0 0;">
+    <div style="padding:16px 18px 20px;">
+      <div id="pieceZoomBrand" style="font-size:.72rem;color:#6a3fc2;font-weight:700;text-transform:uppercase;letter-spacing:.02em;"></div>
+      <div id="pieceZoomName" style="font-size:1rem;color:#1a1a1a;margin-top:2px;"></div>
+      <div id="pieceZoomMeta" style="font-size:.8rem;color:#999;margin-top:6px;"></div>
     </div>
   </div>
 </div>
