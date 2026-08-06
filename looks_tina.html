@@ -584,7 +584,7 @@ body.compare-mode .card-compare-btn { display: flex; }
   <div class="tab" id="tabStats" onclick="switchTab('stats')">📊 Relatório</div>
   <div class="tab" id="tabCal" onclick="switchTab('cal')">🗓 Calendário</div>
   <div class="tab" id="tabImport" onclick="switchTab('import')">➕ Importar</div>
-  <div class="tab" id="tabPecas" onclick="switchTab('pecas')">🧩 Peças (Alta)</div>
+  <div class="tab" id="tabPecas" onclick="switchTab('pecas')">🧩 Peças</div>
   <div class="tab" id="tabMontados" onclick="switchTab('montados')">👗 Looks Montados</div>
 </div>
 
@@ -2129,18 +2129,42 @@ var PIECES = [
 var PECAS_STORAGE_KEY = 'looks_tina_pecas_alta_v1'; // reservado p/ uso futuro (favoritos etc.), não compartilha nada com o catálogo de looks
 var pecasActiveCat = '__all__';
 
+// ── Peças avulsas: peças adicionadas manualmente (foto/galeria), separadas das 276 importadas do Alta ──
+var PECAS_AVULSAS_KEY = 'looks_tina_pecas_avulsas_v1'; // storage próprio - nunca mexe em PIECES (Alta) nem no catálogo
+var PECA_CATEGORIES = ['Tops', 'Bottoms', 'Outerwear', 'Shoes', 'Bags', 'Jewelry', 'Accessories'];
+var pecasAvulsas = [];
+try {
+  pecasAvulsas = JSON.parse(localStorage.getItem(PECAS_AVULSAS_KEY)) || [];
+} catch (e) {
+  pecasAvulsas = [];
+}
+
+function savePecasAvulsas() {
+  try {
+    localStorage.setItem(PECAS_AVULSAS_KEY, JSON.stringify(pecasAvulsas));
+  } catch (e) {
+    alert('Não foi possível salvar a peça avulsa (armazenamento do navegador cheio). Tente remover alguma peça avulsa antiga ou usar uma foto menor.');
+  }
+}
+
+// combina as 276 peças do Alta (PIECES, nunca alterado) com as peças avulsas adicionadas manualmente
+function allPecas() {
+  return PIECES.concat(pecasAvulsas);
+}
+
 function renderPecasCatBar() {
   var bar = document.getElementById('pecasCatBar');
   if (!bar) return;
-  var cats = Array.from(new Set(PIECES.map(function(p){ return p.category; }))).sort();
+  var todas = allPecas();
+  var cats = Array.from(new Set(todas.map(function(p){ return p.category; }))).sort();
   bar.innerHTML = '';
   var allPill = document.createElement('div');
   allPill.className = 'pc-cat-pill' + (pecasActiveCat==='__all__' ? ' active' : '');
-  allPill.textContent = 'Todas (' + PIECES.length + ')';
+  allPill.textContent = 'Todas (' + todas.length + ')';
   allPill.onclick = function(){ pecasActiveCat = '__all__'; renderPecas(); };
   bar.appendChild(allPill);
   cats.forEach(function(cat) {
-    var count = PIECES.filter(function(p){ return p.category === cat; }).length;
+    var count = todas.filter(function(p){ return p.category === cat; }).length;
     var pill = document.createElement('div');
     pill.className = 'pc-cat-pill' + (pecasActiveCat===cat ? ' active' : '');
     pill.textContent = cat + ' (' + count + ')';
@@ -2153,14 +2177,15 @@ function renderPecas() {
   renderPecasCatBar();
   var searchEl = document.getElementById('pecasSearch');
   var q = searchEl ? searchEl.value.trim().toLowerCase() : '';
-  var list = PIECES.filter(function(p) {
+  var todas = allPecas();
+  var list = todas.filter(function(p) {
     if (pecasActiveCat !== '__all__' && p.category !== pecasActiveCat) return false;
     if (q && (p.name + ' ' + p.brand + ' ' + p.color).toLowerCase().indexOf(q) === -1) return false;
     return true;
   });
   var grid = document.getElementById('pecasGrid');
   var countEl = document.getElementById('pecasCount');
-  if (countEl) countEl.textContent = list.length + ' de ' + PIECES.length + ' peças';
+  if (countEl) countEl.textContent = list.length + ' de ' + todas.length + ' peças';
   if (!grid) return;
   grid.innerHTML = '';
   if (list.length === 0) {
@@ -2170,18 +2195,26 @@ function renderPecas() {
   list.forEach(function(p) {
     var card = document.createElement('div');
     card.className = 'pc-card';
+    var isAvulsa = p.avulsa === true;
     card.innerHTML =
       '<img src="' + p.img + '" alt="' + p.name.replace(/"/g,'&quot;') + '" loading="lazy">' +
       '<div class="pc-card-body">' +
-        '<div class="pc-card-brand">' + p.brand + '</div>' +
+        '<div class="pc-card-brand">' + p.brand + (isAvulsa ? ' <span class="week-day-badge">avulsa</span>' : '') + '</div>' +
         '<div class="pc-card-name">' + p.name + '</div>' +
         '<div class="pc-card-meta">' + p.category + ' · ' + p.color + '</div>' +
         '<button class="btn btn-ghost peca-montar-btn" type="button">👗 Montar look</button>' +
+        (isAvulsa ? '<button class="btn btn-ghost peca-remover-btn" type="button" style="margin-top:6px;color:#c00;">🗑 Remover peça avulsa</button>' : '') +
       '</div>';
     card.querySelector('.peca-montar-btn').onclick = function(e) {
       e.stopPropagation();
       montarLookComPeca(p.id);
     };
+    if (isAvulsa) {
+      card.querySelector('.peca-remover-btn').onclick = function(e) {
+        e.stopPropagation();
+        removePecaAvulsa(p.id);
+      };
+    }
     grid.appendChild(card);
   });
 }
@@ -2190,6 +2223,95 @@ function renderPecas() {
 function montarLookComPeca(pieceId) {
   switchTab('montados');
   openSuggestionBuilder(pieceId);
+}
+
+// ── Adicionar peça avulsa (foto ou galeria do iPhone) ──
+var novaPecaImgData = null;
+
+function openAddPecaOverlay() {
+  novaPecaImgData = null;
+  document.getElementById('novaPecaPreview').style.display = 'none';
+  document.getElementById('novaPecaPreview').src = '';
+  document.getElementById('novaPecaFileInput').value = '';
+  document.getElementById('novaPecaBrand').value = '';
+  document.getElementById('novaPecaName').value = '';
+  document.getElementById('novaPecaColor').value = '';
+  var catSelect = document.getElementById('novaPecaCategory');
+  if (catSelect && !catSelect.options.length) {
+    PECA_CATEGORIES.forEach(function(c) {
+      var opt = document.createElement('option');
+      opt.value = c; opt.textContent = c;
+      catSelect.appendChild(opt);
+    });
+  }
+  document.getElementById('addPecaOverlay').style.display = 'flex';
+}
+
+function closeAddPecaOverlay() {
+  document.getElementById('addPecaOverlay').style.display = 'none';
+}
+
+// redimensiona a foto (canvas) antes de guardar no localStorage, pra não estourar o limite de armazenamento do navegador
+function handleNovaPecaFile(fileList) {
+  var file = fileList && fileList[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var img = new Image();
+    img.onload = function() {
+      var maxDim = 900;
+      var scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+      var canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      novaPecaImgData = canvas.toDataURL('image/jpeg', 0.85);
+      var preview = document.getElementById('novaPecaPreview');
+      preview.src = novaPecaImgData;
+      preview.style.display = 'block';
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function saveNovaPecaAvulsa() {
+  if (!novaPecaImgData) {
+    alert('Adicione uma foto da peça (tirar foto ou escolher da galeria).');
+    return;
+  }
+  var brand = document.getElementById('novaPecaBrand').value.trim() || 'Sem marca';
+  var name = document.getElementById('novaPecaName').value.trim();
+  var category = document.getElementById('novaPecaCategory').value;
+  var color = document.getElementById('novaPecaColor').value.trim().toLowerCase();
+  if (!name) {
+    alert('Dê um nome pra peça (ex: "Blusa listrada azul").');
+    return;
+  }
+  if (!color) {
+    alert('Informe a cor principal da peça (ajuda a sugestão automática a combinar looks).');
+    return;
+  }
+  pecasAvulsas.push({
+    id: 'avulsa_' + Date.now() + '_' + Math.floor(Math.random() * 100000),
+    img: novaPecaImgData,
+    brand: brand,
+    name: name,
+    category: category,
+    color: color,
+    avulsa: true
+  });
+  savePecasAvulsas();
+  closeAddPecaOverlay();
+  renderPecas();
+}
+
+function removePecaAvulsa(id) {
+  if (!confirm('Remover esta peça avulsa? (looks montados que já usam ela continuam salvos, mas a peça some da lista)')) return;
+  pecasAvulsas = pecasAvulsas.filter(function(p) { return p.id !== id; });
+  savePecasAvulsas();
+  renderPecas();
 }
 
 // ── Looks Montados (a partir das Peças do Alta) ──
@@ -2211,6 +2333,9 @@ function saveMontagens() {
 function findPieceById(id) {
   for (var i = 0; i < PIECES.length; i++) {
     if (PIECES[i].id === id) return PIECES[i];
+  }
+  for (var j = 0; j < pecasAvulsas.length; j++) {
+    if (pecasAvulsas[j].id === id) return pecasAvulsas[j];
   }
   return null;
 }
@@ -2237,6 +2362,7 @@ function setMontadoWeekday(id, day) {
   saveMontagens();
   renderLooksMontados();
   if (montadoDetailId === id) openMontadoDetail(id);
+  if (typeof renderCal === 'function' && document.getElementById('calGrid')) renderCal();
 }
 
 function renderWeekPlanner() {
@@ -2483,7 +2609,7 @@ function renderBuilderCanvas() {
 function renderBuilderCatBar() {
   var bar = document.getElementById('builderCatBar');
   if (!bar) return;
-  var cats = Array.from(new Set(PIECES.map(function(p) { return p.category; }))).sort();
+  var cats = Array.from(new Set(allPecas().map(function(p) { return p.category; }))).sort();
   bar.innerHTML = '';
   var allPill = document.createElement('div');
   allPill.className = 'pc-cat-pill' + (builderActiveCat === '__all__' ? ' active' : '');
@@ -2502,7 +2628,7 @@ function renderBuilderCatBar() {
 function renderBuilderPicker() {
   var searchEl = document.getElementById('builderSearch');
   var q = searchEl ? searchEl.value.trim().toLowerCase() : '';
-  var list = PIECES.filter(function(p) {
+  var list = allPecas().filter(function(p) {
     if (builderActiveCat !== '__all__' && p.category !== builderActiveCat) return false;
     if (q && (p.name + ' ' + p.brand + ' ' + p.color).toLowerCase().indexOf(q) === -1) return false;
     return true;
@@ -2571,9 +2697,10 @@ var SUGGESTION_REQUIRED_CATS = ['Tops', 'Bottoms', 'Shoes'];
 var SUGGESTION_OPTIONAL_CATS = ['Outerwear', 'Bags', 'Jewelry', 'Accessories'];
 var SUGGESTION_OPTIONAL_CHANCE = { Outerwear: 0.5, Bags: 0.6, Jewelry: 0.3, Accessories: 0.2 };
 var suggestionSlots = []; // [{category, pieceId}]
+var suggestionSeedPiece = null; // peça travada quando a sugestão foi aberta a partir de uma peça específica (aba Peças)
 
 function piecesByCategory(cat) {
-  return PIECES.filter(function(p) { return p.category === cat; });
+  return allPecas().filter(function(p) { return p.category === cat; });
 }
 
 // ── Inferência de estação e ocasião (estimativa a partir do nome/categoria, não é dado do Alta) ──
@@ -2690,10 +2817,11 @@ function generateFullSuggestion(seedPiece) {
   });
 }
 
-// seedPieceId opcional: abre a sugestão automática já com essa peça incluída (usado a partir da aba Peças)
+// seedPieceId opcional: abre a sugestão automática já com essa peça incluída e travada (usado a partir da aba Peças).
+// A peça travada continua fixa mesmo clicando em "gerar nova sugestão", até a peça ser removida ou o overlay ser fechado.
 function openSuggestionBuilder(seedPieceId) {
-  var seedPiece = seedPieceId ? findPieceById(seedPieceId) : null;
-  generateFullSuggestion(seedPiece);
+  suggestionSeedPiece = seedPieceId ? findPieceById(seedPieceId) : null;
+  generateFullSuggestion(suggestionSeedPiece);
   var nameInput = document.getElementById('suggestionNameInput');
   if (nameInput) nameInput.value = '';
   document.getElementById('suggestionOverlay').style.display = 'flex';
@@ -2702,6 +2830,7 @@ function openSuggestionBuilder(seedPieceId) {
 }
 
 function closeSuggestionBuilder() {
+  suggestionSeedPiece = null;
   document.getElementById('suggestionOverlay').style.display = 'none';
 }
 
@@ -2746,6 +2875,10 @@ function rerollSlot(idx) {
 }
 
 function removeSuggestionSlot(idx) {
+  var removed = suggestionSlots[idx];
+  if (removed && suggestionSeedPiece && removed.pieceId === suggestionSeedPiece.id) {
+    suggestionSeedPiece = null; // peça travada foi removida manualmente, destrava
+  }
   suggestionSlots.splice(idx, 1);
   renderSuggestionCanvas();
   renderSuggestionAddBar();
@@ -2755,7 +2888,7 @@ function renderSuggestionAddBar() {
   var bar = document.getElementById('suggestionAddCatBar');
   if (!bar) return;
   var usedCats = suggestionSlots.map(function(s) { return s.category; });
-  var allCats = Array.from(new Set(PIECES.map(function(p) { return p.category; }))).sort();
+  var allCats = Array.from(new Set(allPecas().map(function(p) { return p.category; }))).sort();
   var available = allCats.filter(function(c) { return usedCats.indexOf(c) === -1; });
   bar.innerHTML = '';
   if (available.length === 0) return;
@@ -2778,7 +2911,7 @@ function addSuggestionCategory(cat) {
 }
 
 function regenerateSuggestion() {
-  generateFullSuggestion();
+  generateFullSuggestion(suggestionSeedPiece);
   renderSuggestionCanvas();
   renderSuggestionAddBar();
 }
@@ -7117,6 +7250,7 @@ function closeQuickCat() {
 // ── Calendar View ──
 var calYear = new Date().getFullYear();
 var calMonth = new Date().getMonth(); // 0-based
+var WEEKDAY_JS_MAP = ['dom','seg','ter','qua','qui','sex','sab']; // índice = Date.getDay()
 
 function calPrevMonth() {
   calMonth--;
@@ -7210,6 +7344,19 @@ function renderCal() {
         imgWrap.appendChild(more);
       }
       cell.appendChild(imgWrap);
+    }
+
+    // Look Montado planejado pro dia da semana (recorrente, vem do Planejador da Semana em Looks Montados)
+    var wkKey = WEEKDAY_JS_MAP[new Date(calYear, calMonth, day).getDay()];
+    var plannedLook = montagens.find(function(m){ return m.weekday === wkKey; });
+    if (plannedLook) {
+      var chip = document.createElement('div');
+      chip.className = 'cal-week-chip';
+      chip.style.cssText = 'margin-top:3px;font-size:.6rem;background:#f5f0ff;color:#6a3fc2;border-radius:6px;padding:2px 4px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+      chip.textContent = '👗 ' + (plannedLook.name || 'look');
+      chip.title = 'Look planejado: ' + (plannedLook.name || 'sem nome') + ' — clique pra ver';
+      chip.onclick = (function(mid){ return function(e){ e.stopPropagation(); switchTab('montados'); openMontadoDetail(mid); }; })(plannedLook.id);
+      cell.appendChild(chip);
     }
 
     grid.appendChild(cell);
@@ -7588,8 +7735,11 @@ function applySuggestions() {
 
 <div id="pecasView" style="display:none;padding:24px;">
   <div style="max-width:1100px;margin:0 auto;">
-    <div style="margin-bottom:4px;font-size:1.2rem;font-weight:700;">🧩 Peças importadas do Alta</div>
-    <p style="color:#888;font-size:.82rem;margin-bottom:18px;">Guarda-roupa peça por peça, importado do Alta. Fica completamente separado do catálogo de looks prontos acima — nada aqui mexe nos seus looks.</p>
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:4px;">
+      <div style="font-size:1.2rem;font-weight:700;">🧩 Peças</div>
+      <button class="btn btn-week" onclick="openAddPecaOverlay()">➕ Adicionar peça avulsa</button>
+    </div>
+    <p style="color:#888;font-size:.82rem;margin-bottom:18px;">Guarda-roupa peça por peça: 276 importadas do Alta + as peças avulsas que você adicionar por foto. Fica completamente separado do catálogo de looks prontos acima — nada aqui mexe nos seus looks.</p>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px;">
       <div class="search-wrap" style="max-width:280px;">
         <span class="si">🔍</span>
@@ -7599,6 +7749,33 @@ function applySuggestions() {
     </div>
     <div id="pecasCatBar" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px;"></div>
     <div id="pecasGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px;"></div>
+  </div>
+</div>
+
+<!-- ──── Adicionar Peça Avulsa Overlay ──── -->
+<div id="addPecaOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10001;align-items:flex-start;justify-content:center;padding:30px 16px;overflow-y:auto;" onclick="if(event.target===this)closeAddPecaOverlay()">
+  <div style="background:#fff;max-width:420px;width:100%;border-radius:16px;padding:22px 24px 26px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <div style="font-size:1.1rem;font-weight:700;">➕ Adicionar peça avulsa</div>
+      <span style="cursor:pointer;font-size:1.4rem;line-height:1;" onclick="closeAddPecaOverlay()">✕</span>
+    </div>
+    <p style="color:#888;font-size:.78rem;margin:-6px 0 14px;">Tire uma foto ou escolha da galeria do iPhone. A foto fica salva só neste navegador/dispositivo (não sincroniza automaticamente com o site publicado).</p>
+    <label for="novaPecaFileInput" style="display:block;border:1.5px dashed #ddd;border-radius:12px;padding:18px;text-align:center;cursor:pointer;color:#888;font-size:.85rem;margin-bottom:14px;">
+      📷 Tirar foto ou escolher da galeria
+      <input type="file" id="novaPecaFileInput" accept="image/*" style="display:none" onchange="handleNovaPecaFile(this.files)">
+    </label>
+    <img id="novaPecaPreview" src="" style="display:none;width:100%;max-height:220px;object-fit:contain;border-radius:12px;background:#faf9f7;margin-bottom:14px;">
+    <input type="text" id="novaPecaBrand" placeholder="Marca (opcional)" autocomplete="off"
+      style="width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid #ddd;border-radius:8px;margin-bottom:10px;font-family:inherit;font-size:.85rem;">
+    <input type="text" id="novaPecaName" placeholder="Nome da peça (ex: Blusa listrada azul)" autocomplete="off"
+      style="width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid #ddd;border-radius:8px;margin-bottom:10px;font-family:inherit;font-size:.85rem;">
+    <select id="novaPecaCategory" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid #ddd;border-radius:8px;margin-bottom:10px;font-family:inherit;font-size:.85rem;background:#fff;"></select>
+    <input type="text" id="novaPecaColor" placeholder="Cor principal (ex: azul, preto, verde oliva)" autocomplete="off"
+      style="width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid #ddd;border-radius:8px;margin-bottom:16px;font-family:inherit;font-size:.85rem;">
+    <div style="display:flex;justify-content:flex-end;gap:10px;">
+      <button class="btn btn-ghost" onclick="closeAddPecaOverlay()">Cancelar</button>
+      <button class="btn btn-week" onclick="saveNovaPecaAvulsa()">💾 Salvar peça</button>
+    </div>
   </div>
 </div>
 <div id="montadosView" style="display:none;padding:24px;">
