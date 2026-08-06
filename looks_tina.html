@@ -578,14 +578,14 @@ body.compare-mode .card-compare-btn { display: flex; }
 </div>
 
 <div class="tab-bar">
-  <div class="tab active" id="tabCatalog" onclick="switchTab('catalog')">Catálogo</div>
+  <div class="tab active" id="tabCatalog" onclick="switchTab('catalog')">📖 Catálogo</div>
   <div class="tab" id="tabWeek" onclick="switchTab('week')">📅 Looks da Semana</div>
-  <div class="tab" id="tabAdmin" onclick="switchTab('admin')">⚙️ Peças</div>
-  <div class="tab" id="tabStats" onclick="switchTab('stats')">📊 Relatório</div>
   <div class="tab" id="tabCal" onclick="switchTab('cal')">🗓 Calendário</div>
-  <div class="tab" id="tabImport" onclick="switchTab('import')">➕ Importar</div>
-  <div class="tab" id="tabPecas" onclick="switchTab('pecas')">🧩 Peças</div>
+  <div class="tab" id="tabPecas" onclick="switchTab('pecas')">🧩 Peças Avulsas</div>
   <div class="tab" id="tabMontados" onclick="switchTab('montados')">👗 Looks Montados</div>
+  <div class="tab" id="tabAdmin" onclick="switchTab('admin')">🏷️ Tags</div>
+  <div class="tab" id="tabStats" onclick="switchTab('stats')">📊 Relatório</div>
+  <div class="tab" id="tabImport" onclick="switchTab('import')">➕ Importar</div>
 </div>
 
 <div id="catalogView">
@@ -7736,7 +7736,7 @@ function applySuggestions() {
 <div id="pecasView" style="display:none;padding:24px;">
   <div style="max-width:1100px;margin:0 auto;">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:4px;">
-      <div style="font-size:1.2rem;font-weight:700;">🧩 Peças</div>
+      <div style="font-size:1.2rem;font-weight:700;">🧩 Peças Avulsas</div>
       <button class="btn btn-week" onclick="openAddPecaOverlay()">➕ Adicionar peça avulsa</button>
     </div>
     <p style="color:#888;font-size:.82rem;margin-bottom:18px;">Guarda-roupa peça por peça: 276 importadas do Alta + as peças avulsas que você adicionar por foto. Fica completamente separado do catálogo de looks prontos acima — nada aqui mexe nos seus looks.</p>
