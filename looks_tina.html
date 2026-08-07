@@ -3050,6 +3050,22 @@ function rotateLookBy(pid, delta) {
   return setRotation(pid, getRotation(look) + delta);
 }
 
+// Ordem padrão do catálogo: upload mais recente primeiro.
+// Looks importados têm id string ('imp_<timestamp>_xxxx'), então o `b.id - a.id`
+// antigo virava NaN e eles ficavam no fim da lista. Aqui cada look vira um número
+// comparável: importados usam o timestamp do upload, que é sempre maior que os
+// ids numéricos do CATALOG original.
+function lookRecency(p) {
+  if (p && p.addedAt) return p.addedAt;
+  var id = p ? p.id : null;
+  if (typeof id === 'number') return id;
+  var m = /^imp_(\d+)/.exec(String(id == null ? '' : id));
+  if (m) return Number(m[1]);
+  var n = Number(id);
+  return isNaN(n) ? 0 : n;
+}
+function byNewestFirst(a, b) { return lookRecency(b) - lookRecency(a); }
+
 function loadFromStorage() {
   try {
     var saved = lsGet(STORAGE_KEY);
@@ -3441,8 +3457,8 @@ function renderGrid() {
     });
   }
   // Sort
-  // Default: newest uploads first (highest ID = most recent)
-  filtered = filtered.slice().sort(function(a,b){ return b.id - a.id; });
+  // Default: newest uploads first
+  filtered = filtered.slice().sort(byNewestFirst);
   if (activeSort === 'mais_usados') {
     filtered = filtered.slice().sort(function(a,b){ return (b.wornCount||0)-(a.wornCount||0); });
   } else if (activeSort === 'favoritos') {
@@ -3790,7 +3806,7 @@ function renderDayPickerGrid(day, filterText) {
       var inName = (p.name||'').toLowerCase().indexOf(q) !== -1;
       return inTags || inName;
     })
-    .slice().sort(function(a,b){ return b.id - a.id; });
+    .slice().sort(byNewestFirst);
 
   grid.innerHTML = '';
   if(!pool.length) {
@@ -3906,7 +3922,8 @@ function saveImportedLook(idx) {
     wornCount: 0,
     lastWorn: null,
     weekday: null,
-    isImported: true
+    isImported: true,
+    addedAt: Date.now()
   };
   data.push(newLook);
   importedLooks.splice(idx, 1);
