@@ -1,0 +1,11 @@
+services:
+  lookstina:
+    build: .
+    container_name: lookstina
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+    ports:
+      - "127.0.0.1:4001:4001"
+    volumes:
+      - ./server/data:/app/server/data
