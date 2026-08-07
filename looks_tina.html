@@ -1,4 +1,4 @@
-<!DOCTYPE html> 
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
@@ -987,6 +987,78 @@ function lsGet(key) {
 function lsSet(key, value) {
   try { localStorage.setItem(key, value); }
   catch(e) { _memStorage[key] = value; }
+}
+
+// ── Sincronização com o backend (opcional) ──
+// Se o site estiver rodando atrás do servidor próprio (server/server.js), essas
+// funções mantêm os dados sincronizados entre aparelhos: toda vez que algo é
+// salvo localmente (localStorage), também tentamos mandar pro servidor; e pouco
+// depois de abrir o site, buscamos a versão mais recente do servidor e
+// atualizamos a tela se for diferente do que já estava salvo neste navegador.
+// Se o servidor não responder (ex: site aberto direto do GitHub Pages, sem
+// backend, ou sem internet), tudo falha silenciosamente e o app continua
+// funcionando 100% localmente, como sempre funcionou.
+var SYNC_KEYS = ['looks_tina_catalog_v1', 'looks_tina_montados_v1', 'looks_tina_pecas_avulsas_v1'];
+function syncPut(key, jsonValue) {
+  if (SYNC_KEYS.indexOf(key) === -1) return;
+  try {
+    fetch('/api/data/' + encodeURIComponent(key), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ value: jsonValue })
+    }).catch(function(){ /* offline ou sem backend: ignora */ });
+  } catch (e) { /* fetch indisponível: ignora */ }
+}
+function syncGet(key) {
+  return fetch('/api/data/' + encodeURIComponent(key))
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .catch(function(){ return null; });
+}
+// busca as 3 chaves no servidor e, se algum valor for diferente do que já está
+// carregado localmente, atualiza o estado em memória + localStorage e
+// re-renderiza a tela correspondente. Roda sozinha, sem travar nada.
+function pullRemoteUpdates() {
+  if (typeof fetch !== 'function') return;
+  syncGet('looks_tina_pecas_avulsas_v1').then(function(res) {
+    if (!res || res.value == null) return;
+    var currentJson = JSON.stringify(pecasAvulsas);
+    if (res.value !== currentJson) {
+      try {
+        pecasAvulsas = JSON.parse(res.value) || [];
+        lsSet('looks_tina_pecas_avulsas_v1', res.value);
+        if (typeof renderPecas === 'function' && document.getElementById('pecasGrid')) renderPecas();
+      } catch (e) {}
+    }
+  });
+  syncGet('looks_tina_montados_v1').then(function(res) {
+    if (!res || res.value == null) return;
+    var currentJson = JSON.stringify(montagens);
+    if (res.value !== currentJson) {
+      try {
+        montagens = JSON.parse(res.value) || [];
+        lsSet('looks_tina_montados_v1', res.value);
+        if (typeof renderLooksMontados === 'function' && document.getElementById('montadosGrid')) renderLooksMontados();
+        if (typeof renderWeekPlanner === 'function') renderWeekPlanner();
+        if (typeof renderCal === 'function' && document.getElementById('calGrid')) renderCal();
+      } catch (e) {}
+    }
+  });
+  syncGet('looks_tina_catalog_v1').then(function(res) {
+    if (!res || res.value == null) return;
+    var currentJson = JSON.stringify(data);
+    if (res.value !== currentJson) {
+      try {
+        var merged = JSON.parse(res.value);
+        if (merged && merged.length) {
+          data = merged;
+          _lastSavedSnapshot = res.value;
+          lsSet('looks_tina_catalog_v1', res.value);
+          if (typeof renderGrid === 'function') renderGrid();
+          if (typeof renderCal === 'function' && document.getElementById('calGrid')) renderCal();
+        }
+      } catch (e) {}
+    }
+  });
 }
 
 const CATALOG = [
@@ -2140,11 +2212,13 @@ try {
 }
 
 function savePecasAvulsas() {
+  var json = JSON.stringify(pecasAvulsas);
   try {
-    localStorage.setItem(PECAS_AVULSAS_KEY, JSON.stringify(pecasAvulsas));
+    localStorage.setItem(PECAS_AVULSAS_KEY, json);
   } catch (e) {
     alert('Não foi possível salvar a peça avulsa (armazenamento do navegador cheio). Tente remover alguma peça avulsa antiga ou usar uma foto menor.');
   }
+  syncPut(PECAS_AVULSAS_KEY, json);
 }
 
 // combina as 276 peças do Alta (PIECES, nunca alterado) com as peças avulsas adicionadas manualmente
@@ -2327,7 +2401,9 @@ var builderPieceIds = [];
 var builderActiveCat = '__all__';
 
 function saveMontagens() {
-  localStorage.setItem(MONTADOS_STORAGE_KEY, JSON.stringify(montagens));
+  var json = JSON.stringify(montagens);
+  localStorage.setItem(MONTADOS_STORAGE_KEY, json);
+  syncPut(MONTADOS_STORAGE_KEY, json);
 }
 
 function findPieceById(id) {
@@ -2945,6 +3021,7 @@ function saveToStorage() {
     lsSet(STORAGE_KEY, json);
     _lastSavedSnapshot = json;
     touchLastEdit();
+    syncPut(STORAGE_KEY, json);
   }
 }
 
@@ -5326,6 +5403,12 @@ document.addEventListener('keydown', function(e){
 });
 
 init();
+
+// busca dados mais recentes do backend (se existir) pouco depois do carregamento
+// inicial, sem travar nada — ver função pullRemoteUpdates() lá em cima.
+if (typeof window !== 'undefined') {
+  setTimeout(function(){ pullRemoteUpdates(); }, 400);
+}
 
 // ── AI Suggestion Wizard ──
 // ── Previsão do tempo real (Open-Meteo, sem API key) ──
