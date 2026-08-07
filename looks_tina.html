@@ -3057,6 +3057,16 @@ function rotateLookBy(pid, delta) {
   return setRotation(pid, getRotation(look) + delta);
 }
 
+// Fonte da imagem de um look. Os looks do catálogo original guardam o caminho do
+// arquivo em `thumb`; os enviados pela tela de Import guardam o dataURL em `src`.
+// Vários pontos do app liam só `.thumb`, então a foto de um look importado saía
+// quebrada (planejador da semana, PDF, comparar, relatório…). O fallback por id só
+// vale para o catálogo, onde o id é numérico e corresponde a thumbs/<id>.jpg.
+function lookThumb(p) {
+  if (!p) return '';
+  return p.src || p.thumb || (typeof p.id === 'number' ? 'thumbs/' + p.id + '.jpg' : '');
+}
+
 // Ordem padrão do catálogo: upload mais recente primeiro.
 // Looks importados têm id string ('imp_<timestamp>_xxxx'), então o `b.id - a.id`
 // antigo virava NaN e eles ficavam no fim da lista. Aqui cada look vira um número
@@ -3516,7 +3526,7 @@ function renderGrid() {
     card.dataset.id = p.id;
     
     var img = document.createElement('img');
-    img.src = p.isImported ? (p.src || p.thumb) : p.thumb; img.alt = ''; img.loading = 'lazy';
+    img.src = lookThumb(p); img.alt = ''; img.loading = 'lazy';
     applyRotation(img, p);
     img.onerror = function(){ this.style.background='#f0ece6'; };
     img.addEventListener('click', (function(pid){ return function(){ openView(pid); }; })(p.id));
@@ -3692,7 +3702,7 @@ function renderWeek() {
         dragSourceDay = null;
         document.querySelectorAll('.day-col').forEach(function(c){ c.classList.remove('drag-over'); });
       });
-      var img = document.createElement('img'); img.src = look.thumb; img.alt = '';
+      var img = document.createElement('img'); img.src = lookThumb(look); img.alt = '';
       img.loading = 'lazy'; img.onerror = function(){ this.style.background='#f0ece6'; };
       applyRotation(img, look);
       img.onclick = (function(pid){ return function(){ openView(pid); }; })(look.id);
@@ -3824,7 +3834,7 @@ function renderDayPickerGrid(day, filterText) {
     card.className = 'daypick-card';
     var img = document.createElement('img');
     img.loading = 'lazy';
-    img.src = p.isImported ? (p.src || p.thumb) : p.thumb;
+    img.src = lookThumb(p);
     applyRotation(img, p);
     card.appendChild(img);
     var label = document.createElement('div');
@@ -4127,7 +4137,7 @@ function closeLookCard() {
 function printLookCard() {
   var p = data.find(function(x){ return x.id===currentViewId; });
   if(!p) return;
-  var imgSrc = p.isImported ? (p.src||p.thumb) : p.thumb;
+  var imgSrc = lookThumb(p);
   var today = new Date().toISOString().split('T')[0];
   var daysSince = p.lastWorn ? Math.round((new Date(today)-new Date(p.lastWorn))/(1000*60*60*24)) : null;
   var wornText = p.lastWorn ? (daysSince===0?'Usado hoje':daysSince===1?'Usado ontem':'Usado há '+daysSince+' dias') + ' · ' + (p.wornCount||1) + 'x no total' : 'Nunca registrado';
@@ -4267,7 +4277,7 @@ function saveWeekPhotos() {
   var weekLooks = [];
   DAYS.forEach(function(day) {
     var look = data.find(function(p){ return p.weekday === day; });
-    if(look) weekLooks.push({day: day, thumb: look.thumb, id: look.id});
+    if(look) weekLooks.push({day: day, thumb: lookThumb(look), id: look.id});
   });
   if(!weekLooks.length) { alert('Nenhum look selecionado na semana.'); return; }
 
@@ -4571,7 +4581,7 @@ function renderAdmin() {
       var thumbs = document.createElement('div'); thumbs.className = 'admin-thumbs';
       photos.slice(0, 8).forEach(function(p) {
         var img = document.createElement('img'); img.className='admin-thumb';
-        img.src = p.thumb;
+        img.src = lookThumb(p);
         applyRotation(img, p);
         img.title = p.tags ? p.tags.join(' | ') : '';
         img.onclick = (function(pid){ return function(){ openView(pid); }; })(p.id);
@@ -4819,7 +4829,7 @@ function rotateCurrentView() {
 function openView(pid) {
   currentViewId = pid;
   var p = data.find(function(x){ return x.id===pid; });
-  document.getElementById('viewImg').src = p.isImported ? (p.src || p.thumb) : p.thumb;
+  document.getElementById('viewImg').src = lookThumb(p);
   applyRotation(document.getElementById('viewImg'), p);
   renderViewTags(p);
   document.getElementById('viewTagInput').value = '';
@@ -4937,7 +4947,7 @@ function openView(pid) {
     scored.forEach(function(x){
       var wrap = document.createElement('div'); wrap.className = 'sim-look-wrap';
       var img = document.createElement('img');
-      img.src = x.p.thumb;
+      img.src = lookThumb(x.p);
       img.style.cssText = 'width:62px;height:62px;object-fit:cover;border-radius:8px;cursor:pointer;flex-shrink:0;border:2px solid #eee;display:block;';
       applyRotation(img, x.p);
       var commonLabels = x.common.map(function(t){ return t.split(':').slice(1).join(':').trim(); }).join(', ');
@@ -5119,7 +5129,7 @@ function renderCompareBar() {
       var pid = compareList[i];
       var p = data.find(function(x){ return x.id === pid; });
       var wrap = document.createElement('div'); wrap.className = 'compare-thumb-wrap';
-      var img = document.createElement('img'); img.className = 'compare-thumb'; img.src = p ? p.thumb : '';
+      var img = document.createElement('img'); img.className = 'compare-thumb'; img.src = lookThumb(p);
       if (p) applyRotation(img, p);
       var rm = document.createElement('button'); rm.className = 'compare-thumb-rm'; rm.textContent = '\u00d7';
       rm.onclick = (function(id){ return function(e){ e.stopPropagation(); addToCompare(id); }; })(pid);
@@ -5151,7 +5161,7 @@ function openCompareOverlay() {
     var p = data.find(function(x){ return x.id === pid; });
     if (!p) return;
     var card = document.createElement('div'); card.className = 'cmp-card';
-    var img = document.createElement('img'); img.src = p.thumb; img.alt = '';
+    var img = document.createElement('img'); img.src = lookThumb(p); img.alt = '';
     applyRotation(img, p);
     img.onclick = (function(id){ return function(){ closeCompareOverlay(); openView(id); }; })(pid);
     var tagDiv = document.createElement('div'); tagDiv.className = 'cmp-card-tags';
@@ -5767,7 +5777,7 @@ function renderPieceGrid() {
       if(activeCats.indexOf(cat) === -1) return;
       var tag = t.trim();
       if(!pieceMap[tag]) {
-        var thumb = p.thumb || ('thumbs/'+p.id+'.jpg');
+        var thumb = lookThumb(p);
         pieceMap[tag] = {tag:tag, count:0, sampleId:p.id, sampleThumb:thumb};
       }
       pieceMap[tag].count++;
@@ -5953,7 +5963,7 @@ function renderTodaySuggestion() {
   if(!result) { overlay.classList.remove('open'); return; }
   var p = result.look, fc = result.forecast;
   todaySuggestionCurrentId = p.id;
-  var imgSrc = p.isImported ? (p.src || p.thumb) : p.thumb;
+  var imgSrc = lookThumb(p);
   var mainTags = (p.tags||[]).filter(function(t){ return t.split(':')[0].trim().toLowerCase() !== 'marca'; })
     .map(function(t){ return t.split(':').slice(1).join(':').trim(); }).join(' · ');
 
@@ -6141,7 +6151,7 @@ function buildTripAssignments(tripForecast) {
 
     tripAssigned.push({
       date: f.date, day: f.day, dateLabel: f.dateLabel, temp: f.temp, cond: f.cond, estimated: f.estimated,
-      curId: best.id, curThumb: best.thumb || ('thumbs/' + best.id + '.jpg'), curTags: best.tags || [],
+      curId: best.id, curThumb: lookThumb(best), curTags: best.tags || [],
       allPool: [best].concat(alts), poolIdx: 0
     });
   });
@@ -6184,7 +6194,7 @@ function cycleTripLook(idx, dir) {
   if (!a || !a.allPool || a.allPool.length < 2) return;
   a.poolIdx = (a.poolIdx + dir + a.allPool.length) % a.allPool.length;
   var p = a.allPool[a.poolIdx];
-  a.curId = p.id; a.curThumb = p.thumb || ('thumbs/' + p.id + '.jpg'); a.curTags = p.tags || [];
+  a.curId = p.id; a.curThumb = lookThumb(p); a.curTags = p.tags || [];
   renderTripDayList();
   renderTripPackList();
 }
@@ -6320,7 +6330,7 @@ function buildWeekSnapshot() {
     return {
       day: day,
       pieceId: look ? look.id : null,
-      thumb: look ? (look.isImported ? (look.src || look.thumb) : look.thumb) : null,
+      thumb: look ? lookThumb(look) : null,
       tags: look ? (look.tags || []).slice() : null,
       casa: !!weekCasaDays[day],
       note: weekNotes[day] || '',
@@ -6754,7 +6764,7 @@ function proceedToStep2() {
 
     assignedLooks[f.day] = {
       origId: best.id, curId: best.id,
-      curThumb: best.thumb||'thumbs/'+best.id+'.jpg',
+      curThumb: lookThumb(best),
       curTags: best.tags||[], piece: pieceLabel,
       allPool: [best].concat(altsWithPiece), poolIdx: 0
     };
@@ -6837,7 +6847,7 @@ function regenerateAssignedDay(day) {
 
   assignedLooks[day] = {
     origId: best.id, curId: best.id,
-    curThumb: best.thumb || 'thumbs/' + best.id + '.jpg',
+    curThumb: lookThumb(best),
     curTags: best.tags || [], piece: pieceLabel,
     allPool: [best].concat(altsWithPiece.slice(0, 8)), poolIdx: 0
   };
@@ -6998,7 +7008,7 @@ function cycleAssignLook(day, dir) {
   var nextIdx = (curIdx + dir + available.length) % available.length;
   var pick = available[nextIdx];
   a.curId    = pick.id;
-  a.curThumb = pick.thumb || 'thumbs/'+pick.id+'.jpg';
+  a.curThumb = lookThumb(pick);
   a.curTags  = pick.tags || [];
   renderAssignGrid();
 }
@@ -7138,7 +7148,7 @@ function printWeekPlanFromWeek() {
     return '<div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;padding:3mm 2mm;border:1px solid #e8e3dc;border-radius:4mm;background:#fdfcfb;">'
       +'<div style="font-size:8pt;font-weight:700;color:#2d2d2d;margin-bottom:0px;">'+FULL_DAYS[d.day]+'</div>'
       +(fc?'<div style="font-size:6pt;color:#888;margin-bottom:2mm;">'+fc.date+' · '+fc.temp+'</div>':'<div style="margin-bottom:2mm;"></div>')
-      +'<img src="'+(d.look.thumb)+'" style="width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:3mm;margin-bottom:2mm;">'
+      +'<img src="'+lookThumb(d.look)+'" style="width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:3mm;margin-bottom:2mm;">'
       +'<div style="text-align:center;line-height:1.4;">'+piecesHtml+'</div>'
       +'</div>';
   }).join('');
@@ -7257,7 +7267,7 @@ function openQuickCat() {
 function showQuickCatItem() {
   var p = quickCatList[quickCatIdx];
   if(!p) { closeQuickCat(); return; }
-  document.getElementById('qcImg').src = p.thumb || 'thumbs/'+p.id+'.jpg';
+  document.getElementById('qcImg').src = lookThumb(p);
   applyRotation(document.getElementById('qcImg'), p);
   document.getElementById('qcProgress').textContent = (quickCatIdx+1) + ' / ' + quickCatList.length;
   var list = document.getElementById('qcTagList');
@@ -7437,7 +7447,7 @@ function renderCal() {
       imgWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:2px;';
       looks.slice(0,4).forEach(function(p){
         var img = document.createElement('img');
-        img.src = p.thumb;
+        img.src = lookThumb(p);
         img.style.cssText = 'width:' + (looks.length===1?'100%':'46%') + ';aspect-ratio:1;object-fit:cover;border-radius:5px;cursor:pointer;';
         applyRotation(img, p);
         img.title = (p.tags||[]).slice(0,2).map(function(t){return t.split(':').pop().trim();}).join(', ');
@@ -7539,7 +7549,7 @@ function renderStats() {
   if(favUnused.length) {
     var thumbs = favUnused.slice(0,8).map(function(p){
       return '<div style="text-align:center;cursor:pointer;" onclick="switchTab(\'catalog\');openView('+p.id+')">'
-        +'<img src="'+p.thumb+'" style="width:70px;height:70px;object-fit:cover;border-radius:8px;border:2px solid #f0c040;">'
+        +'<img src="'+lookThumb(p)+'" style="width:70px;height:70px;object-fit:cover;border-radius:8px;border:2px solid #f0c040;">'
         +'<div style="font-size:.65rem;color:#aaa;margin-top:2px;">'+(p.lastWorn?'há '+Math.round((new Date(today)-new Date(p.lastWorn))/(1000*60*60*24))+'d':'nunca')+'</div>'
         +'</div>';
     }).join('');
@@ -7552,7 +7562,7 @@ function renderStats() {
   if(topUsed.length) {
     var thumbs2 = topUsed.map(function(p){
       return '<div style="text-align:center;cursor:pointer;" onclick="switchTab(\'catalog\');openView('+p.id+')">'
-        +'<img src="'+p.thumb+'" style="width:70px;height:70px;object-fit:cover;border-radius:8px;border:2px solid #e0ece0;">'
+        +'<img src="'+lookThumb(p)+'" style="width:70px;height:70px;object-fit:cover;border-radius:8px;border:2px solid #e0ece0;">'
         +'<div style="font-size:.7rem;font-weight:600;margin-top:3px;">'+p.wornCount+'x</div>'
         +'</div>';
     }).join('');
