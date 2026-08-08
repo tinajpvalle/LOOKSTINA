@@ -2233,6 +2233,16 @@ function allPecas() {
   return PIECES.concat(pecasAvulsas);
 }
 
+// Ordem da lista de peças: upload mais recente primeiro. As avulsas têm id
+// 'avulsa_<timestamp>_xxxx', então dá pra extrair a data do próprio id; as peças
+// do catálogo (PIECES) não têm data e ficam depois, na ordem original.
+function pecaRecency(p) {
+  if (p && p.addedAt) return p.addedAt;
+  var m = /^avulsa_(\d+)/.exec(String((p && p.id) || ''));
+  return m ? Number(m[1]) : 0;
+}
+function pecaNewestFirst(a, b) { return pecaRecency(b) - pecaRecency(a); }
+
 function renderPecasCatBar() {
   var bar = document.getElementById('pecasCatBar');
   if (!bar) return;
@@ -2263,7 +2273,7 @@ function renderPecas() {
     if (pecasActiveCat !== '__all__' && p.category !== pecasActiveCat) return false;
     if (q && (p.name + ' ' + p.brand + ' ' + p.color).toLowerCase().indexOf(q) === -1) return false;
     return true;
-  });
+  }).sort(pecaNewestFirst);
   var grid = document.getElementById('pecasGrid');
   var countEl = document.getElementById('pecasCount');
   if (countEl) countEl.textContent = list.length + ' de ' + todas.length + ' peças';
@@ -2311,8 +2321,13 @@ var novaPecaImgData = null;
 
 function openAddPecaOverlay() {
   novaPecaImgData = null;
+  novaPecaImgOriginal = null;
+  novaPecaImgRecortada = null;
   document.getElementById('novaPecaPreview').style.display = 'none';
   document.getElementById('novaPecaPreview').src = '';
+  document.getElementById('novaPecaPreview').style.backgroundImage = 'none';
+  document.getElementById('novaPecaFundoBox').style.display = 'none';
+  statusFundo('');
   document.getElementById('novaPecaFileInput').value = '';
   document.getElementById('novaPecaBrand').value = '';
   document.getElementById('novaPecaName').value = '';
@@ -2332,6 +2347,42 @@ function closeAddPecaOverlay() {
   document.getElementById('addPecaOverlay').style.display = 'none';
 }
 
+// Guarda as duas versões da foto: a original e a recortada. O checkbox só troca
+// qual delas vai pro novaPecaImgData, sem precisar rodar o modelo de novo.
+var novaPecaImgOriginal = null;
+var novaPecaImgRecortada = null;
+
+// O modelo (isnet_quint8) tem 42MB e o runtime ONNX outros 11MB, tudo servido
+// daqui mesmo (vendor/bgremoval/). São baixados só quando a pessoa adiciona a
+// primeira peça, e depois ficam no cache do navegador.
+var _bgrPromise = null;
+function carregarRemovedorDeFundo() {
+  if (!_bgrPromise) {
+    _bgrPromise = import('./vendor/bgremoval/background-removal.mjs');
+  }
+  return _bgrPromise;
+}
+
+function statusFundo(txt) {
+  var el = document.getElementById('novaPecaFundoStatus');
+  if (el) el.textContent = txt || '';
+}
+
+function alternarFundoNovaPeca() {
+  var usarRecorte = document.getElementById('novaPecaSemFundo').checked;
+  var escolhida = (usarRecorte && novaPecaImgRecortada) ? novaPecaImgRecortada : novaPecaImgOriginal;
+  if (!escolhida) return;
+  novaPecaImgData = escolhida;
+  var preview = document.getElementById('novaPecaPreview');
+  preview.src = escolhida;
+  // xadrez discreto atrás da imagem, pra dar pra ver que o fundo ficou transparente
+  preview.style.backgroundImage = (usarRecorte && novaPecaImgRecortada)
+    ? 'linear-gradient(45deg,#eee 25%,transparent 25%,transparent 75%,#eee 75%),linear-gradient(45deg,#eee 25%,transparent 25%,transparent 75%,#eee 75%)'
+    : 'none';
+  preview.style.backgroundSize = '16px 16px';
+  preview.style.backgroundPosition = '0 0, 8px 8px';
+}
+
 // redimensiona a foto (canvas) antes de guardar no localStorage, pra não estourar o limite de armazenamento do navegador
 function handleNovaPecaFile(fileList) {
   var file = fileList && fileList[0];
@@ -2347,14 +2398,105 @@ function handleNovaPecaFile(fileList) {
       canvas.height = Math.round(img.height * scale);
       var ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      novaPecaImgData = canvas.toDataURL('image/jpeg', 0.85);
+      novaPecaImgOriginal = canvas.toDataURL('image/jpeg', 0.85);
+      novaPecaImgRecortada = null;
+      novaPecaImgData = novaPecaImgOriginal;
       var preview = document.getElementById('novaPecaPreview');
-      preview.src = novaPecaImgData;
+      preview.src = novaPecaImgOriginal;
       preview.style.display = 'block';
+      document.getElementById('novaPecaFundoBox').style.display = 'block';
+      if (document.getElementById('novaPecaSemFundo').checked) {
+        recortarFundoNovaPeca(canvas);
+      }
     };
     img.src = e.target.result;
   };
   reader.readAsDataURL(file);
+}
+
+// O PNG que sai do recorte é bem mais pesado que o JPEG original (transparência não
+// comprime como JPEG) e o localStorage tem poucos MB. Aqui a imagem é aparada até a
+// borda da peça, reduzida se for grande demais e regravada em WebP quando o navegador
+// souber gerar — o que costuma deixar o arquivo menor que o JPEG de origem.
+function compactarRecorte(dataUrl, callback) {
+  var img = new Image();
+  img.onload = function() {
+    try {
+      var c = document.createElement('canvas');
+      c.width = img.width; c.height = img.height;
+      var ctx = c.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      var d = ctx.getImageData(0, 0, c.width, c.height).data;
+      // limites da parte visível (alpha acima de ~5%)
+      var minX = c.width, minY = c.height, maxX = -1, maxY = -1;
+      for (var y = 0; y < c.height; y++) {
+        for (var x = 0; x < c.width; x++) {
+          if (d[(y * c.width + x) * 4 + 3] > 12) {
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+          }
+        }
+      }
+      if (maxX < 0) { callback(dataUrl); return; } // recorte vazio: devolve como veio
+      var margem = 4;
+      minX = Math.max(0, minX - margem); minY = Math.max(0, minY - margem);
+      maxX = Math.min(c.width - 1, maxX + margem); maxY = Math.min(c.height - 1, maxY + margem);
+      var w = maxX - minX + 1, h = maxY - minY + 1;
+      var escala = Math.min(1, 800 / Math.max(w, h));
+      var out = document.createElement('canvas');
+      out.width = Math.round(w * escala); out.height = Math.round(h * escala);
+      out.getContext('2d').drawImage(img, minX, minY, w, h, 0, 0, out.width, out.height);
+      var webp = out.toDataURL('image/webp', 0.9);
+      callback(webp.indexOf('data:image/webp') === 0 ? webp : out.toDataURL('image/png'));
+    } catch (e) {
+      callback(dataUrl);
+    }
+  };
+  img.onerror = function() { callback(dataUrl); };
+  img.src = dataUrl;
+}
+
+function recortarFundoNovaPeca(canvas) {
+  statusFundo('Preparando o recorte…');
+  carregarRemovedorDeFundo().then(function(mod) {
+    return new Promise(function(resolve, reject) {
+      canvas.toBlob(function(blob) {
+        if (!blob) { reject(new Error('canvas vazio')); return; }
+        resolve(mod.removeBackground(blob, {
+          publicPath: new URL('vendor/bgremoval/data/', location.href).toString(),
+          model: 'isnet_quint8',
+          device: 'cpu',
+          output: { format: 'image/png' },
+          progress: function(chave, feito, total) {
+            if (chave.indexOf('fetch:') === 0 && total) {
+              statusFundo('Baixando o modelo (uma vez só): ' + Math.round(feito / total * 100) + '%');
+            } else {
+              statusFundo('Recortando o fundo…');
+            }
+          }
+        }));
+      }, 'image/png');
+    });
+  }).then(function(blobSemFundo) {
+    return new Promise(function(resolve) {
+      var fr = new FileReader();
+      fr.onload = function(ev) { resolve(ev.target.result); };
+      fr.readAsDataURL(blobSemFundo);
+    });
+  }).then(function(dataUrl) {
+    return new Promise(function(resolve) { compactarRecorte(dataUrl, resolve); });
+  }).then(function(dataUrl) {
+    novaPecaImgRecortada = dataUrl;
+    statusFundo('Fundo removido. Desmarque acima se preferir a foto original.');
+    if (document.getElementById('novaPecaSemFundo').checked) alternarFundoNovaPeca();
+  }).catch(function(err) {
+    // Se o recorte falhar (rede, memória, aparelho antigo), segue com a foto original.
+    console.error('recorte de fundo falhou:', err);
+    novaPecaImgRecortada = null;
+    statusFundo('Não consegui recortar o fundo desta foto — ela será salva como está.');
+  });
 }
 
 function saveNovaPecaAvulsa() {
@@ -2381,7 +2523,8 @@ function saveNovaPecaAvulsa() {
     name: name,
     category: category,
     color: color,
-    avulsa: true
+    avulsa: true,
+    addedAt: Date.now()
   });
   savePecasAvulsas();
   closeAddPecaOverlay();
@@ -7882,6 +8025,13 @@ function applySuggestions() {
       <input type="file" id="novaPecaFileInput" accept="image/*" style="display:none" onchange="handleNovaPecaFile(this.files)">
     </label>
     <img id="novaPecaPreview" src="" style="display:none;width:100%;max-height:220px;object-fit:contain;border-radius:12px;background:#faf9f7;margin-bottom:14px;">
+    <div id="novaPecaFundoBox" style="display:none;margin:-6px 0 14px;">
+      <label style="display:flex;align-items:center;gap:8px;font-size:.8rem;color:#555;cursor:pointer;">
+        <input type="checkbox" id="novaPecaSemFundo" checked onchange="alternarFundoNovaPeca()">
+        Recortar o fundo da foto
+      </label>
+      <div id="novaPecaFundoStatus" style="font-size:.72rem;color:#999;margin-top:5px;"></div>
+    </div>
     <input type="text" id="novaPecaBrand" placeholder="Marca (opcional)" autocomplete="off"
       style="width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid #ddd;border-radius:8px;margin-bottom:10px;font-family:inherit;font-size:.85rem;">
     <input type="text" id="novaPecaName" placeholder="Nome da peça (ex: Blusa listrada azul)" autocomplete="off"
