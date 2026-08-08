@@ -111,7 +111,9 @@ const SERVER_DIR = path.join(REPO_ROOT, 'server');
 // .dockerignore os deixa de fora da imagem — mexer nesse arquivo publicaria os
 // três sem nenhum aviso. Então a regra é ao contrário: só sai daqui o que está
 // listado abaixo. Ao adicionar um arquivo novo ao site, inclua-o aqui.
-const PASTAS_PUBLICAS = new Set(['pecas', 'thumbs']);
+// 'vendor' guarda o modelo de recorte de fundo (vendor/bgremoval): o .mjs da
+// biblioteca e os blocos do modelo, que o navegador baixa na primeira peça avulsa.
+const PASTAS_PUBLICAS = new Set(['pecas', 'thumbs', 'vendor']);
 const ARQUIVOS_PUBLICOS = new Set([
   'index.html',
   'looks_tina.html',
