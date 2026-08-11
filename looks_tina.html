@@ -426,6 +426,7 @@ body.week-pick-mode .card-week-btn { display: block; }
 .setup-day-row { display: flex; gap: 6px; flex-wrap: wrap; }
 .setup-day-pill { border: 1px solid #EAEAE7; background: #fff; border-radius: 20px; padding: 6px 12px; font-size: .78rem; cursor: pointer; color: #666666; font-family: inherit; min-width: 46px; text-align: center; }
 .setup-day-pill.is-home { background: #FAFAF8; border-color: #E0E0DB; color: #C4985A; }
+.setup-day-pill.active { background: #1A1A1A; border-color: #1A1A1A; color: #fff; }
 .setup-ocasiao-grid { display: flex; flex-direction: column; gap: 6px; }
 .setup-ocasiao-day { display: flex; align-items: center; gap: 8px; }
 .setup-ocasiao-day-label { font-size: .76rem; color: #666666; width: 34px; flex-shrink: 0; }
@@ -641,6 +642,7 @@ body.compare-mode .card-compare-btn { display: flex; }
 .admin-cat-pill.active, .piece-cat-pill.active, .pc-cat-pill.active, .wd-btn.active,
 .day-ocasiao-btn.active { background: var(--ink); color: var(--surface); border-color: var(--ink); }
 .setup-day-pill.is-home { background: var(--bg); border-color: var(--line-input); color: var(--accent); }
+.setup-day-pill.active { background: var(--ink); border-color: var(--ink); color: var(--surface); }
 .wd-btn:hover { border-color: var(--ink); color: var(--ink); }
 .wd-btn.remove { background: transparent; color: var(--danger); border-color: var(--line-input); }
 
@@ -829,12 +831,21 @@ body.compare-mode .card-compare-btn { display: flex; }
       <div class="suggest-header">
         <span style="font-size:1.2rem"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><circle cx="12" cy="12" r="8.6"/><path d="m15.6 8.4-2 5.2-5.2 2 2-5.2 5.2-2z"/></svg></span>
         <h3>Antes de montar a semana...</h3>
-        <button class="btn-dismiss" onclick="document.getElementById('suggestPanel').style.display='none'" style="margin-left:auto"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"/></svg></button>
+        <button class="btn-dismiss" onclick="closeSuggestPanel()" style="margin-left:auto"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"/></svg></button>
       </div>
       <div class="suggest-subtitle">3 perguntas rápidas pra deixar a sugestão mais certeira.</div>
 
       <div class="setup-block">
-        <div class="setup-q-label"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg> Quais dias você vai sair de casa essa semana?</div>
+        <div class="setup-q-label"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg> Qual semana você quer montar?</div>
+        <div class="setup-day-row" id="setupWeekRow">
+          <button type="button" class="setup-day-pill active" id="setupWeek0" onclick="setWizardWeek(0)">Esta semana</button>
+          <button type="button" class="setup-day-pill" id="setupWeek1" onclick="setWizardWeek(1)">Próxima semana</button>
+        </div>
+        <div id="setupWeekRange" style="font-size:.72rem;color:#A8A8A4;margin-top:6px;"></div>
+      </div>
+
+      <div class="setup-block">
+        <div class="setup-q-label"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg> Quais dias você vai sair de casa?</div>
         <div class="setup-day-row" id="setupOutDaysRow"></div>
       </div>
 
@@ -852,7 +863,7 @@ body.compare-mode .card-compare-btn { display: flex; }
 
       <div class="suggest-actions">
         <button class="btn-next" onclick="applySetupAndGenerate()">Gerar sugestão →</button>
-        <button class="btn-dismiss" onclick="document.getElementById('suggestPanel').style.display='none'">Cancelar</button>
+        <button class="btn-dismiss" onclick="closeSuggestPanel()">Cancelar</button>
       </div>
     </div>
 
@@ -861,7 +872,7 @@ body.compare-mode .card-compare-btn { display: flex; }
       <div class="suggest-header">
         <span style="font-size:1.2rem"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><circle cx="12" cy="12" r="8.4"/><circle cx="12" cy="12" r="4.4"/><circle cx="12" cy="12" r="1"/></svg></span>
         <h3>Refinar por peças específicas (opcional)</h3>
-        <button class="btn-dismiss" onclick="document.getElementById('suggestPanel').style.display='none'" style="margin-left:auto"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"/></svg></button>
+        <button class="btn-dismiss" onclick="closeSuggestPanel()" style="margin-left:auto"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"/></svg></button>
       </div>
       <div class="suggest-subtitle" id="suggestSubtitle">Carregando previsão do tempo…</div>
       <div class="suggest-weather-bar" id="suggestWxBar"></div>
@@ -882,7 +893,7 @@ body.compare-mode .card-compare-btn { display: flex; }
       <div class="suggest-actions">
         <button class="btn-next" id="btnStep2" onclick="proceedToStep2()">Ver looks →</button>
         <span class="suggest-hint" id="pieceSelHint">Nenhuma peça selecionada — sugestão livre por clima e novidade</span>
-        <button class="btn-dismiss" onclick="document.getElementById('suggestPanel').style.display='none'">Cancelar</button>
+        <button class="btn-dismiss" onclick="closeSuggestPanel()">Cancelar</button>
       </div>
     </div>
 
@@ -891,14 +902,14 @@ body.compare-mode .card-compare-btn { display: flex; }
       <div class="suggest-header">
         <span style="font-size:1.2rem"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M12 7.2a2.1 2.1 0 1 1 2.1-2.1c0 1.1-1 1.5-2.1 2.1v2"/><path d="M12 9.2 3.6 15.3A1.5 1.5 0 0 0 4.5 18h15a1.5 1.5 0 0 0 .9-2.7L12 9.2z"/></svg></span>
         <h3><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M11 3.5 12.7 8.3 17.5 10l-4.8 1.7L11 16.5 9.3 11.7 4.5 10l4.8-1.7L11 3.5z"/><path d="M18 14.5l.9 2.3 2.3.9-2.3.9-.9 2.3-.9-2.3-2.3-.9 2.3-.9.9-2.3z"/></svg> Looks sugeridos pra semana</h3>
-        <button class="btn-dismiss" onclick="document.getElementById('suggestPanel').style.display='none'" style="margin-left:auto"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"/></svg></button>
+        <button class="btn-dismiss" onclick="closeSuggestPanel()" style="margin-left:auto"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"/></svg></button>
       </div>
       <div class="suggest-subtitle">Clique nas <strong>setas ‹ ›</strong> para trocar o look de cada dia individualmente. Clique na foto para ampliar.</div>
       <div class="assign-grid" id="assignGrid"></div>
       <div class="suggest-actions">
         <button class="btn-apply" onclick="applySuggestions()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><polyline points="4.5 12.2 9.8 17.5 19.5 6.5"/></svg> Aplicar na minha semana</button>
         <button class="btn-back" onclick="goBackToStep1()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><circle cx="12" cy="12" r="8.4"/><circle cx="12" cy="12" r="4.4"/><circle cx="12" cy="12" r="1"/></svg> Refinar peças</button>
-        <button class="btn-dismiss" onclick="document.getElementById('suggestPanel').style.display='none'">Cancelar</button>
+        <button class="btn-dismiss" onclick="closeSuggestPanel()">Cancelar</button>
         <button class="btn-back" onclick="printWeekPlan()" style="margin-left:auto"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M6.5 9V3.5h11V9"/><rect x="3" y="9" width="18" height="7.5" rx="2"/><path d="M6.5 14.5h11v6h-11z"/></svg> PDF</button>
         <button class="btn-back" onclick="emailWeekPlan()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><rect x="3" y="5.2" width="18" height="13.6" rx="2"/><path d="m3.6 6.6 8.4 5.9 8.4-5.9"/></svg> Email</button>
       </div>
@@ -3616,6 +3627,16 @@ function goHome() {
   renderGrid();
 }
 
+// Estado da previsão do tempo
+// Fica aqui, e não lá embaixo junto do resto da previsão, porque init() chama
+// loadForecast() e o init() roda antes daquele trecho: var eleva a declaração
+// mas não o valor, então lá embaixo esses caches ainda seriam undefined.
+var FORECAST = [];                 // a semana sendo planejada (o assistente troca)
+var CURRENT_WEEK_FORECAST = [];    // sempre a semana de hoje, pra sugestão diária
+var forecastWeeks = {};            // offset -> previsão já buscada
+var forecastPromises = {};         // offset -> busca em andamento/pronta
+var wizardWeekOffset = 0;          // 0 = esta semana, 1 = próxima
+
 function init() {
   checkWeekRollover();
   buildChips();
@@ -5920,8 +5941,8 @@ if (typeof window !== 'undefined') {
 // Antes esse array vinha com uma semana fixa escrita no código (30/jun-6/jul,
 // congelada pra sempre). Agora busca a previsão real da semana atual (Seg-Dom)
 // pra São Paulo assim que a página carrega, e o assistente de sugestão usa isso.
-var FORECAST = [];
-var forecastLoadPromise = null;
+// O estado da previsão é declarado lá em cima, junto do init() — ver o comentário
+// "Estado da previsão do tempo".
 var SP_LAT = -23.5505, SP_LON = -46.6333;
 var DAYS_PT = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
 var MESES_PT = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
@@ -5959,26 +5980,38 @@ function profileFor(tmax, rainy) {
 
 // Busca a previsão real 1x (memorizada em forecastLoadPromise) e preenche FORECAST.
 // Se a rede falhar, cai num fallback neutro pra não travar o assistente.
-function loadForecast() {
-  if (forecastLoadPromise) return forecastLoadPromise;
+// offset 0 = semana atual, 1 = próxima semana. Cada semana é buscada uma vez só
+// e guardada. FORECAST aponta pra semana que está sendo planejada no momento;
+// CURRENT_WEEK_FORECAST guarda sempre a semana de hoje, porque a sugestão diária
+// precisa do clima de hoje mesmo enquanto o assistente planeja a semana que vem.
+function loadForecast(offset) {
+  offset = offset || 0;
+  if (forecastPromises[offset]) return forecastPromises[offset];
   var monday = mondayOfCurrentWeek();
+  monday.setDate(monday.getDate() + offset * 7);
   var days = [];
   for (var i=0;i<7;i++) { var d = new Date(monday); d.setDate(monday.getDate()+i); days.push(d); }
 
+  function publish(list) {
+    forecastWeeks[offset] = list;
+    if (offset === 0) CURRENT_WEEK_FORECAST = list;
+    if (offset === wizardWeekOffset) FORECAST = list;
+    return list;
+  }
+
   function neutralFallback(err) {
     if (err) console.warn('Não foi possível buscar a previsão do tempo real, usando estimativa neutra.', err);
-    FORECAST = days.map(function(day, i){
+    return publish(days.map(function(day, i){
       return {day: DAYS_PT[i], date: brDate(day), temp: '—', cond: 'Previsão indisponível', profile: 'ameno'};
-    });
+    }));
   }
 
   // Blindado: se fetch não existir (preview/sandbox restrito) ou a chamada falhar
   // de qualquer forma (rede, CSP, offline), nunca deixa o resto da página travar —
   // sempre resolve com um FORECAST neutro em vez de propagar o erro.
   if (typeof fetch !== 'function') {
-    neutralFallback();
-    forecastLoadPromise = Promise.resolve(FORECAST);
-    return forecastLoadPromise;
+    forecastPromises[offset] = Promise.resolve(neutralFallback());
+    return forecastPromises[offset];
   }
 
   try {
@@ -5986,24 +6019,22 @@ function loadForecast() {
       + '&daily=temperature_2m_max,temperature_2m_min,weathercode&timezone=America%2FSao_Paulo'
       + '&start_date='+isoDate(days[0])+'&end_date='+isoDate(days[6]);
 
-    forecastLoadPromise = fetch(url)
+    forecastPromises[offset] = fetch(url)
       .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
       .then(function(json){
         var d = json.daily;
-        FORECAST = days.map(function(day, i){
+        return publish(days.map(function(day, i){
           var tmax = Math.round(d.temperature_2m_max[i]);
           var tmin = Math.round(d.temperature_2m_min[i]);
           var wc = WMO_MAP[d.weathercode[i]] || ['Tempo variável', false];
           return {day: DAYS_PT[i], date: brDate(day), temp: tmin+'–'+tmax+'°C', cond: wc[0], profile: profileFor(tmax, wc[1])};
-        });
-        return FORECAST;
+        }));
       })
-      .catch(function(err){ neutralFallback(err); return FORECAST; });
+      .catch(function(err){ return neutralFallback(err); });
   } catch (e) {
-    neutralFallback(e);
-    forecastLoadPromise = Promise.resolve(FORECAST);
+    forecastPromises[offset] = Promise.resolve(neutralFallback(e));
   }
-  return forecastLoadPromise;
+  return forecastPromises[offset];
 }
 // Começa a buscar assim que a página carrega, pra já estar pronta quando
 // a Semana ou o assistente de sugestão precisarem (não bloqueia nada).
@@ -6034,12 +6065,37 @@ var assignedLooks = {}; // {day: {id, thumb, tags, alts: [...], altIdx}}
 var wizardPrioritizeStale = false; // ligado pela telinha de setup rápido; reforça peças paradas há tempo
 var forecastReadyPromise = null;
 
+// Fechar o assistente devolve o FORECAST pra semana atual: o resto do app (a aba
+// Semana, o PDF, o .ics) conta com ele apontando pra hoje.
+function closeSuggestPanel() {
+  var panel = document.getElementById('suggestPanel');
+  if (panel) panel.style.display = 'none';
+  wizardWeekOffset = 0;
+  if (CURRENT_WEEK_FORECAST.length) FORECAST = CURRENT_WEEK_FORECAST;
+}
+
+function setWizardWeek(offset) {
+  wizardWeekOffset = offset;
+  var b0 = document.getElementById('setupWeek0'), b1 = document.getElementById('setupWeek1');
+  if (b0) b0.classList.toggle('active', offset === 0);
+  if (b1) b1.classList.toggle('active', offset === 1);
+  assignedLooks = {}; // semana trocou: o que já tinha sido montado não vale mais
+  var range = document.getElementById('setupWeekRange');
+  if (range) range.textContent = 'Buscando previsão…';
+  loadForecast(offset).then(function(list){
+    if (wizardWeekOffset !== offset) return; // ela trocou de novo enquanto carregava
+    FORECAST = list;
+    if (range && list.length) range.textContent = 'Semana de ' + list[0].date + ' a ' + list[list.length-1].date;
+  });
+}
+
 function showSuggestions() {
   selectedPieces = new Set();
   assignedLooks = {};
   wizardPrioritizeStale = false;
   var stale = document.getElementById('setupPrioritizeOld');
   if (stale) stale.checked = false;
+  setWizardWeek(0); // sempre reabre na semana atual
   // Primeiro uma telinha rápida de 3 perguntas (Passo 0), depois vai pro resultado.
   // O Passo 1 (peças específicas) fica disponível como refinamento opcional,
   // acessível pelo botão "Refinar peças" no resultado.
@@ -6051,7 +6107,7 @@ function showSuggestions() {
   renderSetupStep();
   // Já dispara a busca da previsão em paralelo, pra estar pronta quando ela
   // terminar de responder e clicar em "Gerar sugestão".
-  forecastReadyPromise = loadForecast();
+  forecastReadyPromise = loadForecast(wizardWeekOffset);
 }
 
 function setupToggleOutDay(day) {
@@ -6114,7 +6170,8 @@ function applySetupAndGenerate() {
   var grid = document.getElementById('assignGrid');
   if (grid) grid.innerHTML = '<div style="padding:24px;color:#666666;font-size:.85rem;">Carregando previsão do tempo e montando os looks da semana…</div>';
 
-  (forecastReadyPromise || loadForecast()).then(function(){
+  loadForecast(wizardWeekOffset).then(function(list){
+    FORECAST = list; // garante que o resto do assistente lê a semana escolhida
     renderWeatherBar();
     updateSuggestSubtitle();
     buildPieceCatBar();
@@ -6352,11 +6409,23 @@ function detectLookSeason(tags) {
 // Returns +5 if look matches week season, -8 if it's the opposite season
 // Antes isso exigia a tag "estação:" escrita à mão, que nenhum look tinha — ou
 // seja, o critério nunca contava nada. Agora usa a mesma dedução do Catálogo.
-function seasonScore(tags, weekSeason) {
-  if(!weekSeason) return 0;
+function seasonScore(tags, season) {
+  if(!season) return 0;
   var s = detectLookSeason(tags);
   if(!s) return 0; // indefinido → neutro
-  return s === weekSeason ? 5 : -8;
+  return s === season ? 5 : -8;
+}
+
+// Estação que UM DIA pede, a partir do perfil de clima daquele dia.
+// A estação era decidida pra semana inteira (detectWeekSeason), e numa semana
+// misturada como 13–29°C isso dava errado feio: a semana virava "inverno" e o
+// look de inverno ganhava +5 até na quinta de 29°C, brigando com o critério de
+// clima do próprio dia. Só os extremos definem estação aqui; 22–26°C fica
+// neutro e deixa o weatherScore, que é mais granular, decidir sozinho.
+function seasonForProfile(profile) {
+  if(profile === 'frio_chuva' || profile === 'frio_seco' || profile === 'frio' || profile === 'agradavel') return 'inverno';
+  if(profile === 'quente' || profile === 'muito_quente') return 'verao';
+  return null;
 }
 
 // Detect week season from FORECAST profiles
@@ -6463,7 +6532,9 @@ function shuffledCopy(arr) {
 function pickTodaySuggestion() {
   var today = new Date().toISOString().split('T')[0];
   var todayLabel = JS_DOW_TO_PT[new Date().getDay()];
-  var fc = (FORECAST||[]).find(function(f){ return f.day === todayLabel; });
+  // CURRENT_WEEK_FORECAST e não FORECAST: o assistente pode ter trocado o FORECAST
+  // pra próxima semana, e aqui o que importa é o clima de hoje.
+  var fc = (CURRENT_WEEK_FORECAST||[]).find(function(f){ return f.day === todayLabel; });
   var profile = fc ? fc.profile : 'ameno';
   var basePool = data.filter(function(p){
     return !p.archived && (p.tags||[]).length && p.lastWorn !== today;
@@ -7228,7 +7299,6 @@ function emailTripPlan() {
 }
 
 function proceedToStep2() {
-  var weekSeason = detectWeekSeason();
   var piecesArr = Array.from(selectedPieces);
 
   var outerCats = PIECE_GROUPS[0].cats;
@@ -7261,7 +7331,7 @@ function proceedToStep2() {
       // e competia demais com recencyBonus (peça parada de verdade).
       return pieceMatchScore(p, piecesArr) * 6
            + weatherScore(p.tags, f.profile) * 3
-           + seasonScore(p.tags, weekSeason)
+           + seasonScore(p.tags, seasonForProfile(f.profile))
            + recencyBonus(p) * 2 * staleFactor
            + noveltyScore(p, wizardIdRange) * 0.5
            + ocasiaoBoost(p, f.day)
@@ -7303,7 +7373,7 @@ function proceedToStep2() {
     var outerPiece = ta.outerPiece;
 
     function scoreForPool(p) {
-      return pieceMatchScore(p, piecesArr) * 4 + weatherScore(p.tags, ta.profile) * 2 + seasonScore(p.tags, weekSeason) + recencyBonus(p) * staleFactor + noveltyScore(p, wizardIdRange) * 0.5;
+      return pieceMatchScore(p, piecesArr) * 4 + weatherScore(p.tags, ta.profile) * 2 + seasonScore(p.tags, seasonForProfile(ta.profile)) + recencyBonus(p) * staleFactor + noveltyScore(p, wizardIdRange) * 0.5;
     }
 
     var pieceLabel = outerPiece
@@ -7351,7 +7421,6 @@ function proceedToStep2() {
 function regenerateAssignedDay(day) {
   var f = FORECAST.find(function(x){ return x.day === day; });
   if (!f) return;
-  var weekSeason = detectWeekSeason();
   var piecesArr = Array.from(selectedPieces);
   var wizardIdRange = catalogIdRange();
 
@@ -7369,7 +7438,7 @@ function regenerateAssignedDay(day) {
   function score(p) {
     return pieceMatchScore(p, piecesArr) * 6
          + weatherScore(p.tags, f.profile) * 3
-         + seasonScore(p.tags, weekSeason)
+         + seasonScore(p.tags, seasonForProfile(f.profile))
          + recencyBonus(p) * 2 * staleFactor
          + noveltyScore(p, wizardIdRange) * 0.5
          + ocasiaoBoost(p, day) * 3
@@ -7389,7 +7458,7 @@ function regenerateAssignedDay(day) {
   if (!best) return;
 
   function scoreForPool(p) {
-    return pieceMatchScore(p, piecesArr) * 4 + weatherScore(p.tags, f.profile) * 2 + seasonScore(p.tags, weekSeason) + recencyBonus(p) + noveltyScore(p, wizardIdRange) * 0.5 + ocasiaoBoost(p, day) * 2;
+    return pieceMatchScore(p, piecesArr) * 4 + weatherScore(p.tags, f.profile) * 2 + seasonScore(p.tags, seasonForProfile(f.profile)) + recencyBonus(p) + noveltyScore(p, wizardIdRange) * 0.5 + ocasiaoBoost(p, day) * 2;
   }
 
   var pieceLabel = (piecesArr.length ? (piecesArr.find(function(sp){
