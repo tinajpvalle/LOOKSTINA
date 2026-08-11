@@ -6593,7 +6593,26 @@ function noveltyScore(p, range) {
   return (p.id - range.min) / (range.max - range.min); // 0..1, 1 = mais novo
 }
 
-// Sugestão automática pra hoje 
+// Escolha com variação, usada pelo montador da semana
+// Ordenar por nota e pegar o primeiro dava sempre o MESMO look: como quase tudo
+// empata (recencyBonus é 3 pra quase todo mundo e o weatherScore tem poucos
+// valores), o desempate caía na ordem do catálogo. Dez gerações seguidas devolviam
+// a semana idêntica. Aqui embaralha antes de ordenar, pra empate sair em ordem
+// diferente a cada vez, e sorteia dentro da faixa de melhores em vez de fixar no 1º.
+function pickWithVariety(pool, scoreFn, minBand) {
+  if (!pool || !pool.length) return null;
+  var scored = shuffledCopy(pool).map(function(p){ return {p:p, s:scoreFn(p)}; })
+    .sort(function(a,b){ return b.s - a.s; });
+  var keep = Math.max(minBand || 8, Math.round(scored.length * 0.10));
+  if (keep < scored.length) {
+    var corte = scored[keep-1].s;
+    while (keep < scored.length && scored[keep].s === corte) keep++; // não corta empate no meio
+  }
+  var faixa = scored.slice(0, Math.min(keep, scored.length));
+  return faixa[Math.floor(Math.random() * faixa.length)].p;
+}
+
+// Sugestão automática pra hoje
 // Aparece sozinha assim que o Catálogo carrega (sem precisar clicar em nada).
 // Some se você fechar, mas volta a aparecer na próxima vez que abrir o arquivo.
 var JS_DOW_TO_PT = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb']; // Date.getDay(): 0=Dom
@@ -7436,21 +7455,20 @@ function proceedToStep2() {
   var usedTagFreq = {};
   var tempAssign = {};
 
-  var wizardIdRange = catalogIdRange();
   var staleFactor = wizardPrioritizeStale ? 3 : 1; // ligado na telinha de setup rápido
   FORECAST.forEach(function(f){
     if (weekCasaDays[f.day]) return; // marcado como "fico em casa" no setup — sem look esse dia
     var outerPiece = outerForDay[f.day] || null;
 
     function score(p) {
-      // Clima é o critério principal; noveltyScore (id de cadastro no catálogo)
-      // fica só como desempate mínimo — não é isso que deve decidir a escolha,
-      // e competia demais com recencyBonus (peça parada de verdade).
+      // Clima é o critério principal. O noveltyScore (bônus por look cadastrado
+      // recentemente) saiu daqui: valia no máximo 0,5, mas como o resto empata
+      // quase sempre, era ele que decidia — e a semana vinha inteira dos 5% de
+      // looks mais novos do catálogo, deixando os antigos de fora pra sempre.
       return pieceMatchScore(p, piecesArr) * 6
            + weatherScore(p.tags, f.profile) * 3
            + seasonScore(p.tags, seasonForProfile(f.profile))
            + recencyBonus(p) * 2 * staleFactor
-           + noveltyScore(p, wizardIdRange) * 0.5
            + ocasiaoBoost(p, f.day)
            - diversityPenalty(p.tags, usedTagFreq);
     }
@@ -7472,8 +7490,7 @@ function proceedToStep2() {
       pool = data.filter(function(p){ return !p.archived && !usedIds.has(p.id) && (p.tags||[]).length>0; });
     }
 
-    pool.sort(function(a,b){ return score(b)-score(a); });
-    var best = pool[0];
+    var best = pickWithVariety(pool, score, 10);
     if(best) {
       usedIds.add(best.id);
       (best.tags||[]).forEach(function(t){
@@ -7490,7 +7507,7 @@ function proceedToStep2() {
     var outerPiece = ta.outerPiece;
 
     function scoreForPool(p) {
-      return pieceMatchScore(p, piecesArr) * 4 + weatherScore(p.tags, ta.profile) * 2 + seasonScore(p.tags, seasonForProfile(ta.profile)) + recencyBonus(p) * staleFactor + noveltyScore(p, wizardIdRange) * 0.5;
+      return pieceMatchScore(p, piecesArr) * 4 + weatherScore(p.tags, ta.profile) * 2 + seasonScore(p.tags, seasonForProfile(ta.profile)) + recencyBonus(p) * staleFactor;
     }
 
     var pieceLabel = outerPiece
@@ -7539,7 +7556,6 @@ function regenerateAssignedDay(day) {
   var f = FORECAST.find(function(x){ return x.day === day; });
   if (!f) return;
   var piecesArr = Array.from(selectedPieces);
-  var wizardIdRange = catalogIdRange();
 
   var usedIds = new Set();
   var usedTagFreq = {};
@@ -7557,7 +7573,6 @@ function regenerateAssignedDay(day) {
          + weatherScore(p.tags, f.profile) * 3
          + seasonScore(p.tags, seasonForProfile(f.profile))
          + recencyBonus(p) * 2 * staleFactor
-         + noveltyScore(p, wizardIdRange) * 0.5
          + ocasiaoBoost(p, day) * 3
          - diversityPenalty(p.tags, usedTagFreq);
   }
@@ -7570,12 +7585,11 @@ function regenerateAssignedDay(day) {
   if (!pool.length) {
     pool = data.filter(function(p){ return !p.archived && !usedIds.has(p.id) && (p.tags||[]).length>0; });
   }
-  pool.sort(function(a,b){ return score(b)-score(a); });
-  var best = pool[0];
+  var best = pickWithVariety(pool, score, 10);
   if (!best) return;
 
   function scoreForPool(p) {
-    return pieceMatchScore(p, piecesArr) * 4 + weatherScore(p.tags, f.profile) * 2 + seasonScore(p.tags, seasonForProfile(f.profile)) + recencyBonus(p) + noveltyScore(p, wizardIdRange) * 0.5 + ocasiaoBoost(p, day) * 2;
+    return pieceMatchScore(p, piecesArr) * 4 + weatherScore(p.tags, f.profile) * 2 + seasonScore(p.tags, seasonForProfile(f.profile)) + recencyBonus(p) + ocasiaoBoost(p, day) * 2;
   }
 
   var pieceLabel = (piecesArr.length ? (piecesArr.find(function(sp){
