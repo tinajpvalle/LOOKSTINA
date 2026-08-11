@@ -6161,25 +6161,77 @@ function noveltyScore(p, range) {
 // Some se você fechar, mas volta a aparecer na próxima vez que abrir o arquivo.
 var JS_DOW_TO_PT = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb']; // Date.getDay(): 0=Dom
 var todaySuggestionDismissed = false;
-var todaySuggestionExcludeId = null;
+var todaySuggestionSeen = []; // ids já mostrados nesta sessão (cada "gerar outro" acumula aqui)
+
+// Histórico de sugestões recentes (persistente)
+// Sem ele a sugestão do dia se repetia sem parar: como quase nenhum look tem
+// "usado em" preenchido, recencyBonus dá 3 pra praticamente todo mundo e a nota
+// passa a depender só do weatherScore, que tem poucos valores inteiros. Centenas
+// de looks empatam na nota máxima, o desempate caía na ordem do catálogo e o
+// sorteio era feito dentro de um top 8 fixo — sempre os mesmos ~10 looks, num
+// catálogo de mais de 800.
+var SUGGEST_HISTORY_KEY = 'looks_tina_sugestoes_recentes_v1';
+var SUGGEST_HISTORY_MAX = 60; // quantos looks recém-sugeridos ficam fora do sorteio
+
+function loadSuggestHistory() {
+  try {
+    var h = JSON.parse(lsGet(SUGGEST_HISTORY_KEY));
+    return Array.isArray(h) ? h : [];
+  } catch(e) { return []; }
+}
+function pushSuggestHistory(id) {
+  if(id == null) return;
+  var h = loadSuggestHistory().filter(function(x){ return x !== id; });
+  h.unshift(id);
+  lsSet(SUGGEST_HISTORY_KEY, JSON.stringify(h.slice(0, SUGGEST_HISTORY_MAX)));
+}
+
+// Fisher-Yates: embaralha antes de ordenar por nota, pra que os empates (que são
+// a maioria) saiam em ordem diferente a cada abertura em vez de sempre na ordem
+// em que os looks estão no catálogo.
+function shuffledCopy(arr) {
+  var a = arr.slice();
+  for(var i = a.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var t = a[i]; a[i] = a[j]; a[j] = t;
+  }
+  return a;
+}
 
 function pickTodaySuggestion() {
   var today = new Date().toISOString().split('T')[0];
   var todayLabel = JS_DOW_TO_PT[new Date().getDay()];
   var fc = (FORECAST||[]).find(function(f){ return f.day === todayLabel; });
   var profile = fc ? fc.profile : 'ameno';
-  var pool = data.filter(function(p){
-    return !p.archived && (p.tags||[]).length && p.lastWorn !== today && p.id !== todaySuggestionExcludeId;
+  var basePool = data.filter(function(p){
+    return !p.archived && (p.tags||[]).length && p.lastWorn !== today;
   });
-  if(!pool.length) return null;
+  if(!basePool.length) return null;
+
+  // Tira do sorteio o que já foi sugerido nos últimos dias e o que já apareceu
+  // nesta sessão. Se sobrar pouca coisa, vai afrouxando — o histórico nunca pode
+  // deixar a sugestão sem candidato.
+  var recent = loadSuggestHistory().concat(todaySuggestionSeen);
+  var pool = basePool.filter(function(p){ return recent.indexOf(p.id) === -1; });
+  if(pool.length < 5) pool = basePool.filter(function(p){ return todaySuggestionSeen.indexOf(p.id) === -1; });
+  if(!pool.length) pool = basePool;
+
   // Clima é o critério principal; "novidade" aqui é peça que anda parada
   // (recencyBonus), não peça recém-cadastrada no catálogo — por isso
   // noveltyScore (que mede isso) não entra no cálculo desse pick diário.
-  var scored = pool.map(function(p){
+  var scored = shuffledCopy(pool).map(function(p){
     var score = weatherScore(p.tags, profile) * 3 + recencyBonus(p) * 2 + (p.favorite ? 1.5 : 0) + (p.rating||0) * 0.5;
     return {p:p, score:score};
   }).sort(function(a,b){ return b.score - a.score; });
-  var topN = scored.slice(0, Math.min(8, scored.length));
+  // A faixa de candidatos acompanha o tamanho do catálogo (mínimo 12) em vez de
+  // ser um top 8 fixo, e ainda inclui todo mundo empatado com o último colocado
+  // da faixa, pra não cortar no meio de um empate.
+  var keep = Math.max(12, Math.round(scored.length * 0.15));
+  if(keep < scored.length) {
+    var cutScore = scored[keep - 1].score;
+    while(keep < scored.length && scored[keep].score === cutScore) keep++;
+  }
+  var topN = scored.slice(0, Math.min(keep, scored.length));
   var pick = topN[Math.floor(Math.random() * topN.length)];
   return {look: pick.p, forecast: fc};
 }
@@ -6194,6 +6246,8 @@ function renderTodaySuggestion() {
   if(!result) { overlay.classList.remove('open'); return; }
   var p = result.look, fc = result.forecast;
   todaySuggestionCurrentId = p.id;
+  if(todaySuggestionSeen.indexOf(p.id) === -1) todaySuggestionSeen.push(p.id);
+  pushSuggestHistory(p.id);
   var imgSrc = lookThumb(p);
   var mainTags = (p.tags||[]).filter(function(t){ return t.split(':')[0].trim().toLowerCase() !== 'marca'; })
     .map(function(t){ return t.split(':').slice(1).join(':').trim(); }).join(' · ');
@@ -6236,7 +6290,8 @@ function closeTodaySuggestion() {
 }
 
 function rerollTodaySuggestion() {
-  todaySuggestionExcludeId = todaySuggestionCurrentId;
+  // todaySuggestionSeen já acumula tudo que apareceu nesta sessão, então cada
+  // clique traz um look novo em vez de alternar entre os mesmos dois.
   renderTodaySuggestion();
 }
 
