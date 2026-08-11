@@ -7539,7 +7539,9 @@ function renderAssignGrid() {
         if(reason) {
           var hint = document.createElement('div');
           hint.style.cssText = 'font-size:.58rem;color:#A8A8A4;text-align:center;padding:2px 4px;';
-          hint.textContent = reason;
+          // reason traz o <svg> do ícone junto com o texto; com textContent o
+          // código do ícone aparecia escrito na tela embaixo de cada look.
+          hint.innerHTML = reason;
           col.appendChild(hint);
         }
       }
