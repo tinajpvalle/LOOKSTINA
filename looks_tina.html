@@ -198,6 +198,10 @@ body.select-mode .card:hover { border-color: #C6C6C2; }
 .btn-sel-archive { background: #8C8C88; color: #fff; border: none; border-radius: 7px; padding: 6px 14px; cursor: pointer; font-size: .8rem; font-family: inherit; }
 .btn-sel-cancel { background: rgba(255,255,255,.15); color: #fff; border: none; border-radius: 7px; padding: 6px 14px; cursor: pointer; font-size: .8rem; font-family: inherit; }
 .btn-sel-all { background: rgba(255,255,255,.15); color: #fff; border: none; border-radius: 7px; padding: 6px 14px; cursor: pointer; font-size: .8rem; font-family: inherit; }
+.sel-ocasiao-group { display: inline-flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.sel-ocasiao-label { color: rgba(255,255,255,.55); font-size: .74rem; text-transform: uppercase; letter-spacing: .08em; }
+.btn-sel-oc { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.35); border-radius: 7px; padding: 6px 12px; cursor: pointer; font-size: .8rem; font-family: inherit; }
+.btn-sel-oc:hover { background: rgba(255,255,255,.15); border-color: rgba(255,255,255,.6); }
 
 .card-week-btn {
   position: absolute; top: 7px; left: 7px;
@@ -689,6 +693,13 @@ body.compare-mode .card-compare-btn { display: flex; }
 <div class="select-bar" id="selectBar">
   <span class="count-sel" id="selCount">0 selecionados</span>
   <button class="btn-sel-all" onclick="selectAllVisible()">Selecionar todos visíveis</button>
+  <span class="sel-ocasiao-group">
+    <span class="sel-ocasiao-label">Ocasião:</span>
+    <button class="btn-sel-oc" onclick="setOcasiaoSelected('casual')">Casual</button>
+    <button class="btn-sel-oc" onclick="setOcasiaoSelected('trabalho')">Trabalho</button>
+    <button class="btn-sel-oc" onclick="setOcasiaoSelected('festa')">Festa</button>
+    <button class="btn-sel-oc" onclick="setOcasiaoSelected('viagem')">Viagem</button>
+  </span>
   <button class="btn-sel-archive" onclick="archiveSelected()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><rect x="3" y="4" width="18" height="4.5" rx="1.2"/><path d="M5 8.5V19a1.5 1.5 0 0 0 1.5 1.5h11A1.5 1.5 0 0 0 19 19V8.5M10 12.5h4"/></svg> Arquivar selecionados</button>
   <button class="btn-sel-cancel" onclick="toggleSelectMode()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"/></svg> Cancelar</button>
 </div>
@@ -3895,7 +3906,10 @@ function renderGrid() {
   
   filtered.forEach(function(p) {
     var card = document.createElement('div');
-    card.className = 'card' + (p.archived?' archived-card':'') + (p.weekday?' week-card':'');
+    // a marca de selecionado tem que sobreviver a um renderGrid: sem isso a
+    // seleção continuava valendo por dentro mas sumia da tela.
+    card.className = 'card' + (p.archived?' archived-card':'') + (p.weekday?' week-card':'')
+      + (selectedIds.has(p.id) ? ' selected' : '');
     card.dataset.id = p.id;
     
     var img = document.createElement('img');
@@ -5768,9 +5782,14 @@ function toggleSelect(pid) {
 }
 
 function selectAllVisible() {
+  // dataset.id vem sempre como texto, mas o toggleSelect guarda o id como ele é
+  // no catálogo (número, ou texto nos looks importados). Misturar os dois fazia
+  // o "Arquivar selecionados" não achar nada do que este botão tinha marcado.
   document.querySelectorAll('.card').forEach(function(c){
-    var pid = c.dataset.id;
-    selectedIds.add(pid);
+    var raw = c.dataset.id;
+    var p = data.find(function(x){ return String(x.id) === raw; });
+    if(!p) return;
+    selectedIds.add(p.id);
     c.classList.add('selected');
   });
   updateSelCount();
@@ -5778,6 +5797,44 @@ function selectAllVisible() {
 
 function updateSelCount() {
   document.getElementById('selCount').textContent = selectedIds.size + ' selecionado' + (selectedIds.size !== 1 ? 's' : '');
+}
+
+// Marcar ocasião em lote
+// Ocasião não dá pra deduzir das tags (nada nelas diz "trabalho" ou "festa"), e
+// nenhum look tinha essa marcação — por isso o filtro de ocasião do Catálogo não
+// devolvia nada e o ocasiaoBoost da semana nunca casava. Marcar look a look em
+// 851 é inviável, então aqui vai em lote: filtra a grade, seleciona tudo, marca.
+function ehTagOcasiao(t, oc) {
+  var tl = String(t).toLowerCase();
+  if(tl.indexOf('ocasião:') !== 0 && tl.indexOf('ocasiao:') !== 0) return false;
+  return tl.split(':').slice(1).join(':').trim() === oc;
+}
+
+function lookTemOcasiao(p, oc) {
+  return (p.tags||[]).some(function(t){ return ehTagOcasiao(t, oc); });
+}
+
+function setOcasiaoSelected(oc) {
+  if(!selectedIds.size) return;
+  var alvos = data.filter(function(p){ return selectedIds.has(p.id); });
+  if(!alvos.length) return;
+  // Se todos os selecionados já têm essa ocasião, o clique tira — assim um
+  // engano numa marcação grande se desfaz clicando de novo, já que não existe
+  // desfazer em lote.
+  var todosJaTem = alvos.every(function(p){ return lookTemOcasiao(p, oc); });
+  alvos.forEach(function(p){
+    if(!p.tags) p.tags = [];
+    if(todosJaTem) {
+      p.tags = p.tags.filter(function(t){ return !ehTagOcasiao(t, oc); });
+    } else if(!lookTemOcasiao(p, oc)) {
+      p.tags.push('ocasião: ' + oc);
+    }
+  });
+  saveToStorage(); buildChips(); renderGrid();
+  var n = alvos.length, plural = n > 1 ? 's' : '';
+  showSavedToast(todosJaTem
+    ? ('"' + oc + '" removido de ' + n + ' look' + plural + '.')
+    : (n + ' look' + plural + ' marcado' + plural + ' como ' + oc + '.'));
 }
 
 function archiveSelected() {
@@ -6268,16 +6325,38 @@ function pieceMatchScore(look, piecesArr) {
   }).length;
 }
 
+// Estação de um look: 'inverno', 'verao' ou null (neutro).
+// A tag "estação:" escrita à mão manda; sem ela, deduz pelas peças — é a mesma
+// detecção que o filtro do Catálogo já fazia. Look que puxa pros dois lados
+// (casaco + sandália, por exemplo) fica neutro em vez de chutar.
+function detectLookSeason(tags) {
+  var list = tags || [];
+  var tl = list.map(function(t){ return t.toLowerCase(); });
+  if(tl.some(function(t){ return t.indexOf('estação: inverno')!==-1; })) return 'inverno';
+  if(tl.some(function(t){ return t.indexOf('estação: verão')!==-1; }))   return 'verao';
+  // Inverno casa pela categoria da tag ("casaco: ...") e verão pela tag inteira,
+  // que é como o filtro do Catálogo sempre fez.
+  var pareceInverno = list.some(function(t){
+    var cat = t.split(':')[0].trim().toLowerCase();
+    return WINTER_TAGS.some(function(w){ return cat.indexOf(w) !== -1; });
+  });
+  var pareceVerao = tl.some(function(t){
+    return SUMMER_TAGS.some(function(w){ return t.indexOf(w) !== -1; });
+  });
+  if(pareceInverno && pareceVerao) return null;
+  if(pareceInverno) return 'inverno';
+  if(pareceVerao)   return 'verao';
+  return null;
+}
+
 // Returns +5 if look matches week season, -8 if it's the opposite season
+// Antes isso exigia a tag "estação:" escrita à mão, que nenhum look tinha — ou
+// seja, o critério nunca contava nada. Agora usa a mesma dedução do Catálogo.
 function seasonScore(tags, weekSeason) {
   if(!weekSeason) return 0;
-  var tl = (tags||[]).map(function(t){ return t.toLowerCase(); });
-  var hasInverno = tl.some(function(t){ return t.indexOf('estação: inverno')!==-1; });
-  var hasVerao   = tl.some(function(t){ return t.indexOf('estação: verão')!==-1; });
-  if(!hasInverno && !hasVerao) return 0; // no explicit tag → neutral
-  if(weekSeason === 'inverno') return hasInverno ? 5 : -8;
-  if(weekSeason === 'verao')   return hasVerao   ? 5 : -8;
-  return 0;
+  var s = detectLookSeason(tags);
+  if(!s) return 0; // indefinido → neutro
+  return s === weekSeason ? 5 : -8;
 }
 
 // Detect week season from FORECAST profiles
