@@ -501,6 +501,10 @@ body.week-pick-mode .card-week-btn { display: block; }
 .daypick-card:hover { border-color:#1A1A1A; }
 .daypick-card img { width:100%; aspect-ratio:1; object-fit:cover; display:block; }
 .daypick-card-label { font-size:.65rem; color:#666666; padding:3px 5px; text-align:center; background:#FAFAF8; }
+.day-look-montado { cursor: pointer; }
+.day-look-montado .flatlay-canvas { max-width: none; aspect-ratio: 1; border-radius: 0; }
+.day-look-montado-label { font-size: .68rem; color: #666666; text-align: center; padding: 4px 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.day-montado-chip { font-size: .66rem; color: #666666; background: #FAFAF8; border: 1px solid #EAEAE7; border-radius: 6px; margin: 4px 6px 0; padding: 2px 6px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; }
 .day-empty { height: 160px; display: flex; align-items: center; justify-content: center; color: #B0B0AC; font-size: .78rem; flex-direction: column; gap: 8px; cursor: pointer; }
 .day-empty:hover { background: #f9f8f6; }
 .add-look-hint { font-size: .7rem; }
@@ -642,6 +646,8 @@ body.compare-mode .card-compare-btn { display: flex; }
 .select-bar { background: var(--ink); }
 .flatlay-canvas { background: var(--bg); }
 .flatlay-item img { filter: none; }
+.day-look-montado-label { color: var(--txt-2); }
+.day-montado-chip { background: var(--surface); border-color: var(--line); color: var(--txt-2); }
 
 /* Modais: raio menor, sem sombra */
 .modal, .edit-modal, .rename-modal, #dayPickerBox { border-radius: var(--r-lg); }
@@ -2630,7 +2636,10 @@ function removePecaAvulsa(id) {
 var MONTADOS_STORAGE_KEY = 'looks_tina_montados_v1'; // storage separado - não compartilha nada com o catálogo (STORAGE_KEY) nem com PECAS_STORAGE_KEY
 var montagens = [];
 try {
-  montagens = JSON.parse(localStorage.getItem(MONTADOS_STORAGE_KEY)) || [];
+  // lsGet/lsSet e não localStorage direto: no Safari o localStorage lança
+  // SecurityError em alguns contextos, e aí o dia do look montado deixava de ser
+  // gravado silenciosamente (o mesmo motivo que já derrubava o catálogo antes).
+  montagens = JSON.parse(lsGet(MONTADOS_STORAGE_KEY)) || [];
 } catch (e) {
   montagens = [];
 }
@@ -2640,7 +2649,7 @@ var builderActiveCat = '__all__';
 
 function saveMontagens() {
   var json = JSON.stringify(montagens);
-  localStorage.setItem(MONTADOS_STORAGE_KEY, json);
+  lsSet(MONTADOS_STORAGE_KEY, json);
   syncPut(MONTADOS_STORAGE_KEY, json);
 }
 
@@ -2677,6 +2686,8 @@ function setMontadoWeekday(id, day) {
   renderLooksMontados();
   if (montadoDetailId === id) openMontadoDetail(id);
   if (typeof renderCal === 'function' && document.getElementById('calGrid')) renderCal();
+  if (typeof renderWeek === 'function' && document.getElementById('weekGrid')) renderWeek();
+  if (typeof renderWeekPlanner === 'function') renderWeekPlanner();
 }
 
 function renderWeekPlanner() {
@@ -3919,6 +3930,13 @@ function renderWeek() {
     col.appendChild(dh);
 
     var look = data.find(function(p){ return p.weekday === day; });
+    // Look montado atribuído a este dia. Ele vive em `montagens`, storage separado
+    // do catálogo, e usa a chave minúscula do WEEKDAYS ('qui') em vez do rótulo
+    // do DAYS ('Qui') — por isso precisa da conversão. Sem isso o look montado
+    // ficava salvo corretamente mas não aparecia em lugar nenhum nesta aba, que é
+    // onde se olha pra saber o que vestir no dia.
+    var dayKey = (WEEKDAYS.find(function(d){ return d.label === day; }) || {}).key;
+    var montado = dayKey ? montagens.find(function(m){ return m.weekday === dayKey; }) : null;
     if (look) {
       var dl = document.createElement('div'); dl.className = 'day-look';
       dl.draggable = true;
@@ -3943,6 +3961,34 @@ function renderWeek() {
       resugg.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M20.3 12a8.3 8.3 0 1 1-2.7-6.1"/><path d="M20.3 3.6v4.7h-4.7"/></svg>';
       resugg.onclick = (function(d){ return function(e){ e.stopPropagation(); openDayPicker(d); }; })(day);
       dl.appendChild(img); dl.appendChild(rm); dl.appendChild(resugg); col.appendChild(dl);
+      // Dia com look do catálogo E look montado: o montado entra como etiqueta
+      // embaixo, pra não sumir da vista (mesma ideia usada no Calendário).
+      if (montado) {
+        var mchip = document.createElement('div');
+        mchip.className = 'day-montado-chip';
+        mchip.textContent = '+ ' + (montado.name || 'look montado');
+        mchip.title = 'Look montado também planejado pra ' + day + ' — clique pra ver';
+        mchip.onclick = (function(mid){ return function(e){ e.stopPropagation(); switchTab('montados'); openMontadoDetail(mid); }; })(montado.id);
+        col.appendChild(mchip);
+      }
+    } else if (montado) {
+      // Nenhum look do catálogo neste dia, mas tem um look montado: ele vira o
+      // look do dia (flat lay das peças), clicável pra abrir o detalhe.
+      var dm = document.createElement('div'); dm.className = 'day-look day-look-montado';
+      var fl = document.createElement('div'); fl.className = 'flatlay-canvas';
+      renderFlatLay(fl, montado.pieceIds.map(findPieceById).filter(Boolean));
+      dm.appendChild(fl);
+      var mlabel = document.createElement('div');
+      mlabel.className = 'day-look-montado-label';
+      mlabel.textContent = montado.name || 'Look montado';
+      dm.appendChild(mlabel);
+      var mrm = document.createElement('button'); mrm.className = 'day-look-remove';
+      mrm.title = 'Tirar da semana';
+      mrm.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"/></svg>';
+      mrm.onclick = (function(mid, k){ return function(e){ e.stopPropagation(); setMontadoWeekday(mid, k); renderWeek(); }; })(montado.id, dayKey);
+      dm.appendChild(mrm);
+      dm.onclick = (function(mid){ return function(){ switchTab('montados'); openMontadoDetail(mid); }; })(montado.id);
+      col.appendChild(dm);
     } else if (weekCasaDays[day]) {
       // Day marked as "em casa"
       var de = document.createElement('div'); de.className = 'day-empty';
