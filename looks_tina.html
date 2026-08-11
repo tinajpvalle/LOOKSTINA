@@ -989,9 +989,10 @@ body.compare-mode .card-compare-btn { display: flex; }
         <h4><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg> Usar em qual dia?</h4>
         <div class="week-days" id="todaySuggestDayBtns"></div>
       </div>
-      <div style="display:flex;gap:8px;margin-top:14px;">
+      <button id="todaySuggestWornBtn" onclick="markTodaySuggestionWorn()" style="width:100%;margin-top:14px;background:#1A1A1A;color:#fff;border:none;border-radius:8px;padding:11px;cursor:pointer;font-size:.86rem;font-family:inherit;font-weight:600;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><polyline points="4.5 12.2 9.8 17.5 19.5 6.5"/></svg> Vou usar esse hoje</button>
+      <div style="display:flex;gap:8px;margin-top:8px;">
         <button onclick="rerollTodaySuggestion()" style="flex:1;background:#fff;border:1px solid #E0E0DB;color:#1A1A1A;border-radius:8px;padding:9px;cursor:pointer;font-size:.83rem;font-family:inherit;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M20.3 12a8.3 8.3 0 1 1-2.7-6.1"/><path d="M20.3 3.6v4.7h-4.7"/></svg> Outro</button>
-        <button onclick="viewTodaySuggestionLook()" style="flex:1;background:#1A1A1A;color:#fff;border:none;border-radius:8px;padding:9px;cursor:pointer;font-size:.83rem;font-family:inherit;font-weight:600;">Ver look completo</button>
+        <button onclick="viewTodaySuggestionLook()" style="flex:1;background:#fff;border:1px solid #E0E0DB;color:#1A1A1A;border-radius:8px;padding:9px;cursor:pointer;font-size:.83rem;font-family:inherit;">Ver look completo</button>
       </div>
     </div>
   </div>
@@ -6482,6 +6483,29 @@ function viewTodaySuggestionLook() {
   closeTodaySuggestion();
   todaySuggestionDismissed = false; // ver o look não conta como "dispensar" a sugestão
   if(id != null) { switchTab('catalog'); openView(id); }
+}
+
+// Registrar o uso a partir da sugestão da manhã
+// Marcar look como usado só existia dentro do detalhe (markWorn), então quase
+// ninguém tinha lastWorn/wornCount preenchido — e é deles que dependem o filtro
+// "esquecidos", o "nunca usados", o Relatório e o recencyBonus que ordena esta
+// própria sugestão. Aqui é o único momento do dia em que ela olha um look
+// específico, então é o lugar barato de registrar isso.
+function markTodaySuggestionWorn() {
+  var p = data.find(function(x){ return x.id === todaySuggestionCurrentId; });
+  if(!p) return;
+  var today = new Date().toISOString().split('T')[0];
+  if(p.lastWorn === today) {
+    showSavedToast('Esse look já está marcado como usado hoje.');
+    return;
+  }
+  p.lastWorn = today;
+  p.wornCount = (p.wornCount || 0) + 1;
+  saveToStorage();
+  if(typeof renderGrid === 'function') renderGrid();
+  if(typeof renderCal === 'function' && document.getElementById('calGrid')) renderCal();
+  showSavedToast('Anotado! Esse look já foi usado ' + p.wornCount + 'x.');
+  closeTodaySuggestion();
 }
 
 // Mala de viagem 
