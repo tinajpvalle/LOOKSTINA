@@ -8387,7 +8387,7 @@ function applySuggestions() {
     var p = data.find(function(x){ return x.id === a.curId; });
     if(p) p.weekday = f.day;
   });
-  document.getElementById('suggestPanel').style.display = 'none';
+  closeSuggestPanel(); // devolve o FORECAST pra semana atual se ela montou a próxima
   saveToStorage(); renderWeek(); renderGrid();
 }
 </script>
