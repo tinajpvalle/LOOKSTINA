@@ -440,10 +440,18 @@ body.week-pick-mode .card-week-btn { display: block; }
 .week-templates-del { border: none; background: none; color: #B0B0AC; cursor: pointer; font-size: .9rem; padding: 4px 6px; flex-shrink: 0; }
 .week-templates-del:hover { color: #8C8C88; }
 .week-templates-empty { font-size: .78rem; color: #A8A8A4; }
-.week-history-card { display: flex; align-items: center; gap: 10px; background: #FAFAF8; border-radius: 10px; padding: 8px 10px; margin-bottom: 6px; }
-.week-history-thumbs { display: flex; gap: 3px; flex-shrink: 0; }
-.week-history-thumbs img { width: 26px; height: 26px; object-fit: cover; border-radius: 5px; border: 1px solid #F0F0EC; }
-.week-history-thumbs .wh-empty { width: 26px; height: 26px; border-radius: 5px; border: 1px dashed #E0E0DB; background: #F5F4F1; }
+/* Miniaturas de 26px não deixavam reconhecer o look nenhum — o histórico só
+   serve se dá pra bater o olho e lembrar da semana. */
+.week-history-modal { max-width: 780px; }
+.week-history-card { display: flex; align-items: center; gap: 14px; background: #FAFAF8; border-radius: 10px; padding: 12px; margin-bottom: 10px; flex-wrap: wrap; }
+.week-history-thumbs { display: flex; gap: 6px; flex-shrink: 0; }
+.wh-day { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.wh-day-label { font-size: .58rem; color: #A8A8A4; text-transform: uppercase; letter-spacing: .06em; }
+.week-history-thumbs img { width: 62px; height: 82px; object-fit: cover; border-radius: 6px; border: 1px solid #F0F0EC; background: #fff; }
+.week-history-thumbs .wh-empty { width: 62px; height: 82px; border-radius: 6px; border: 1px dashed #E0E0DB; background: #F5F4F1; display: flex; align-items: center; justify-content: center; color: #C6C6C2; }
+@media (max-width: 640px) {
+  .week-history-thumbs img, .week-history-thumbs .wh-empty { width: 40px; height: 54px; }
+}
 .week-history-info { flex: 1; min-width: 0; }
 .week-history-label { font-size: .82rem; font-weight: 600; color: #1A1A1A; }
 .week-history-meta { font-size: .68rem; color: #666666; margin-top: 1px; }
@@ -1085,7 +1093,7 @@ body.compare-mode .card-compare-btn { display: flex; }
 
 <!-- Histórico automático de semanas -->
 <div class="overlay" id="weekHistoryOverlay" onclick="if(event.target===this) closeWeekHistory()">
-  <div class="modal trip-modal">
+  <div class="modal week-history-modal">
     <button class="close-btn" onclick="closeWeekHistory()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"/></svg></button>
     <div class="modal-body">
       <h3 style="margin-bottom:4px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M12 3.2 3.2 7.6 12 12l8.8-4.4L12 3.2z"/><path d="M3.2 12 12 16.4 20.8 12M3.2 16.4 12 20.8l8.8-4.4"/></svg> Histórico de semanas</h3>
@@ -7159,9 +7167,11 @@ function renderWeekHistoryList() {
   weekHistory.forEach(function(w, i){
     var filled = w.days.filter(function(d){ return d.pieceId || d.casa; }).length;
     var thumbsHtml = w.days.map(function(d){
-      if (d.thumb) return '<img src="' + d.thumb + '" alt="' + d.day + '" title="' + d.day + '">';
-      if (d.casa) return '<div class="wh-empty" title="' + d.day + ': em casa"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="m3.8 10.4 8.2-6.6 8.2 6.6V19a1.6 1.6 0 0 1-1.6 1.6H5.4A1.6 1.6 0 0 1 3.8 19v-8.6z"/></svg></div>';
-      return '<div class="wh-empty" title="' + d.day + ': sem look"></div>';
+      var inner;
+      if (d.thumb) inner = '<img src="' + d.thumb + '" alt="' + d.day + '" title="' + d.day + '">';
+      else if (d.casa) inner = '<div class="wh-empty" title="' + d.day + ': em casa"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3.8 10.4 8.2-6.6 8.2 6.6V19a1.6 1.6 0 0 1-1.6 1.6H5.4A1.6 1.6 0 0 1 3.8 19v-8.6z"/></svg></div>';
+      else inner = '<div class="wh-empty" title="' + d.day + ': sem look"></div>';
+      return '<div class="wh-day">' + inner + '<span class="wh-day-label">' + d.day + '</span></div>';
     }).join('');
     html += '<div class="week-history-card">'
       + '<div class="week-history-thumbs">' + thumbsHtml + '</div>'
