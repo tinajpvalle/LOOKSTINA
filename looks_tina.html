@@ -442,6 +442,10 @@ body.week-pick-mode .card-week-btn { display: block; }
 .week-templates-empty { font-size: .78rem; color: #A8A8A4; }
 /* Miniaturas de 26px não deixavam reconhecer o look nenhum — o histórico só
    serve se dá pra bater o olho e lembrar da semana. */
+.week-view-switch { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 14px; }
+.week-view-btn { border: 1px solid #E0E0DB; background: #fff; border-radius: 20px; padding: 7px 16px; font-size: .82rem; cursor: pointer; color: #666666; font-family: inherit; }
+.week-view-btn.active { background: #1A1A1A; border-color: #1A1A1A; color: #fff; font-weight: 600; }
+.week-view-range { font-size: .76rem; color: #A8A8A4; margin-left: 4px; }
 .week-history-modal { max-width: 780px; }
 .week-history-card { display: flex; align-items: center; gap: 14px; background: #FAFAF8; border-radius: 10px; padding: 12px; margin-bottom: 10px; flex-wrap: wrap; }
 .week-history-thumbs { display: flex; gap: 6px; flex-shrink: 0; }
@@ -818,9 +822,16 @@ body.compare-mode .card-compare-btn { display: flex; }
     <h2><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg> Looks da Semana</h2>
     <button class="btn btn-week" id="weekPickBtn" onclick="toggleWeekPickMode()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><circle cx="12" cy="12" r="8.5"/><path d="M12 8.2v7.6M8.2 12h7.6"/></svg> Selecionar looks</button>
     <button class="btn btn-ghost" onclick="clearWeek()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14"/></svg> Limpar semana</button>
-    <button class="btn btn-ghost" onclick="saveWeekToHistoryNow()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M12 3.5v11M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg> Salvar semana no histórico</button>
     <button class="btn btn-ghost" onclick="showSuggestions()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><circle cx="7.8" cy="7.6" r="2.8"/><path d="M7.8 2.4v1.4M3.6 3.4l1 1M2.4 7.6h1.4M12 3.4l-1 1"/><path d="M9.4 19.4a3.7 3.7 0 0 1 .6-7.4 4.8 4.8 0 0 1 9.1 1.4 3.1 3.1 0 0 1-.6 6h-9.1z"/></svg> Sugestão IA</button>
     <button class="btn btn-ghost" onclick="openTripWizard()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M9 7V4h6v3M3 13.5h18"/></svg> Mala de viagem</button>
+  </div>
+  <div class="week-view-switch">
+    <button class="week-view-btn active" id="weekViewAtual" onclick="setWeekView('atual')">Esta semana</button>
+    <button class="week-view-btn" id="weekViewProxima" onclick="setWeekView('proxima')">Próxima semana</button>
+    <span class="week-view-range" id="weekViewRange"></span>
+  </div>
+  <div class="week-header" id="weekOnlyCurrentBtns">
+    <button class="btn btn-ghost" onclick="saveWeekToHistoryNow()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M12 3.5v11M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg> Salvar semana no histórico</button>
     <button class="btn btn-ghost" onclick="openWeekTemplates()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><rect x="5" y="4.2" width="14" height="16.6" rx="2"/><rect x="9" y="2.6" width="6" height="3.4" rx="1.2"/><path d="M9 11.5h6M9 15.2h4"/></svg> Semanas modelo</button>
     <button class="btn btn-ghost" onclick="openWeekHistory()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M12 3.2 3.2 7.6 12 12l8.8-4.4L12 3.2z"/><path d="M3.2 12 12 16.4 20.8 12M3.2 16.4 12 20.8l8.8-4.4"/></svg> Histórico de semanas</button>
     <button class="btn btn-ghost" onclick="saveWeekPhotos()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M3 7.2A2 2 0 0 1 5 5.2h3.8l2.1 2.6H19a2 2 0 0 1 2 2v8.4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7.2z"/></svg> Salvar fotos</button>
@@ -1145,7 +1156,7 @@ function lsSet(key, value) {
 // Se o servidor não responder (ex: site aberto direto do GitHub Pages, sem
 // backend, ou sem internet), tudo falha silenciosamente e o app continua
 // funcionando 100% localmente, como sempre funcionou.
-var SYNC_KEYS = ['looks_tina_catalog_v1', 'looks_tina_montados_v1', 'looks_tina_pecas_avulsas_v1'];
+var SYNC_KEYS = ['looks_tina_catalog_v1', 'looks_tina_montados_v1', 'looks_tina_pecas_avulsas_v1', 'looks_tina_proxsemana_v1'];
 function syncPut(key, jsonValue) {
   if (SYNC_KEYS.indexOf(key) === -1) return;
   try {
@@ -1174,6 +1185,16 @@ function pullRemoteUpdates() {
         pecasAvulsas = JSON.parse(res.value) || [];
         lsSet('looks_tina_pecas_avulsas_v1', res.value);
         if (typeof renderPecas === 'function' && document.getElementById('pecasGrid')) renderPecas();
+      } catch (e) {}
+    }
+  });
+  syncGet('looks_tina_proxsemana_v1').then(function(res) {
+    if (!res || res.value == null) return;
+    if (res.value !== JSON.stringify(nextWeekPlan)) {
+      try {
+        nextWeekPlan = JSON.parse(res.value) || {};
+        lsSet('looks_tina_proxsemana_v1', res.value);
+        if (typeof renderWeek === 'function' && document.getElementById('weekGrid')) renderWeek();
       } catch (e) {}
     }
   });
@@ -4103,7 +4124,7 @@ function renderWeek() {
     var dh = document.createElement('div'); dh.className = 'day-header'; dh.textContent = day;
     col.appendChild(dh);
 
-    var look = data.find(function(p){ return p.weekday === day; });
+    var look = weekLookFor(day);
     // Look montado atribuído a este dia. Ele vive em `montagens`, storage separado
     // do catálogo, e usa a chave minúscula do WEEKDAYS ('qui') em vez do rótulo
     // do DAYS ('Qui') — por isso precisa da conversão. Sem isso o look montado
@@ -4219,11 +4240,12 @@ function renderWeek() {
       e.preventDefault();
       col.classList.remove('drag-over');
       if (!dragSourceDay || dragSourceDay === day) return;
-      // Swap weekday assignments
-      var srcLook = data.find(function(p){ return p.weekday === dragSourceDay; });
-      var dstLook = data.find(function(p){ return p.weekday === day; });
-      if (srcLook) srcLook.weekday = day;
-      if (dstLook) dstLook.weekday = dragSourceDay;
+      // Swap weekday assignments (na semana que estiver sendo vista)
+      var srcLook = weekLookFor(dragSourceDay);
+      var dstLook = weekLookFor(day);
+      clearWeekLookFor(dragSourceDay); clearWeekLookFor(day);
+      if (srcLook) setWeekLookFor(day, srcLook.id);
+      if (dstLook) setWeekLookFor(dragSourceDay, dstLook.id);
       dragSourceDay = null;
       saveToStorage();
       renderWeek();
@@ -4235,11 +4257,75 @@ function renderWeek() {
   });
 }
 
-function removeFromWeek(day) {
-  delete weekCasaDays[day];
-  lsSet('looks_tina_casadays_v1', JSON.stringify(weekCasaDays));
+// Próxima semana
+// A semana atual mora no próprio look (p.weekday). A próxima mora aqui, num mapa
+// à parte {Seg: id}, pra ela poder deixar a semana que vem pronta sem apagar a de
+// agora. Na virada da segunda o mapa vira a semana atual (ver checkWeekRollover).
+var NEXT_WEEK_KEY = 'looks_tina_proxsemana_v1';
+var nextWeekPlan = safeParse(lsGet(NEXT_WEEK_KEY), {}) || {};
+var weekView = 'atual'; // 'atual' | 'proxima' — só de visualização, não persiste
+
+function saveNextWeekPlan() {
+  var json = JSON.stringify(nextWeekPlan);
+  lsSet(NEXT_WEEK_KEY, json);
+  syncPut(NEXT_WEEK_KEY, json);
+}
+
+// Leitura/escrita da semana que está sendo vista, pra todo o resto da tela não
+// precisar saber em qual das duas está mexendo.
+function weekLookFor(day) {
+  if (weekView === 'proxima') {
+    var id = nextWeekPlan[day];
+    if (id == null) return null;
+    return data.find(function(p){ return p.id === id; }) || null;
+  }
+  return data.find(function(p){ return p.weekday === day; });
+}
+
+function setWeekLookFor(day, pid) {
+  if (weekView === 'proxima') {
+    Object.keys(nextWeekPlan).forEach(function(d){ if(nextWeekPlan[d] === pid) delete nextWeekPlan[d]; });
+    nextWeekPlan[day] = pid;
+    saveNextWeekPlan();
+    return;
+  }
+  data.forEach(function(p){ if(p.weekday === day) p.weekday = null; });
+  var p = data.find(function(x){ return x.id === pid; });
+  if(p) p.weekday = day;
+}
+
+function clearWeekLookFor(day) {
+  if (weekView === 'proxima') { delete nextWeekPlan[day]; saveNextWeekPlan(); return; }
   var look = data.find(function(p){ return p.weekday === day; });
-  if (look) { look.weekday = null; renderGrid(); renderWeek(); }
+  if (look) look.weekday = null;
+}
+
+function setWeekView(v) {
+  weekView = v;
+  var a = document.getElementById('weekViewAtual'), b = document.getElementById('weekViewProxima');
+  if (a) a.classList.toggle('active', v === 'atual');
+  if (b) b.classList.toggle('active', v === 'proxima');
+  // Os botões abaixo mexem só na semana atual (histórico, PDF, .ics, fotos,
+  // modelos): escondê-los evita a pergunta "isso vale pra qual semana?".
+  var soAtual = document.getElementById('weekOnlyCurrentBtns');
+  if (soAtual) soAtual.style.display = (v === 'atual') ? '' : 'none';
+  var range = document.getElementById('weekViewRange');
+  if (range) {
+    var monday = mondayOfCurrentWeek();
+    if (v === 'proxima') monday.setDate(monday.getDate() + 7);
+    var sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
+    range.textContent = brDate(monday) + ' a ' + brDate(sunday);
+  }
+  renderWeek();
+}
+
+function removeFromWeek(day) {
+  if (weekView === 'atual') {
+    delete weekCasaDays[day];
+    lsSet('looks_tina_casadays_v1', JSON.stringify(weekCasaDays));
+  }
+  clearWeekLookFor(day);
+  renderGrid(); renderWeek();
 }
 
 // Day picker (botão "resugerir" em cada dia da semana) 
@@ -4290,7 +4376,9 @@ function renderDayPickerGrid(day, filterText) {
     card.appendChild(img);
     var label = document.createElement('div');
     label.className = 'daypick-card-label';
-    label.textContent = p.weekday === day ? 'look atual' : (p.weekday ? 'já em ' + p.weekday : '');
+    var aqui = weekLookFor(day);
+    var jaEm = DAYS.find(function(d){ var l = weekLookFor(d); return l && l.id === p.id; });
+    label.textContent = (aqui && aqui.id === p.id) ? 'look atual' : (jaEm ? 'já em ' + jaEm : '');
     card.appendChild(label);
     card.onclick = (function(pid){ return function(){ assignDay(pid, day); closeDayPicker(); }; })(p.id);
     grid.appendChild(card);
@@ -4812,6 +4900,13 @@ function _saveWeekFallback(weekLooks, err) {
 }
 
 function clearWeek() {
+  if (weekView === 'proxima') {
+    // A próxima semana é só um plano: não vai pro histórico, é só descartar.
+    if (!confirm('Limpar o plano da próxima semana?')) return;
+    nextWeekPlan = {}; saveNextWeekPlan();
+    renderGrid(); renderWeek(); showSavedToast('Plano da próxima semana limpo.');
+    return;
+  }
   if (!confirm('Limpar todos os looks da semana?')) return;
   var snap = buildWeekSnapshot();
   var archived = archiveWeekToHistory(isoDate(mondayOfCurrentWeek()), snap);
@@ -4835,12 +4930,12 @@ function saveWeekToHistoryNow() {
 }
 
 function assignDay(pid, day) {
-  // Remove from any existing day with same day
-  data.forEach(function(p){ if(p.weekday === day) p.weekday = null; });
   var p = data.find(function(x){ return x.id === pid; });
   if(!p) return;
-  var removing = (p.weekday === day);
-  p.weekday = removing ? null : day;
+  var atual = weekLookFor(day);
+  var removing = !!(atual && atual.id === pid);
+  if (removing) clearWeekLookFor(day);
+  else setWeekLookFor(day, pid);
 
   // Alerta de repetição: look usado há menos de 7 dias
   if(!removing && p.lastWorn) {
@@ -5483,17 +5578,20 @@ function renderWeekDayBtns(pid) {
   var p = data.find(function(x){ return x.id===pid; });
   var container = document.getElementById('weekDayBtns');
   container.innerHTML = '';
+  // Segue a semana que está sendo vista na aba Semana, pra marcar aqui e ver lá
+  // não darem respostas diferentes.
+  var diaAtual = DAYS.find(function(d){ var l = weekLookFor(d); return l && l.id === pid; });
   DAYS.forEach(function(day) {
     var btn = document.createElement('button');
-    btn.className = 'wd-btn' + (p.weekday===day?' active':'');
-    btn.textContent = p.weekday===day ? '✓ '+day : day;
+    btn.className = 'wd-btn' + (diaAtual===day?' active':'');
+    btn.textContent = diaAtual===day ? '✓ '+day : day;
     btn.onclick = (function(d){ return function(){ assignDay(pid,d); }; })(day);
     container.appendChild(btn);
   });
-  if (p.weekday) {
+  if (diaAtual) {
     var rm = document.createElement('button');
     rm.className = 'wd-btn remove'; rm.textContent = 'Remover da semana';
-    rm.onclick = function(){ assignDay(pid, p.weekday); };
+    rm.onclick = function(){ assignDay(pid, diaAtual); };
     container.appendChild(rm);
   }
 }
@@ -7040,6 +7138,15 @@ function checkWeekRollover() {
       var look = data.find(function(p){ return p.weekday === day; });
       if (look) look.weekday = null;
     });
+    // O que ela deixou programado pra "próxima semana" vira a semana atual agora.
+    var promovidos = 0;
+    DAYS.forEach(function(day){
+      var id = nextWeekPlan[day];
+      if (id == null) return;
+      var p = data.find(function(x){ return x.id === id; });
+      if (p) { p.weekday = day; promovidos++; }
+    });
+    nextWeekPlan = {}; saveNextWeekPlan();
     weekCasaDays = {}; lsSet('looks_tina_casadays_v1', '{}');
     weekNotes = {}; lsSet('looks_tina_weeknotes_v1', '{}');
     weekDayOcasiao = {}; lsSet('looks_tina_dayocasiao_v1', '{}');
@@ -8389,16 +8496,34 @@ function runColorAnalysis() {
 var wizardOcasiao = null;
 
 function applySuggestions() {
-  var hasExisting = data.some(function(p){ return p.weekday !== null; });
-  if(hasExisting && !confirm('Isso vai substituir os looks já atribuídos à semana. Continuar?')) return;
-  data.forEach(function(p){ p.weekday = null; });
-  FORECAST.forEach(function(f){
-    var a = assignedLooks[f.day]; if(!a) return;
-    var p = data.find(function(x){ return x.id === a.curId; });
-    if(p) p.weekday = f.day;
-  });
+  // Montou a próxima semana? Então vai pro plano da próxima, sem encostar na atual.
+  var paraProxima = (wizardWeekOffset === 1);
+  var alvo = paraProxima ? 'a próxima semana' : 'a semana';
+  var hasExisting = paraProxima
+    ? Object.keys(nextWeekPlan).length > 0
+    : data.some(function(p){ return p.weekday !== null; });
+  if(hasExisting && !confirm('Isso vai substituir os looks já atribuídos a ' + alvo + '. Continuar?')) return;
+
+  if (paraProxima) {
+    nextWeekPlan = {};
+    FORECAST.forEach(function(f){
+      var a = assignedLooks[f.day]; if(!a) return;
+      nextWeekPlan[f.day] = a.curId;
+    });
+    saveNextWeekPlan();
+  } else {
+    data.forEach(function(p){ p.weekday = null; });
+    FORECAST.forEach(function(f){
+      var a = assignedLooks[f.day]; if(!a) return;
+      var p = data.find(function(x){ return x.id === a.curId; });
+      if(p) p.weekday = f.day;
+    });
+  }
+  var eraProxima = paraProxima;
   closeSuggestPanel(); // devolve o FORECAST pra semana atual se ela montou a próxima
-  saveToStorage(); renderWeek(); renderGrid();
+  saveToStorage();
+  if (eraProxima) setWeekView('proxima'); // mostra o que acabou de ser montado
+  renderWeek(); renderGrid();
 }
 </script>
 <!-- Saved toast -->
