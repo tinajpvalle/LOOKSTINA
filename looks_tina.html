@@ -442,6 +442,7 @@ body.week-pick-mode .card-week-btn { display: block; }
 .week-templates-empty { font-size: .78rem; color: #A8A8A4; }
 /* Miniaturas de 26px não deixavam reconhecer o look nenhum — o histórico só
    serve se dá pra bater o olho e lembrar da semana. */
+#todaySuggestFlatlay { max-width: none; border-radius: 16px 16px 0 0; aspect-ratio: 4/5; }
 .wd-target-switch { display: flex; gap: 6px; margin-bottom: 8px; width: 100%; }
 .wd-target-btn { flex: 1; border: 1px solid #E0E0DB; background: #fff; border-radius: 8px; padding: 6px 10px; font-size: .76rem; cursor: pointer; color: #666666; font-family: inherit; }
 .wd-target-btn.active { background: #1A1A1A; border-color: #1A1A1A; color: #fff; font-weight: 600; }
@@ -1029,16 +1030,17 @@ body.compare-mode .card-compare-btn { display: flex; }
   <div class="modal" id="todaySuggestModal" style="max-width:380px;">
     <button class="close-btn" onclick="closeTodaySuggestion()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"/></svg></button>
     <img id="todaySuggestImg" src="" alt="" style="cursor:pointer;" onclick="viewTodaySuggestionLook()">
+    <div id="todaySuggestFlatlay" class="flatlay-canvas" style="display:none;cursor:pointer;" onclick="viewTodaySuggestionLook()"></div>
     <div class="modal-body">
       <div id="todaySuggestMeta" style="font-size:.74rem;color:#1A1A1A;font-weight:700;letter-spacing:.03em;margin-bottom:8px;"></div>
       <div id="todaySuggestTags" style="font-size:.92rem;color:#333333;margin-bottom:14px;line-height:1.5;"></div>
-      <div class="week-selector" style="margin-top:0;border-top:none;padding-top:0;">
+      <div class="week-selector" id="todaySuggestDaysWrap" style="margin-top:0;border-top:none;padding-top:0;">
         <h4><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg> Usar em qual dia?</h4>
         <div class="week-days" id="todaySuggestDayBtns"></div>
       </div>
       <button id="todaySuggestWornBtn" onclick="markTodaySuggestionWorn()" style="width:100%;margin-top:14px;background:#1A1A1A;color:#fff;border:none;border-radius:8px;padding:11px;cursor:pointer;font-size:.86rem;font-family:inherit;font-weight:600;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><polyline points="4.5 12.2 9.8 17.5 19.5 6.5"/></svg> Vou usar esse hoje</button>
       <div style="display:flex;gap:8px;margin-top:8px;">
-        <button onclick="rerollTodaySuggestion()" style="flex:1;background:#fff;border:1px solid #E0E0DB;color:#1A1A1A;border-radius:8px;padding:9px;cursor:pointer;font-size:.83rem;font-family:inherit;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M20.3 12a8.3 8.3 0 1 1-2.7-6.1"/><path d="M20.3 3.6v4.7h-4.7"/></svg> Outro</button>
+        <button id="todaySuggestRerollBtn" onclick="rerollTodaySuggestion()" style="flex:1;background:#fff;border:1px solid #E0E0DB;color:#1A1A1A;border-radius:8px;padding:9px;cursor:pointer;font-size:.83rem;font-family:inherit;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M20.3 12a8.3 8.3 0 1 1-2.7-6.1"/><path d="M20.3 3.6v4.7h-4.7"/></svg> Outro</button>
         <button onclick="viewTodaySuggestionLook()" style="flex:1;background:#fff;border:1px solid #E0E0DB;color:#1A1A1A;border-radius:8px;padding:9px;cursor:pointer;font-size:.83rem;font-family:inherit;">Ver look completo</button>
       </div>
     </div>
@@ -6743,22 +6745,84 @@ function pickTodaySuggestion() {
 
 var todaySuggestionCurrentId = null;
 
+// O look que ela já planejou pra hoje na aba Semana (do catálogo ou montado).
+function todayPlannedLook() {
+  var todayLabel = JS_DOW_TO_PT[new Date().getDay()];
+  var look = data.find(function(p){ return !p.archived && p.weekday === todayLabel; });
+  if (look) return { tipo: 'catalogo', look: look };
+  var dayKey = (WEEKDAYS.find(function(d){ return d.label === todayLabel; }) || {}).key;
+  var m = dayKey ? montagens.find(function(x){ return x.weekday === dayKey; }) : null;
+  if (m) return { tipo: 'montado', montado: m };
+  return null;
+}
+
+// 'auto' mostra o que ela planejou pra hoje, quando existe; 'sugestao' é quando
+// ela pediu outro. Antes o card sempre sorteava um look, ignorando o próprio
+// planejamento dela — abrir o app na quarta contradizia a semana que ela montou.
+var todaySuggestMode = 'auto';
+var todaySuggestPlanned = null; // {tipo, look|montado} quando está mostrando o planejado
+
 function renderTodaySuggestion() {
   var overlay = document.getElementById('todaySuggestOverlay');
   if(!overlay) return;
   if(todaySuggestionDismissed || showArchived) { overlay.classList.remove('open'); return; }
+
+  var hoje = new Date().toISOString().split('T')[0];
+  var fcHoje = (CURRENT_WEEK_FORECAST||[]).find(function(f){ return f.day === JS_DOW_TO_PT[new Date().getDay()]; });
+  var planejado = (todaySuggestMode === 'auto') ? todayPlannedLook() : null;
+  // Já marcou como usado hoje? Então não precisa lembrar dele de novo.
+  if (planejado && planejado.tipo === 'catalogo' && planejado.look.lastWorn === hoje) planejado = null;
+
+  var img = document.getElementById('todaySuggestImg');
+  var flat = document.getElementById('todaySuggestFlatlay');
+  var daysBox = document.getElementById('todaySuggestDaysWrap');
+  var wornBtn = document.getElementById('todaySuggestWornBtn');
+  var rerollBtn = document.getElementById('todaySuggestRerollBtn');
+  var climaTxt = fcHoje ? (' · ' + fcHoje.cond + ' ' + fcHoje.temp) : '';
+
+  todaySuggestPlanned = planejado;
+
+  if (planejado) {
+    rerollBtn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M20.3 12a8.3 8.3 0 1 1-2.7-6.1"/><path d="M20.3 3.6v4.7h-4.7"/></svg> Sugerir outro';
+    document.getElementById('todaySuggestMeta').textContent = 'VOCÊ PLANEJOU ESSE PRA HOJE' + climaTxt;
+    daysBox.style.display = 'none'; // o dia já está decidido: é hoje
+
+    if (planejado.tipo === 'catalogo') {
+      var lp = planejado.look;
+      todaySuggestionCurrentId = lp.id;
+      img.style.display = ''; flat.style.display = 'none';
+      img.src = lookThumb(lp); applyRotation(img, lp);
+      document.getElementById('todaySuggestTags').textContent =
+        (lp.tags||[]).filter(function(t){ return t.split(':')[0].trim().toLowerCase() !== 'marca'; })
+          .map(function(t){ return t.split(':').slice(1).join(':').trim(); }).join(' · ') || 'sem tags';
+      wornBtn.style.display = '';
+    } else {
+      // Look montado não tem foto única nem contagem de uso: mostra o flat lay
+      // das peças e esconde o "vou usar esse hoje", que só existe pro catálogo.
+      todaySuggestionCurrentId = null;
+      img.style.display = 'none'; flat.style.display = '';
+      renderFlatLay(flat, planejado.montado.pieceIds.map(findPieceById).filter(Boolean));
+      document.getElementById('todaySuggestTags').textContent = planejado.montado.name || 'Look montado';
+      wornBtn.style.display = 'none';
+    }
+    overlay.classList.add('open');
+    return;
+  }
+
   var result = pickTodaySuggestion();
   if(!result) { overlay.classList.remove('open'); return; }
   var p = result.look, fc = result.forecast;
   todaySuggestionCurrentId = p.id;
   if(todaySuggestionSeen.indexOf(p.id) === -1) todaySuggestionSeen.push(p.id);
   pushSuggestHistory(p.id);
-  var imgSrc = lookThumb(p);
   var mainTags = (p.tags||[]).filter(function(t){ return t.split(':')[0].trim().toLowerCase() !== 'marca'; })
     .map(function(t){ return t.split(':').slice(1).join(':').trim(); }).join(' · ');
 
-  document.getElementById('todaySuggestImg').src = imgSrc;
-  applyRotation(document.getElementById('todaySuggestImg'), p);
+  img.style.display = ''; flat.style.display = 'none';
+  daysBox.style.display = ''; wornBtn.style.display = '';
+  rerollBtn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M20.3 12a8.3 8.3 0 1 1-2.7-6.1"/><path d="M20.3 3.6v4.7h-4.7"/></svg> Outro';
+  img.src = lookThumb(p);
+  applyRotation(img, p);
   document.getElementById('todaySuggestMeta').textContent = 'LOOK SUGERIDO PRA HOJE' + (fc ? (' · ' + fc.cond + ' ' + fc.temp) : '');
   document.getElementById('todaySuggestTags').textContent = mainTags || 'sem tags';
   renderTodaySuggestDayBtns(p);
@@ -6813,15 +6877,20 @@ function closeTodaySuggestion() {
 }
 
 function rerollTodaySuggestion() {
+  // Sai do modo "planejado": ela pediu outro, então passa a sortear. E o
   // todaySuggestionSeen já acumula tudo que apareceu nesta sessão, então cada
   // clique traz um look novo em vez de alternar entre os mesmos dois.
+  todaySuggestMode = 'sugestao';
   renderTodaySuggestion();
 }
 
 function viewTodaySuggestionLook() {
+  var planejadoMontado = todaySuggestPlanned && todaySuggestPlanned.tipo === 'montado'
+    ? todaySuggestPlanned.montado.id : null;
   var id = todaySuggestionCurrentId;
   closeTodaySuggestion();
   todaySuggestionDismissed = false; // ver o look não conta como "dispensar" a sugestão
+  if(planejadoMontado) { switchTab('montados'); openMontadoDetail(planejadoMontado); return; }
   if(id != null) { switchTab('catalog'); openView(id); }
 }
 
