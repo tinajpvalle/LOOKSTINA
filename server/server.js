@@ -31,7 +31,8 @@ const ALLOWED_KEYS = new Set([
   'looks_tina_catalog_v1',
   'looks_tina_montados_v1',
   'looks_tina_pecas_avulsas_v1',
-  'looks_tina_proxsemana_v1'    // plano da próxima semana ({Seg: idDoLook})
+  'looks_tina_proxsemana_v1',   // plano da próxima semana ({Seg: idDoLook})
+  'looks_tina_pecas_arquivadas_v1' // peças aposentadas (doadas, perdidas): ids
 ]);
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
