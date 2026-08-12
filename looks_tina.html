@@ -514,10 +514,9 @@ body.week-pick-mode .card-week-btn { display: block; }
   position:absolute; top:4px; left:4px;
   background:rgba(0,0,0,.55); color:#fff; border:none;
   border-radius:50%; width:26px; height:26px; font-size:.85rem;
-  cursor:pointer; display:none; align-items:center; justify-content:center;
+  cursor:pointer; display:flex; align-items:center; justify-content:center;
   line-height:1;
 }
-.day-look:hover .day-look-resuggest { display:flex; }
 #dayPickerOverlay {
   position:fixed; inset:0; z-index:9000; background:rgba(0,0,0,.6);
   display:none; align-items:center; justify-content:center;
@@ -4277,9 +4276,9 @@ function renderWeek() {
       img.onclick = (function(pid){ return function(){ openView(pid); }; })(look.id);
       var rm = document.createElement('button'); rm.className = 'day-look-remove'; rm.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"/></svg>';
       rm.onclick = (function(d){ return function(e){ e.stopPropagation(); removeFromWeek(d); }; })(day);
-      var resugg = document.createElement('button'); resugg.className = 'day-look-resuggest'; resugg.title = 'Sugerir outro look para este dia';
+      var resugg = document.createElement('button'); resugg.className = 'day-look-resuggest'; resugg.title = 'Sugerir outro look pra este dia';
       resugg.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M20.3 12a8.3 8.3 0 1 1-2.7-6.1"/><path d="M20.3 3.6v4.7h-4.7"/></svg>';
-      resugg.onclick = (function(d){ return function(e){ e.stopPropagation(); openDayPicker(d); }; })(day);
+      resugg.onclick = (function(d){ return function(e){ e.stopPropagation(); sugerirLookParaDia(d, 'atual'); }; })(day);
       dl.appendChild(img); dl.appendChild(rm); dl.appendChild(resugg); col.appendChild(dl);
       // Dia com look do catálogo E look montado: o montado entra como etiqueta
       // embaixo, pra não sumir da vista (mesma ideia usada no Calendário).
@@ -4481,7 +4480,11 @@ function renderNextWeekGrid() {
       rm.title = 'Tirar da próxima semana';
       rm.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"/></svg>';
       rm.onclick = (function(dd){ return function(e){ e.stopPropagation(); clearWeekLookFor(dd, 'proxima'); renderWeek(); }; })(day);
-      dl.appendChild(img); dl.appendChild(rm); col.appendChild(dl);
+      var rs = document.createElement('button'); rs.className = 'day-look-resuggest';
+      rs.title = 'Sugerir outro look pra este dia';
+      rs.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.3 12a8.3 8.3 0 1 1-2.7-6.1"/><path d="M20.3 3.6v4.7h-4.7"/></svg>';
+      rs.onclick = (function(dd){ return function(e){ e.stopPropagation(); sugerirLookParaDia(dd, 'proxima'); }; })(day);
+      dl.appendChild(img); dl.appendChild(rm); dl.appendChild(rs); col.appendChild(dl);
     } else if (montado) {
       var dm = document.createElement('div'); dm.className = 'day-look day-look-montado';
       var fl = document.createElement('div'); fl.className = 'flatlay-canvas';
@@ -6919,9 +6922,11 @@ function infoParaDia(label, alvo) {
 // dia só obrigava a abrir o assistente e montar a semana inteira.
 function sugerirLookParaDia(day, alvo) {
   var info = infoParaDia(day, alvo || 'atual');
+  var atual = weekLookFor(day, info.alvo); // o que já está no dia, se houver
   delete todayCardState[info.chave]; // sorteia de novo a cada clique
   var st = todayCardPool(info);
-  var p = st.pool[0];
+  // Pedir "outro" e receber o mesmo seria não responder ao clique.
+  var p = st.pool.find(function(x){ return !atual || x.id !== atual.id; });
   if (!p) { showSavedToast('Nenhum look disponível pra sugerir.'); return; }
   assignDay(p.id, day, info.alvo);
   renderWeek();
