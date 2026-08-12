@@ -625,6 +625,7 @@ body.compare-mode .card-compare-btn { display: flex; }
 .week-planner-look { font-size: .72rem; color: #666666; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .week-day-pill { font-size: .74rem; padding: 5px 11px; border-radius: 20px; background: #F5F4F1; color: #666666; cursor: pointer; border: 1px solid #EAEAE7; }
 .week-day-pill.active { background: #1A1A1A; color: #fff; border-color: #1A1A1A; }
+.week-day-pill.ocupado { border-color: #C6C6C2; }
 .week-day-badge { font-size: .62rem; font-weight: 700; background: #F0F0EC; color: #A8A8A4; border-radius: 8px; padding: 2px 7px; margin-left: 6px; vertical-align: middle; }
 
 .sim-score { position: absolute; bottom: 2px; right: 2px; background: rgba(0,0,0,.6); color: #fff; font-size: .55rem; border-radius: 4px; padding: 1px 4px; }
@@ -3105,13 +3106,33 @@ function openMontadoDetail(id) {
     });
     dayBar.appendChild(switcher);
     var campo = (montadoWeekTarget === 'proxima') ? 'weekdayNext' : 'weekday';
+    var temOcupado = false;
     WEEKDAYS.forEach(function(d) {
       var pill = document.createElement('span');
-      pill.className = 'week-day-pill' + (m[campo] === d.key ? ' active' : '');
+      var aqui = (m[campo] === d.key);
+      // Dia que já tem look salvo — do catálogo ou de outro look montado. Sem
+      // isso os pills só diziam se ESTE look estava no dia, e não dava pra ver
+      // o que já estava resolvido sem ir até a aba Semana.
+      var doCatalogo = weekLookFor(d.label, montadoWeekTarget);
+      var outroMontado = montagens.some(function(x){ return x.id !== m.id && x[campo] === d.key; });
+      var ocupado = !aqui && (!!doCatalogo || outroMontado);
+      if (ocupado) temOcupado = true;
+      pill.className = 'week-day-pill' + (aqui ? ' active' : '') + (ocupado ? ' ocupado' : '');
       pill.textContent = d.label;
+      if (ocupado) {
+        var dot = document.createElement('span'); dot.className = 'wd-dot';
+        pill.appendChild(dot);
+        pill.title = d.label + ' já tem look salvo — usar este substitui';
+      }
       pill.onclick = (function(k){ return function() { setMontadoWeekday(m.id, k, montadoWeekTarget); }; })(d.key);
       dayBar.appendChild(pill);
     });
+    if (temOcupado) {
+      var legenda = document.createElement('div');
+      legenda.className = 'wd-legend';
+      legenda.innerHTML = '<span class="wd-dot"></span> dia que já tem look salvo';
+      dayBar.appendChild(legenda);
+    }
   }
   var pieces = m.pieceIds.map(findPieceById).filter(Boolean);
   var flatlay = document.getElementById('montadoDetailFlatlay');
