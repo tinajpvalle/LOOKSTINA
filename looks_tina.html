@@ -6766,26 +6766,44 @@ function renderTodaySuggestion() {
   overlay.classList.add('open');
 }
 
+var todaySuggestWeekTarget = 'atual'; // qual semana os dias deste card estão mirando
+
 function renderTodaySuggestDayBtns(p) {
   var container = document.getElementById('todaySuggestDayBtns');
   if(!container) return;
   container.innerHTML = '';
   var todayLabel = JS_DOW_TO_PT[new Date().getDay()];
+
+  var switcher = document.createElement('div');
+  switcher.className = 'wd-target-switch';
+  [['atual','Esta semana'],['proxima','Próxima semana']].forEach(function(o){
+    var b = document.createElement('button');
+    b.className = 'wd-target-btn' + (todaySuggestWeekTarget===o[0] ? ' active' : '');
+    b.textContent = o[1];
+    b.onclick = (function(a){ return function(){ todaySuggestWeekTarget = a; renderTodaySuggestDayBtns(p); }; })(o[0]);
+    switcher.appendChild(b);
+  });
+  container.appendChild(switcher);
+
   DAYS.forEach(function(day) {
     var btn = document.createElement('button');
-    var isAssignedHere = p.weekday === day;
+    var aqui = weekLookFor(day, todaySuggestWeekTarget);
+    var isAssignedHere = !!(aqui && aqui.id === p.id);
     btn.className = 'wd-btn' + (isAssignedHere ? ' active' : '');
-    btn.textContent = (isAssignedHere ? '✓ ' : '') + day + (day === todayLabel ? ' (hoje)' : '');
+    // "(hoje)" só faz sentido na semana atual — na próxima, esse dia ainda vai chegar.
+    var marcaHoje = (todaySuggestWeekTarget === 'atual' && day === todayLabel) ? ' (hoje)' : '';
+    btn.textContent = (isAssignedHere ? '✓ ' : '') + day + marcaHoje;
     btn.onclick = (function(d){ return function(){ assignTodaySuggestionToDay(p.id, d); }; })(day);
     container.appendChild(btn);
   });
 }
 
 function assignTodaySuggestionToDay(pid, day) {
-  assignDay(pid, day);
+  assignDay(pid, day, todaySuggestWeekTarget);
   var p = data.find(function(x){ return x.id === pid; });
   if(p) renderTodaySuggestDayBtns(p);
-  showSavedToast('Look adicionado em ' + day + '!');
+  var ondeTxt = (todaySuggestWeekTarget === 'proxima') ? ' da próxima semana' : '';
+  showSavedToast('Look adicionado em ' + day + ondeTxt + '!');
 }
 
 function closeTodaySuggestion() {
