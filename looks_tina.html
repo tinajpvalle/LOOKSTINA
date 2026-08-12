@@ -442,6 +442,9 @@ body.week-pick-mode .card-week-btn { display: block; }
 .week-templates-empty { font-size: .78rem; color: #A8A8A4; }
 /* Miniaturas de 26px não deixavam reconhecer o look nenhum — o histórico só
    serve se dá pra bater o olho e lembrar da semana. */
+.wd-target-switch { display: flex; gap: 6px; margin-bottom: 8px; width: 100%; }
+.wd-target-btn { flex: 1; border: 1px solid #E0E0DB; background: #fff; border-radius: 8px; padding: 6px 10px; font-size: .76rem; cursor: pointer; color: #666666; font-family: inherit; }
+.wd-target-btn.active { background: #1A1A1A; border-color: #1A1A1A; color: #fff; font-weight: 600; }
 .week-view-switch { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 14px; }
 .week-view-btn { border: 1px solid #E0E0DB; background: #fff; border-radius: 20px; padding: 7px 16px; font-size: .82rem; cursor: pointer; color: #666666; font-family: inherit; }
 .week-view-btn.active { background: #1A1A1A; border-color: #1A1A1A; color: #fff; font-weight: 600; }
@@ -655,6 +658,9 @@ body.compare-mode .card-compare-btn { display: flex; }
 .day-ocasiao-btn.active { background: var(--ink); color: var(--surface); border-color: var(--ink); }
 .setup-day-pill.is-home { background: var(--bg); border-color: var(--line-input); color: var(--accent); }
 .setup-day-pill.active { background: var(--ink); border-color: var(--ink); color: var(--surface); }
+.week-view-btn { background: transparent; border-color: var(--line-input); color: var(--txt-2); }
+.week-view-btn.active, .wd-target-btn.active { background: var(--ink); border-color: var(--ink); color: var(--surface); }
+.wd-target-btn { background: transparent; border-color: var(--line-input); color: var(--txt-2); }
 .wd-btn:hover { border-color: var(--ink); color: var(--ink); }
 .wd-btn.remove { background: transparent; color: var(--danger); border-color: var(--line-input); }
 
@@ -2806,14 +2812,17 @@ var WEEKDAYS = [
   { key: 'dom', label: 'Dom' }
 ];
 
-function setMontadoWeekday(id, day) {
+// Look montado também pode ser marcado pra próxima semana: `weekday` é a semana
+// atual, `weekdayNext` é a próxima. Na virada da segunda um vira o outro.
+function setMontadoWeekday(id, day, alvo) {
   var target = montagens.find(function(m) { return m.id === id; });
   if (!target) return;
-  var turningOff = target.weekday === day;
+  var campo = (alvo === 'proxima') ? 'weekdayNext' : 'weekday';
+  var turningOff = target[campo] === day;
   montagens.forEach(function(m) {
-    if (m.weekday === day) m.weekday = null;
+    if (m[campo] === day) m[campo] = null;
   });
-  target.weekday = turningOff ? null : day;
+  target[campo] = turningOff ? null : day;
   saveMontagens();
   renderLooksMontados();
   if (montadoDetailId === id) openMontadoDetail(id);
@@ -2964,8 +2973,9 @@ function deleteMontagem(id) {
   renderLooksMontados();
 }
 
-// Detalhe de look montado 
+// Detalhe de look montado
 var montadoDetailId = null;
+var montadoWeekTarget = 'atual'; // qual semana os dias do detalhe estão mirando
 
 function openMontadoDetail(id) {
   var m = montagens.find(function(x) { return x.id === id; });
@@ -2981,11 +2991,23 @@ function openMontadoDetail(id) {
   var dayBar = document.getElementById('montadoDetailWeekday');
   if (dayBar) {
     dayBar.innerHTML = '';
+    var switcher = document.createElement('div');
+    switcher.className = 'wd-target-switch';
+    switcher.style.width = '100%';
+    [['atual','Esta semana'],['proxima','Próxima semana']].forEach(function(o){
+      var b = document.createElement('button');
+      b.className = 'wd-target-btn' + (montadoWeekTarget===o[0] ? ' active' : '');
+      b.textContent = o[1];
+      b.onclick = (function(a){ return function(){ montadoWeekTarget = a; openMontadoDetail(m.id); }; })(o[0]);
+      switcher.appendChild(b);
+    });
+    dayBar.appendChild(switcher);
+    var campo = (montadoWeekTarget === 'proxima') ? 'weekdayNext' : 'weekday';
     WEEKDAYS.forEach(function(d) {
       var pill = document.createElement('span');
-      pill.className = 'week-day-pill' + (m.weekday === d.key ? ' active' : '');
+      pill.className = 'week-day-pill' + (m[campo] === d.key ? ' active' : '');
       pill.textContent = d.label;
-      pill.onclick = function() { setMontadoWeekday(m.id, d.key); };
+      pill.onclick = (function(k){ return function() { setMontadoWeekday(m.id, k, montadoWeekTarget); }; })(d.key);
       dayBar.appendChild(pill);
     });
   }
@@ -4131,7 +4153,8 @@ function renderWeek() {
     // ficava salvo corretamente mas não aparecia em lugar nenhum nesta aba, que é
     // onde se olha pra saber o que vestir no dia.
     var dayKey = (WEEKDAYS.find(function(d){ return d.label === day; }) || {}).key;
-    var montado = dayKey ? montagens.find(function(m){ return m.weekday === dayKey; }) : null;
+    var campoMontado = (weekView === 'proxima') ? 'weekdayNext' : 'weekday';
+    var montado = dayKey ? montagens.find(function(m){ return m[campoMontado] === dayKey; }) : null;
     if (look) {
       var dl = document.createElement('div'); dl.className = 'day-look';
       dl.draggable = true;
@@ -4180,7 +4203,7 @@ function renderWeek() {
       var mrm = document.createElement('button'); mrm.className = 'day-look-remove';
       mrm.title = 'Tirar da semana';
       mrm.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"/></svg>';
-      mrm.onclick = (function(mid, k){ return function(e){ e.stopPropagation(); setMontadoWeekday(mid, k); renderWeek(); }; })(montado.id, dayKey);
+      mrm.onclick = (function(mid, k, alvo){ return function(e){ e.stopPropagation(); setMontadoWeekday(mid, k, alvo); renderWeek(); }; })(montado.id, dayKey, weekView);
       dm.appendChild(mrm);
       dm.onclick = (function(mid){ return function(){ switchTab('montados'); openMontadoDetail(mid); }; })(montado.id);
       col.appendChild(dm);
@@ -4273,8 +4296,11 @@ function saveNextWeekPlan() {
 
 // Leitura/escrita da semana que está sendo vista, pra todo o resto da tela não
 // precisar saber em qual das duas está mexendo.
-function weekLookFor(day) {
-  if (weekView === 'proxima') {
+// `alvo` opcional: 'atual' ou 'proxima'. Sem ele, segue a semana aberta na aba
+// Semana — mas as telas de detalhe passam o alvo explicitamente, porque de lá
+// não dá pra ver qual semana está aberta lá atrás.
+function weekLookFor(day, alvo) {
+  if ((alvo || weekView) === 'proxima') {
     var id = nextWeekPlan[day];
     if (id == null) return null;
     return data.find(function(p){ return p.id === id; }) || null;
@@ -4282,8 +4308,8 @@ function weekLookFor(day) {
   return data.find(function(p){ return p.weekday === day; });
 }
 
-function setWeekLookFor(day, pid) {
-  if (weekView === 'proxima') {
+function setWeekLookFor(day, pid, alvo) {
+  if ((alvo || weekView) === 'proxima') {
     Object.keys(nextWeekPlan).forEach(function(d){ if(nextWeekPlan[d] === pid) delete nextWeekPlan[d]; });
     nextWeekPlan[day] = pid;
     saveNextWeekPlan();
@@ -4294,8 +4320,8 @@ function setWeekLookFor(day, pid) {
   if(p) p.weekday = day;
 }
 
-function clearWeekLookFor(day) {
-  if (weekView === 'proxima') { delete nextWeekPlan[day]; saveNextWeekPlan(); return; }
+function clearWeekLookFor(day, alvo) {
+  if ((alvo || weekView) === 'proxima') { delete nextWeekPlan[day]; saveNextWeekPlan(); return; }
   var look = data.find(function(p){ return p.weekday === day; });
   if (look) look.weekday = null;
 }
@@ -4929,13 +4955,13 @@ function saveWeekToHistoryNow() {
   showHistoryToast('Semana salva no histórico!');
 }
 
-function assignDay(pid, day) {
+function assignDay(pid, day, alvo) {
   var p = data.find(function(x){ return x.id === pid; });
   if(!p) return;
-  var atual = weekLookFor(day);
+  var atual = weekLookFor(day, alvo);
   var removing = !!(atual && atual.id === pid);
-  if (removing) clearWeekLookFor(day);
-  else setWeekLookFor(day, pid);
+  if (removing) clearWeekLookFor(day, alvo);
+  else setWeekLookFor(day, pid, alvo);
 
   // Alerta de repetição: look usado há menos de 7 dias
   if(!removing && p.lastWorn) {
@@ -5574,26 +5600,47 @@ function addTagToCurrentView() {
   inp.value = ''; hideTagSuggestions(); inp.focus(); showSavedToast();
 }
 
+// Qual semana os botões de dia deste modal estão mirando. Fica explícito na tela
+// em vez de herdar a aba Semana: daqui não dá pra ver qual está aberta lá.
+var viewWeekTarget = 'atual';
+
+function setViewWeekTarget(alvo, pid) {
+  viewWeekTarget = alvo;
+  renderWeekDayBtns(pid);
+}
+
 function renderWeekDayBtns(pid) {
-  var p = data.find(function(x){ return x.id===pid; });
   var container = document.getElementById('weekDayBtns');
   container.innerHTML = '';
-  // Segue a semana que está sendo vista na aba Semana, pra marcar aqui e ver lá
-  // não darem respostas diferentes.
-  var diaAtual = DAYS.find(function(d){ var l = weekLookFor(d); return l && l.id === pid; });
+
+  var switcher = document.createElement('div');
+  switcher.className = 'wd-target-switch';
+  [['atual','Esta semana'],['proxima','Próxima semana']].forEach(function(o){
+    var b = document.createElement('button');
+    b.className = 'wd-target-btn' + (viewWeekTarget===o[0] ? ' active' : '');
+    b.textContent = o[1];
+    b.onclick = (function(a){ return function(){ setViewWeekTarget(a, pid); }; })(o[0]);
+    switcher.appendChild(b);
+  });
+  container.appendChild(switcher);
+
+  var diaAtual = DAYS.find(function(d){ var l = weekLookFor(d, viewWeekTarget); return l && l.id === pid; });
+  var linha = document.createElement('div');
+  linha.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;';
   DAYS.forEach(function(day) {
     var btn = document.createElement('button');
     btn.className = 'wd-btn' + (diaAtual===day?' active':'');
     btn.textContent = diaAtual===day ? '✓ '+day : day;
-    btn.onclick = (function(d){ return function(){ assignDay(pid,d); }; })(day);
-    container.appendChild(btn);
+    btn.onclick = (function(d){ return function(){ assignDay(pid, d, viewWeekTarget); }; })(day);
+    linha.appendChild(btn);
   });
   if (diaAtual) {
     var rm = document.createElement('button');
-    rm.className = 'wd-btn remove'; rm.textContent = 'Remover da semana';
-    rm.onclick = function(){ assignDay(pid, diaAtual); };
-    container.appendChild(rm);
+    rm.className = 'wd-btn remove'; rm.textContent = 'Remover';
+    rm.onclick = function(){ assignDay(pid, diaAtual, viewWeekTarget); };
+    linha.appendChild(rm);
   }
+  container.appendChild(linha);
 }
 
 function closeView(e) { if(e.target===document.getElementById('viewOverlay')) closeViewModal(); }
@@ -7166,6 +7213,12 @@ function checkWeekRollover() {
       if (p) { p.weekday = day; promovidos++; }
     });
     nextWeekPlan = {}; saveNextWeekPlan();
+    // O mesmo vale pros looks montados marcados pra próxima semana.
+    var montPromovidos = 0;
+    montagens.forEach(function(m){
+      if (m.weekdayNext) { m.weekday = m.weekdayNext; m.weekdayNext = null; montPromovidos++; }
+    });
+    if (montPromovidos) saveMontagens();
     weekCasaDays = {}; lsSet('looks_tina_casadays_v1', '{}');
     weekNotes = {}; lsSet('looks_tina_weeknotes_v1', '{}');
     weekDayOcasiao = {}; lsSet('looks_tina_dayocasiao_v1', '{}');
