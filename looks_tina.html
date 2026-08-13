@@ -4280,18 +4280,7 @@ function renderWeek() {
     var montado = dayKey ? montagens.find(function(m){ return m.weekday === dayKey; }) : null;
     if (look) {
       var dl = document.createElement('div'); dl.className = 'day-look';
-      dl.draggable = true;
-      dl.dataset.day = day;
-      dl.addEventListener('dragstart', function(e) {
-        dragSourceDay = day;
-        setTimeout(function(){ dl.classList.add('dragging'); }, 0);
-        e.dataTransfer.effectAllowed = 'move';
-      });
-      dl.addEventListener('dragend', function() {
-        dl.classList.remove('dragging');
-        dragSourceDay = null;
-        document.querySelectorAll('.day-col').forEach(function(c){ c.classList.remove('drag-over'); });
-      });
+      ligarArrastarLook(dl, day, 'atual');
       var img = document.createElement('img'); img.src = lookThumb(look); img.alt = '';
       img.loading = 'lazy'; img.onerror = function(){ this.style.background='#F0F0EC'; };
       applyRotation(img, look);
@@ -4374,32 +4363,7 @@ function renderWeek() {
     });
     col.appendChild(ocRow);
 
-    // Drop target on entire column (works for filled and empty slots)
-    col.addEventListener('dragover', function(e) {
-      if (!dragSourceDay || dragSourceDay === day) return;
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-      col.classList.add('drag-over');
-    });
-    col.addEventListener('dragleave', function(e) {
-      if (!col.contains(e.relatedTarget)) col.classList.remove('drag-over');
-    });
-    col.addEventListener('drop', function(e) {
-      e.preventDefault();
-      col.classList.remove('drag-over');
-      if (!dragSourceDay || dragSourceDay === day) return;
-      // Swap weekday assignments (na semana que estiver sendo vista)
-      var srcLook = weekLookFor(dragSourceDay);
-      var dstLook = weekLookFor(day);
-      clearWeekLookFor(dragSourceDay); clearWeekLookFor(day);
-      if (srcLook) setWeekLookFor(day, srcLook.id);
-      if (dstLook) setWeekLookFor(dragSourceDay, dstLook.id);
-      dragSourceDay = null;
-      saveToStorage();
-      renderWeek();
-      renderGrid();
-      showSavedToast();
-    });
+    ligarSoltarNoDia(col, day, 'atual');
 
     wg.appendChild(col);
   });
@@ -4479,14 +4443,26 @@ function setWeekOccupants(day, occ, alvo) {
   if (occ.montado) occ.montado[campo] = k;
 }
 
-function trocarDiasDaSemana(origem, destino, alvo) {
-  if (!origem || !destino || origem === destino) return;
-  var a = weekOccupants(origem, alvo), b = weekOccupants(destino, alvo);
-  clearWeekOccupants(origem, alvo); clearWeekOccupants(destino, alvo);
-  setWeekOccupants(destino, a, alvo); setWeekOccupants(origem, b, alvo);
+// Troca o conteúdo de dois dias, que podem estar em semanas diferentes. Se o
+// destino estiver vazio, a troca é o mesmo que mover — que é o que se espera ao
+// arrastar pra um dia livre.
+function trocarDias(origem, origemAlvo, destino, destinoAlvo) {
+  if (!origem || !destino) return;
+  if (origem === destino && origemAlvo === destinoAlvo) return;
+  var a = weekOccupants(origem, origemAlvo), b = weekOccupants(destino, destinoAlvo);
+  clearWeekOccupants(origem, origemAlvo); clearWeekOccupants(destino, destinoAlvo);
+  setWeekOccupants(destino, a, destinoAlvo); setWeekOccupants(origem, b, origemAlvo);
   saveMontagens(); saveToStorage();
   renderWeek(); renderGrid();
-  showSavedToast('Looks de ' + origem + ' e ' + destino + ' trocados.');
+  var nome = function(d, alvo){ return d + (alvo === 'proxima' ? ' da próxima' : ''); };
+  showSavedToast(b.look || b.montado
+    ? ('Trocado: ' + nome(origem, origemAlvo) + ' ↔ ' + nome(destino, destinoAlvo) + '.')
+    : ('Look movido pra ' + nome(destino, destinoAlvo) + '.'));
+}
+
+// mantido pro caso de uma chamada dentro da mesma semana
+function trocarDiasDaSemana(origem, destino, alvo) {
+  trocarDias(origem, alvo, destino, alvo);
 }
 
 // Liga arrastar/soltar numa coluna de dia — serve pras duas grades.
@@ -4496,9 +4472,8 @@ function ligarSoltarNoDia(col, day, alvo) {
   col.addEventListener('drop', function(e){
     e.preventDefault();
     col.classList.remove('drag-over');
-    // Trocar entre semanas diferentes seria ambíguo, então só dentro da mesma.
-    if (!dragSourceDay || dragSourceDay === day || dragSourceAlvo !== alvo) return;
-    trocarDiasDaSemana(dragSourceDay, day, alvo);
+    if (!dragSourceDay || (dragSourceDay === day && dragSourceAlvo === alvo)) return;
+    trocarDias(dragSourceDay, dragSourceAlvo, day, alvo);
     dragSourceDay = null; dragSourceAlvo = null;
   });
 }
