@@ -3693,6 +3693,7 @@ var DAYS = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
 var DAYS_PT = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
 var MESES_PT = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
 var dragSourceDay = null;
+var dragSourceAlvo = null; // 'atual' | 'proxima' — impede arrastar entre semanas
 function safeParse(json, fallback) { try { return JSON.parse(json); } catch(e) { return fallback; } }
 var weekNotes = safeParse(lsGet('looks_tina_weeknotes_v1'), {}) || {};
 var weekCasaDays = safeParse(lsGet('looks_tina_casadays_v1'), {}) || {};
@@ -4315,6 +4316,7 @@ function renderWeek() {
       // Nenhum look do catálogo neste dia, mas tem um look montado: ele vira o
       // look do dia (flat lay das peças), clicável pra abrir o detalhe.
       var dm = document.createElement('div'); dm.className = 'day-look day-look-montado';
+      ligarArrastarLook(dm, day, 'atual');
       var fl = document.createElement('div'); fl.className = 'flatlay-canvas';
       renderFlatLay(fl, montado.pieceIds.map(findPieceById).filter(Boolean));
       dm.appendChild(fl);
@@ -4450,6 +4452,72 @@ function clearWeekLookFor(day, alvo) {
   if (look) look.weekday = null;
 }
 
+// Arrastar entre dias
+// O que ocupa um dia pode ser um look do catálogo, um look montado, ou os dois.
+// Arrastar mexia só no do catálogo, então look montado ficava preso no dia em
+// que estava. Aqui o dia vira um pacote, e a troca leva o que houver nele.
+function campoMontadoDe(alvo) { return (alvo === 'proxima') ? 'weekdayNext' : 'weekday'; }
+function chaveDoDia(day) { return (WEEKDAYS.find(function(d){ return d.label === day; }) || {}).key; }
+
+function weekOccupants(day, alvo) {
+  var campo = campoMontadoDe(alvo), k = chaveDoDia(day);
+  return {
+    look: weekLookFor(day, alvo) || null,
+    montado: k ? (montagens.find(function(m){ return m[campo] === k; }) || null) : null
+  };
+}
+
+function clearWeekOccupants(day, alvo) {
+  var campo = campoMontadoDe(alvo), k = chaveDoDia(day);
+  clearWeekLookFor(day, alvo);
+  montagens.forEach(function(m){ if (m[campo] === k) m[campo] = null; });
+}
+
+function setWeekOccupants(day, occ, alvo) {
+  var campo = campoMontadoDe(alvo), k = chaveDoDia(day);
+  if (occ.look) setWeekLookFor(day, occ.look.id, alvo);
+  if (occ.montado) occ.montado[campo] = k;
+}
+
+function trocarDiasDaSemana(origem, destino, alvo) {
+  if (!origem || !destino || origem === destino) return;
+  var a = weekOccupants(origem, alvo), b = weekOccupants(destino, alvo);
+  clearWeekOccupants(origem, alvo); clearWeekOccupants(destino, alvo);
+  setWeekOccupants(destino, a, alvo); setWeekOccupants(origem, b, alvo);
+  saveMontagens(); saveToStorage();
+  renderWeek(); renderGrid();
+  showSavedToast('Looks de ' + origem + ' e ' + destino + ' trocados.');
+}
+
+// Liga arrastar/soltar numa coluna de dia — serve pras duas grades.
+function ligarSoltarNoDia(col, day, alvo) {
+  col.addEventListener('dragover', function(e){ e.preventDefault(); col.classList.add('drag-over'); });
+  col.addEventListener('dragleave', function(){ col.classList.remove('drag-over'); });
+  col.addEventListener('drop', function(e){
+    e.preventDefault();
+    col.classList.remove('drag-over');
+    // Trocar entre semanas diferentes seria ambíguo, então só dentro da mesma.
+    if (!dragSourceDay || dragSourceDay === day || dragSourceAlvo !== alvo) return;
+    trocarDiasDaSemana(dragSourceDay, day, alvo);
+    dragSourceDay = null; dragSourceAlvo = null;
+  });
+}
+
+function ligarArrastarLook(el, day, alvo) {
+  el.draggable = true;
+  el.dataset.day = day;
+  el.addEventListener('dragstart', function(e){
+    dragSourceDay = day; dragSourceAlvo = alvo;
+    setTimeout(function(){ el.classList.add('dragging'); }, 0);
+    e.dataTransfer.effectAllowed = 'move';
+  });
+  el.addEventListener('dragend', function(){
+    el.classList.remove('dragging');
+    dragSourceDay = null; dragSourceAlvo = null;
+    document.querySelectorAll('.day-col').forEach(function(c){ c.classList.remove('drag-over'); });
+  });
+}
+
 function clearNextWeek() {
   // Plano não vai pro histórico: é só descartar.
   if (!Object.keys(nextWeekPlan).length &&
@@ -4486,6 +4554,7 @@ function renderNextWeekGrid() {
     var dh = document.createElement('div'); dh.className = 'day-header';
     dh.textContent = day + ' ' + brDate(d);
     col.appendChild(dh);
+    ligarSoltarNoDia(col, day, 'proxima');
 
     var look = weekLookFor(day, 'proxima');
     var dayKey = (WEEKDAYS.find(function(x){ return x.label === day; }) || {}).key;
@@ -4493,6 +4562,7 @@ function renderNextWeekGrid() {
 
     if (look) {
       var dl = document.createElement('div'); dl.className = 'day-look';
+      ligarArrastarLook(dl, day, 'proxima');
       var img = document.createElement('img'); img.src = lookThumb(look); img.alt = '';
       img.loading = 'lazy';
       applyRotation(img, look);
@@ -4508,6 +4578,7 @@ function renderNextWeekGrid() {
       dl.appendChild(img); dl.appendChild(rm); dl.appendChild(rs); col.appendChild(dl);
     } else if (montado) {
       var dm = document.createElement('div'); dm.className = 'day-look day-look-montado';
+      ligarArrastarLook(dm, day, 'proxima');
       var fl = document.createElement('div'); fl.className = 'flatlay-canvas';
       renderFlatLay(fl, montado.pieceIds.map(findPieceById).filter(Boolean));
       dm.appendChild(fl);
