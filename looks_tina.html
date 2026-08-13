@@ -7134,9 +7134,41 @@ function trocarLookDoDia() {
   renderTodaySuggestion();
 }
 
+// Registra que o look foi usado hoje. É isso que alimenta o Calendário, o filtro
+// "esquecidos", o Relatório e o peso de "tempo sem usar" nas sugestões.
+function marcarUsoDoLook(pid) {
+  var p = data.find(function(x){ return x.id === pid; });
+  if (!p) return false;
+  var hoje = new Date().toISOString().split('T')[0];
+  if (p.lastWorn === hoje) return false; // já contado hoje
+  p.lastWorn = hoje;
+  p.wornCount = (p.wornCount || 0) + 1;
+  saveToStorage();
+  if (typeof renderGrid === 'function') renderGrid();
+  if (typeof renderCal === 'function' && document.getElementById('calGrid')) renderCal();
+  return true;
+}
+
 function usarLookNesteDia() {
   var info = todayCardInfo();
   if (todaySuggestionCurrentId == null) return;
+  var ehHoje = (todayCardOffset === 0);
+
+  if (ehHoje) {
+    // "hoje" quer dizer que já vestiu: registra o uso. Antes esse botão só
+    // planejava o dia, então nada chegava no Calendário — e, como o dia guarda
+    // um look só, cada clique ainda substituía o anterior.
+    var novo = marcarUsoDoLook(todaySuggestionCurrentId);
+    // Ocupa o dia só se estiver livre, pra não derrubar um look já usado antes.
+    if (!weekLookFor(info.label, info.alvo)) {
+      assignDay(todaySuggestionCurrentId, info.label, info.alvo);
+      todayCardPool(info).modo = 'plano';
+    }
+    renderTodaySuggestion();
+    showSavedToast(novo ? 'Uso registrado! Aparece no Calendário.' : 'Esse look já estava marcado como usado hoje.');
+    return;
+  }
+
   assignDay(todaySuggestionCurrentId, info.label, info.alvo);
   todayCardPool(info).modo = 'plano';
   renderTodaySuggestion();
@@ -7204,7 +7236,7 @@ function renderTodaySuggestion() {
     nav.style.display = ''; trocaBtn.style.display = 'none';
     document.getElementById('todaySuggestCount').textContent = (st.idx + 1) + '/' + st.pool.length;
     useBtn.style.display = '';
-    useBtn.textContent = ehHoje ? 'Usar esse hoje' : ('Usar esse em ' + info.label);
+    useBtn.textContent = ehHoje ? 'Vou usar esse hoje' : ('Usar esse em ' + info.label);
     wornBtn.style.display = 'none';
   }
 
@@ -7237,16 +7269,10 @@ function viewTodaySuggestionLook() {
 function markTodaySuggestionWorn() {
   var p = data.find(function(x){ return x.id === todaySuggestionCurrentId; });
   if(!p) return;
-  var today = new Date().toISOString().split('T')[0];
-  if(p.lastWorn === today) {
+  if(!marcarUsoDoLook(p.id)) {
     showSavedToast('Esse look já está marcado como usado hoje.');
     return;
   }
-  p.lastWorn = today;
-  p.wornCount = (p.wornCount || 0) + 1;
-  saveToStorage();
-  if(typeof renderGrid === 'function') renderGrid();
-  if(typeof renderCal === 'function' && document.getElementById('calGrid')) renderCal();
   showSavedToast('Anotado! Esse look já foi usado ' + p.wornCount + 'x.');
   closeTodaySuggestion();
 }
