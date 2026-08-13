@@ -8676,7 +8676,38 @@ function renderCal() {
     }
   });
   var usedDays = Object.keys(dayMap).length;
-  countEl.textContent = usedDays > 0 ? usedDays + ' dia' + (usedDays>1?'s':'') + ' com look registrado' : 'Nenhum look registrado neste mês';
+
+  // Semana planejada -> data do calendário
+  // Ela já diz o que vai vestir ao montar a semana; exigir uma segunda marcação
+  // só pra encher o Calendário seria trabalho duplicado. Então o mês mostra o
+  // que foi registrado como usado E o que está planejado nas duas semanas.
+  var segAtual = mondayOfCurrentWeek();
+  var segProx = new Date(segAtual); segProx.setDate(segAtual.getDate() + 7);
+  var fimProx = new Date(segProx); fimProx.setDate(segProx.getDate() + 6);
+  function planejadoPara(dt) {
+    if (dt < segAtual || dt > fimProx) return null;
+    var alvo = (dt >= segProx) ? 'proxima' : 'atual';
+    var label = JS_DOW_TO_PT[dt.getDay()];
+    var campo = (alvo === 'proxima') ? 'weekdayNext' : 'weekday';
+    var k = (WEEKDAYS.find(function(w){ return w.label === label; }) || {}).key;
+    return {
+      look: weekLookFor(label, alvo) || null,
+      montado: k ? (montagens.find(function(m){ return m[campo] === k; }) || null) : null
+    };
+  }
+
+  // conta os dias planejados que caem neste mês
+  var planejadosNoMes = 0;
+  var diasNoMesTmp = new Date(calYear, calMonth+1, 0).getDate();
+  for (var dd=1; dd<=diasNoMesTmp; dd++) {
+    var pl = planejadoPara(new Date(calYear, calMonth, dd));
+    var jaUsado = dayMap[calYear + '-' + String(calMonth+1).padStart(2,'0') + '-' + String(dd).padStart(2,'0')];
+    if (pl && (pl.look || pl.montado) && !jaUsado) planejadosNoMes++;
+  }
+  var partes = [];
+  if (usedDays) partes.push(usedDays + ' dia' + (usedDays>1?'s':'') + ' registrado' + (usedDays>1?'s':''));
+  if (planejadosNoMes) partes.push(planejadosNoMes + ' planejado' + (planejadosNoMes>1?'s':''));
+  countEl.textContent = partes.length ? partes.join(' · ') : 'Nada registrado nem planejado neste mês';
 
   grid.innerHTML = '';
 
@@ -8738,17 +8769,32 @@ function renderCal() {
       cell.appendChild(imgWrap);
     }
 
-    // Look Montado planejado pro dia da semana (recorrente, vem do Planejador da Semana em Looks Montados)
-    var wkKey = WEEKDAY_JS_MAP[new Date(calYear, calMonth, day).getDay()];
-    var plannedLook = montagens.find(function(m){ return m.weekday === wkKey; });
-    if (plannedLook) {
-      var chip = document.createElement('div');
-      chip.className = 'cal-week-chip';
-      chip.style.cssText = 'margin-top:3px;font-size:.6rem;background:#FAFAF8;color:#1A1A1A;border-radius:6px;padding:2px 4px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
-      chip.textContent = (plannedLook.name || 'look');
-      chip.title = 'Look planejado: ' + (plannedLook.name || 'sem nome') + ' — clique pra ver';
-      chip.onclick = (function(mid){ return function(e){ e.stopPropagation(); switchTab('montados'); openMontadoDetail(mid); }; })(plannedLook.id);
-      cell.appendChild(chip);
+    // Planejado na Semana (só na semana certa — antes o look montado aparecia
+    // em TODAS as quintas do mês, como se o dia fosse uma regra fixa).
+    var plano = planejadoPara(new Date(calYear, calMonth, day));
+    if (plano && (plano.look || plano.montado) && !looks.length) {
+      var pw = document.createElement('div');
+      pw.style.cssText = 'display:flex;flex-direction:column;gap:2px;';
+      if (plano.look) {
+        var pimg = document.createElement('img');
+        pimg.src = lookThumb(plano.look);
+        pimg.style.cssText = 'width:100%;aspect-ratio:1;object-fit:cover;border-radius:5px;cursor:pointer;opacity:.62;';
+        applyRotation(pimg, plano.look);
+        pimg.title = 'Planejado pra este dia';
+        pimg.onclick = (function(pid){ return function(){ switchTab('catalog'); openView(pid); }; })(plano.look.id);
+        pw.appendChild(pimg);
+      } else if (plano.montado) {
+        var pm = document.createElement('div');
+        pm.style.cssText = 'font-size:.58rem;background:#FAFAF8;color:#666666;border:1px solid #EAEAE7;border-radius:5px;padding:2px 4px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+        pm.textContent = plano.montado.name || 'Look montado';
+        pm.onclick = (function(mid){ return function(){ switchTab('montados'); openMontadoDetail(mid); }; })(plano.montado.id);
+        pw.appendChild(pm);
+      }
+      var tag = document.createElement('div');
+      tag.style.cssText = 'font-size:.55rem;color:#A8A8A4;text-align:center;';
+      tag.textContent = 'planejado';
+      pw.appendChild(tag);
+      cell.appendChild(pw);
     }
 
     grid.appendChild(cell);
