@@ -6152,6 +6152,8 @@ function markWorn() {
   var wcd = document.getElementById('viewWornCountDisplay');
   if(wcd) wcd.textContent = p.wornCount;
   saveToStorage(); renderGrid();
+  // sem isso o Calendário só mostrava a marcação depois de trocar de aba
+  if(typeof renderCal === 'function' && document.getElementById('calGrid')) renderCal();
   var today = new Date().toISOString().split('T')[0];
   var days = Math.round((new Date(today)-new Date(date))/(1000*60*60*24));
   var wInfoEl = document.getElementById('viewWornInfo');
