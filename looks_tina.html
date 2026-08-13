@@ -517,18 +517,20 @@ body.week-pick-mode .card-week-btn { display: block; }
   cursor:pointer; display:flex; align-items:center; justify-content:center;
   line-height:1;
 }
-#dayPickerOverlay {
-  position:fixed; inset:0; z-index:9000; background:rgba(0,0,0,.6);
+#dayPickerOverlay, #suggestPiecePickerOverlay {
+  position:fixed; inset:0; z-index:10050; background:rgba(0,0,0,.6);
   display:none; align-items:center; justify-content:center;
 }
-#dayPickerOverlay.open { display:flex; }
+#dayPickerOverlay.open, #suggestPiecePickerOverlay.open { display:flex; }
 #dayPickerBox {
   background:#fff; border-radius:14px; padding:20px; max-width:820px; width:90vw;
   max-height:85vh; overflow-y:auto;
 }
-#dayPickerGrid {
+#dayPickerGrid, #suggestPickerGrid {
   display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:10px; margin-top:14px;
 }
+#suggestPickerGrid img { background:#FAFAF8; object-fit:contain; }
+.sugg-pick-pill { border-color:#1A1A1A; color:#1A1A1A; font-weight:600; }
 .daypick-card {
   border:2px solid transparent; border-radius:10px; overflow:hidden; cursor:pointer;
   transition:border-color .15s;
@@ -3539,12 +3541,18 @@ function removeSuggestionSlot(idx) {
 function renderSuggestionAddBar() {
   var bar = document.getElementById('suggestionAddCatBar');
   if (!bar) return;
+  bar.innerHTML = '';
+  // "Escolher peça" vem primeiro e sempre: os "+ Categoria" sorteiam uma peça
+  // qualquer daquela categoria, e às vezes o que se quer é apontar uma peça.
+  var escolher = document.createElement('div');
+  escolher.className = 'pc-cat-pill sugg-pick-pill';
+  escolher.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M12 5.5v13M5.5 12h13"/></svg> Escolher peça';
+  escolher.onclick = function(){ openSuggestPiecePicker(); };
+  bar.appendChild(escolher);
+
   var usedCats = suggestionSlots.map(function(s) { return s.category; });
   var allCats = Array.from(new Set(allPecas().map(function(p) { return p.category; }))).sort();
-  var available = allCats.filter(function(c) { return usedCats.indexOf(c) === -1; });
-  bar.innerHTML = '';
-  if (available.length === 0) return;
-  available.forEach(function(cat) {
+  allCats.filter(function(c) { return usedCats.indexOf(c) === -1; }).forEach(function(cat) {
     var pill = document.createElement('div');
     pill.className = 'pc-cat-pill';
     pill.textContent = '+ ' + cat;
@@ -3560,6 +3568,87 @@ function addSuggestionCategory(cat) {
   suggestionSlots.push({ category: cat, pieceId: p.id });
   renderSuggestionCanvas();
   renderSuggestionAddBar();
+}
+
+// Escolher uma peça específica pro look
+// O "+ Categoria" sorteia dentro da categoria; aqui ela aponta a peça. A peça
+// escolhida já entra travada, senão o "Gerar nova sugestão" seguinte a trocaria
+// — e escolher a dedo justamente significa que ela deve ficar.
+var suggestPickerCat = '__all__';
+
+function openSuggestPiecePicker() {
+  suggestPickerCat = '__all__';
+  var busca = document.getElementById('suggestPickerSearch');
+  if (busca) busca.value = '';
+  renderSuggestPickerCats();
+  renderSuggestPickerGrid();
+  document.getElementById('suggestPiecePickerOverlay').classList.add('open');
+  if (busca) setTimeout(function(){ busca.focus(); }, 50);
+}
+
+function closeSuggestPiecePicker() {
+  document.getElementById('suggestPiecePickerOverlay').classList.remove('open');
+}
+
+function renderSuggestPickerCats() {
+  var bar = document.getElementById('suggestPickerCats');
+  if (!bar) return;
+  bar.innerHTML = '';
+  var cats = ['__all__'].concat(Array.from(new Set(allPecas().map(function(p){ return p.category; }))).sort());
+  cats.forEach(function(c){
+    var pill = document.createElement('div');
+    pill.className = 'pc-cat-pill' + (suggestPickerCat === c ? ' active' : '');
+    pill.textContent = (c === '__all__') ? 'Todas' : c;
+    pill.onclick = (function(cc){ return function(){ suggestPickerCat = cc; renderSuggestPickerCats(); renderSuggestPickerGrid(); }; })(c);
+    bar.appendChild(pill);
+  });
+}
+
+function renderSuggestPickerGrid() {
+  var grid = document.getElementById('suggestPickerGrid');
+  if (!grid) return;
+  var busca = document.getElementById('suggestPickerSearch');
+  var q = busca ? busca.value.trim().toLowerCase() : '';
+  var lista = allPecas().filter(function(p){
+    if (suggestPickerCat !== '__all__' && p.category !== suggestPickerCat) return false;
+    if (q && (p.name + ' ' + p.brand + ' ' + p.color).toLowerCase().indexOf(q) === -1) return false;
+    return true;
+  });
+  grid.innerHTML = '';
+  if (!lista.length) {
+    grid.innerHTML = '<p style="grid-column:1/-1;color:#A8A8A4;font-size:.85rem;">Nenhuma peça encontrada.</p>';
+    return;
+  }
+  lista.forEach(function(p){
+    var card = document.createElement('div');
+    card.className = 'daypick-card';
+    var jaEsta = suggestionSlots.some(function(s){ return s.pieceId === p.id; });
+    card.innerHTML = '<img src="' + p.img + '" alt="" loading="lazy">' +
+      '<div class="daypick-card-label">' + p.name.replace(/</g,'&lt;') + (jaEsta ? ' · já no look' : '') + '</div>';
+    card.onclick = (function(pid){ return function(){ escolherPecaNaSugestao(pid); }; })(p.id);
+    grid.appendChild(card);
+  });
+}
+
+function escolherPecaNaSugestao(pieceId) {
+  var p = findPieceById(pieceId);
+  if (!p) return;
+  // Um look tem uma peça por categoria: se a categoria já está ocupada, a
+  // escolhida entra no lugar da que estava.
+  var slot = suggestionSlots.find(function(s){ return s.category === p.category; });
+  if (slot) {
+    var antigo = slot.pieceId;
+    slot.pieceId = p.id;
+    var li = suggestionLockedIds.indexOf(antigo);
+    if (li !== -1) suggestionLockedIds.splice(li, 1);
+  } else {
+    suggestionSlots.push({ category: p.category, pieceId: p.id });
+  }
+  if (suggestionLockedIds.indexOf(p.id) === -1) suggestionLockedIds.push(p.id);
+  closeSuggestPiecePicker();
+  renderSuggestionCanvas();
+  renderSuggestionAddBar();
+  showSavedToast(p.name + ' entrou no look e ficou travada.');
 }
 
 function regenerateSuggestion() {
@@ -9004,6 +9093,22 @@ function applySuggestions() {
       oninput="renderDayPickerGrid(dayPickerCurrentDay, this.value)"
       style="width:100%;box-sizing:border-box;border:1px solid #E0E0DB;border-radius:8px;padding:7px 10px;font-size:.82rem;font-family:inherit;margin-top:8px;">
     <div id="dayPickerGrid"></div>
+  </div>
+</div>
+
+<!-- Escolher uma peça específica pra sugestão de look -->
+<div id="suggestPiecePickerOverlay" onclick="if(event.target===this)closeSuggestPiecePicker()">
+  <div id="dayPickerBox">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <strong style="font-size:1rem">Escolher peça pro look</strong>
+      <button onclick="closeSuggestPiecePicker()" style="border:none;background:none;font-size:1.2rem;cursor:pointer"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"/></svg></button>
+    </div>
+    <div style="font-size:.8rem;color:#666666;margin-top:4px">A peça entra no look já travada, e o resto é montado em volta dela. Se a categoria dela já estiver no look, ela substitui a que estava.</div>
+    <input type="text" id="suggestPickerSearch" placeholder="Buscar peça (ex: tênis, jeans, preta)..." autocomplete="off"
+      oninput="renderSuggestPickerGrid()"
+      style="width:100%;box-sizing:border-box;border:1px solid #E0E0DB;border-radius:8px;padding:7px 10px;font-size:.82rem;font-family:inherit;margin-top:8px;">
+    <div id="suggestPickerCats" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;"></div>
+    <div id="suggestPickerGrid"></div>
   </div>
 </div>
 <!-- IMPORT VIEW -->
