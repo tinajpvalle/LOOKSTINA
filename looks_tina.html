@@ -4406,6 +4406,11 @@ function renderWeek() {
       mrm.title = 'Tirar da semana';
       mrm.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"/></svg>';
       mrm.onclick = (function(mid, k, alvo){ return function(e){ e.stopPropagation(); setMontadoWeekday(mid, k, alvo); renderWeek(); }; })(montado.id, dayKey, weekView);
+      var mrs = document.createElement('button'); mrs.className = 'day-look-resuggest';
+      mrs.title = 'Sugerir outro look pra este dia';
+      mrs.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.3 12a8.3 8.3 0 1 1-2.7-6.1"/><path d="M20.3 3.6v4.7h-4.7"/></svg>';
+      mrs.onclick = (function(dd){ return function(e){ e.stopPropagation(); sugerirLookParaDia(dd, 'atual'); }; })(day);
+      dm.appendChild(mrs);
       dm.appendChild(mrm);
       dm.onclick = (function(mid){ return function(){ switchTab('montados'); openMontadoDetail(mid); }; })(montado.id);
       col.appendChild(dm);
@@ -4653,6 +4658,11 @@ function renderNextWeekGrid() {
       mrm.title = 'Tirar da próxima semana';
       mrm.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"/></svg>';
       mrm.onclick = (function(mid, k){ return function(e){ e.stopPropagation(); setMontadoWeekday(mid, k, 'proxima'); renderWeek(); }; })(montado.id, dayKey);
+      var mrs = document.createElement('button'); mrs.className = 'day-look-resuggest';
+      mrs.title = 'Sugerir outro look pra este dia';
+      mrs.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.3 12a8.3 8.3 0 1 1-2.7-6.1"/><path d="M20.3 3.6v4.7h-4.7"/></svg>';
+      mrs.onclick = (function(dd){ return function(e){ e.stopPropagation(); sugerirLookParaDia(dd, 'proxima'); }; })(day);
+      dm.appendChild(mrs);
       dm.appendChild(mrm);
       dm.onclick = (function(mid){ return function(){ switchTab('montados'); openMontadoDetail(mid); }; })(montado.id);
       col.appendChild(dm);
@@ -7078,17 +7088,78 @@ function infoParaDia(label, alvo) {
 // Sugerir e já colocar no dia, direto da grade da semana: dia vazio só oferecia
 // "adicionar" (que manda pro Catálogo) ou "em casa", e pedir uma sugestão pra um
 // dia só obrigava a abrir o assistente e montar a semana inteira.
+// Tags aproximadas de um look montado, pra ele ser pontuado pelos mesmos
+// critérios do catálogo. Saem da categoria e da cor das peças, traduzidas pras
+// palavras que o weatherScore reconhece (sandália x sapato fechado, saia x calça).
+function tagsDoMontado(m) {
+  var CAT_PT = { Outerwear:'casaco', Tops:'blusa', Bottoms:'calça', Shoes:'sapato',
+                 Bags:'bolsa', Jewelry:'colar', Accessories:'acessório' };
+  return (m.pieceIds||[]).map(findPieceById).filter(Boolean).map(function(p){
+    var nome = (p.name||'').toLowerCase();
+    var cat = CAT_PT[p.category] || (p.category||'').toLowerCase();
+    if (p.category === 'Shoes') {
+      cat = /sandal|slide|flip|espadrille/.test(nome) ? 'sandália'
+          : /boot/.test(nome) ? 'bota'
+          : /sneaker|trainer/.test(nome) ? 'tênis' : 'sapato';
+    } else if (p.category === 'Bottoms' && /skirt|short|dress/.test(nome)) {
+      cat = 'saia';
+    } else if (p.category === 'Tops' && /long sleeve|sweater|knit|turtleneck/.test(nome)) {
+      cat = 'blusa manga longa';
+    }
+    return cat + ': ' + (p.color || p.name || '');
+  });
+}
+
+function notaParaODia(tags, profile, extra) {
+  return weatherScore(tags, profile) * 3
+       + seasonScore(tags, seasonForProfile(profile))
+       + recencyBonus(extra || {}) * 2
+       + ((extra && extra.favorite) ? 1.5 : 0)
+       + ((extra && extra.rating) || 0) * 0.5;
+}
+
 function sugerirLookParaDia(day, alvo) {
   var info = infoParaDia(day, alvo || 'atual');
-  var atual = weekLookFor(day, info.alvo); // o que já está no dia, se houver
+  var profile = info.fc ? info.fc.profile : 'ameno';
+  var ocupa = weekOccupants(day, info.alvo); // o que já está no dia, se houver
   delete todayCardState[info.chave]; // sorteia de novo a cada clique
   var st = todayCardPool(info);
-  // Pedir "outro" e receber o mesmo seria não responder ao clique.
-  var p = st.pool.find(function(x){ return !atual || x.id !== atual.id; });
-  if (!p) { showSavedToast('Nenhum look disponível pra sugerir.'); return; }
-  assignDay(p.id, day, info.alvo);
-  renderWeek();
-  showSavedToast('Sugestão colocada em ' + day + (info.alvo === 'proxima' ? ' da próxima semana' : '') + '.');
+
+  // Candidatos do catálogo (a faixa já vem filtrada e embaralhada)
+  var cands = st.pool
+    .filter(function(p){ return !ocupa.look || p.id !== ocupa.look.id; })
+    .map(function(p){ return { look: p, s: notaParaODia(p.tags || [], profile, p) }; });
+
+  // Looks montados entram no mesmo páreo. Sem lastWorn nem wornCount, o
+  // recencyBonus dá a eles o mesmo 3 de quem nunca foi usado — que é a verdade.
+  var campo = campoMontadoDe(info.alvo), k = chaveDoDia(day);
+  montagens.forEach(function(m){
+    if (!(m.pieceIds||[]).length) return;
+    if (m[campo]) return; // já está em algum dia desta semana
+    if (ocupa.montado && ocupa.montado.id === m.id) return;
+    // Bônus por ser feito à mão: são poucos contra 851 do catálogo, e vários
+    // empatam na nota máxima — sem isso eles quase nunca sairiam sorteados. Um
+    // look que ela montou peça por peça diz mais de intenção do que uma foto.
+    cands.push({ montado: m, s: notaParaODia(tagsDoMontado(m), profile, m) + 2.5 });
+  });
+
+  if (!cands.length) { showSavedToast('Nenhum look disponível pra sugerir.'); return; }
+  cands.sort(function(a,b){ return b.s - a.s; });
+  // sorteia entre os que estão perto do topo, pra não devolver sempre o mesmo
+  var faixa = cands.filter(function(c){ return c.s >= cands[0].s - 2; });
+  var esc = faixa[Math.floor(Math.random() * faixa.length)];
+
+  clearWeekOccupants(day, info.alvo); // sugerir substitui o que estava no dia
+  if (esc.montado) {
+    esc.montado[campo] = k;
+    saveMontagens();
+  } else {
+    setWeekLookFor(day, esc.look.id, info.alvo);
+    saveToStorage();
+  }
+  renderGrid(); renderWeek();
+  showSavedToast((esc.montado ? 'Look montado' : 'Sugestão') + ' colocado em ' + day +
+    (info.alvo === 'proxima' ? ' da próxima semana' : '') + '.');
 }
 
 // Candidatos daquele dia: mesma nota da sugestão diária, mas com o clima do dia
