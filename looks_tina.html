@@ -544,6 +544,8 @@ body.week-pick-mode .card-week-btn { display: block; }
   display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:10px; margin-top:14px;
 }
 #suggestPickerGrid img { background:#FAFAF8; object-fit:contain; }
+.daypick-link { grid-column: 1/-1; background: none; border: none; color: #1A1A1A; font-size: .82rem; font-family: inherit; cursor: pointer; text-align: left; padding: 2px 0 6px; text-decoration: underline; text-underline-offset: 3px; }
+.daypick-link:hover { color: #8C8C88; }
 .sugg-pick-pill { border-color:#1A1A1A; color:#1A1A1A; font-weight:600; }
 .daypick-card {
   border:2px solid transparent; border-radius:10px; overflow:hidden; cursor:pointer;
@@ -4847,9 +4849,11 @@ function removeFromWeek(day) {
 // Day picker (botão "resugerir" em cada dia da semana) 
 var dayPickerCurrentDay = null;
 var dayPickerTarget = 'atual'; // em qual semana o picker vai colocar o look
+var dayPickerModo = 'catalogo'; // 'catalogo' | 'montados'
 function openDayPicker(day, alvo) {
   dayPickerCurrentDay = day;
   dayPickerTarget = alvo || 'atual';
+  dayPickerModo = 'catalogo';
   var overlay = document.getElementById('dayPickerOverlay');
   var title = document.getElementById('dayPickerTitle');
   var subtitle = document.getElementById('dayPickerSubtitle');
@@ -4880,9 +4884,9 @@ function renderDayPickerGrid(day, filterText) {
     })
     .slice().sort(byNewestFirst);
 
-  // Looks montados também podem ir pro dia — antes só o catálogo aparecia aqui,
-  // então a única forma de usar um montado era pelo detalhe dele. Vêm primeiro
-  // porque são poucos e se perderiam no meio de centenas de fotos.
+  // Duas páginas no mesmo seletor: o catálogo abre por padrão (é o caso comum)
+  // e os montados ficam atrás de um link no topo. Trocar de página mantém o dia
+  // que está sendo escolhido, que é o que importa aqui.
   var campoM = campoMontadoDe(dayPickerTarget);
   var kDia = chaveDoDia(day);
   var mont = montagens.filter(function(m){
@@ -4895,15 +4899,25 @@ function renderDayPickerGrid(day, filterText) {
   });
 
   grid.innerHTML = '';
-  if(!pool.length && !mont.length) {
-    grid.innerHTML = '<p style="color:#A8A8A4;font-size:.85rem;grid-column:1/-1;">Nenhum look encontrado' + (q ? ' pra "' + filterText + '"' : '') + '.</p>';
-  }
 
-  if (mont.length) {
-    var tit = document.createElement('p');
-    tit.style.cssText = 'grid-column:1/-1;margin:2px 0 0;font-size:.72rem;color:#A8A8A4;text-transform:uppercase;letter-spacing:.08em;';
-    tit.textContent = 'Looks montados';
-    grid.appendChild(tit);
+  var link = document.createElement('button');
+  link.className = 'daypick-link';
+  if (dayPickerModo === 'montados') {
+    link.innerHTML = '&lsaquo; Voltar aos looks do catálogo';
+    link.onclick = function(){ dayPickerModo = 'catalogo'; renderDayPickerGrid(day, filterText); };
+  } else {
+    link.innerHTML = 'Ver meus looks montados (' + montagens.length + ') &rsaquo;';
+    link.onclick = function(){ dayPickerModo = 'montados'; renderDayPickerGrid(day, filterText); };
+  }
+  grid.appendChild(link);
+
+  if (dayPickerModo === 'montados') {
+    if (!mont.length) {
+      var vazio = document.createElement('p');
+      vazio.style.cssText = 'grid-column:1/-1;color:#A8A8A4;font-size:.85rem;';
+      vazio.textContent = 'Nenhum look montado' + (q ? ' pra "' + filterText + '"' : ' ainda') + '.';
+      grid.appendChild(vazio);
+    }
     mont.forEach(function(m){
       var card = document.createElement('div');
       card.className = 'daypick-card';
@@ -4925,12 +4939,15 @@ function renderDayPickerGrid(day, filterText) {
       }; })(m.id);
       grid.appendChild(card);
     });
-    var tit2 = document.createElement('p');
-    tit2.style.cssText = 'grid-column:1/-1;margin:10px 0 0;font-size:.72rem;color:#A8A8A4;text-transform:uppercase;letter-spacing:.08em;';
-    tit2.textContent = 'Do catálogo';
-    grid.appendChild(tit2);
+    return;
   }
 
+  if(!pool.length) {
+    var nada = document.createElement('p');
+    nada.style.cssText = 'grid-column:1/-1;color:#A8A8A4;font-size:.85rem;';
+    nada.textContent = 'Nenhum look encontrado' + (q ? ' pra "' + filterText + '"' : '') + '.';
+    grid.appendChild(nada);
+  }
   pool.forEach(function(p){
     var card = document.createElement('div');
     card.className = 'daypick-card';
