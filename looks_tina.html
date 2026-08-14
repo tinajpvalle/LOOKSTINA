@@ -458,6 +458,18 @@ body.week-pick-mode .card-week-btn { display: block; }
 .wd-target-switch { display: flex; gap: 6px; margin-bottom: 8px; width: 100%; }
 .wd-target-btn { flex: 1; border: 1px solid #E0E0DB; background: #fff; border-radius: 8px; padding: 6px 10px; font-size: .76rem; cursor: pointer; color: #666666; font-family: inherit; }
 .wd-target-btn.active { background: #1A1A1A; border-color: #1A1A1A; color: #fff; font-weight: 600; }
+/* Calendário
+   As sete colunas com min-height fixo estouravam a largura no celular e o
+   sábado saía da tela. Agora a célula acompanha a coluna (minmax(0,1fr) deixa
+   ela encolher) e o mês inteiro cabe. */
+#calGrid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+#calGrid > div { min-width: 0; }
+#calGrid img { max-width: 100%; }
+@media (max-width: 700px) {
+  #calGrid { gap: 2px; }
+  #calGrid > div { min-height: 56px !important; padding: 2px !important; border-radius: 6px !important; }
+  #calGrid .cal-planejado-tag { display: none; }
+}
 .day-suggest-btn { font-size: .68rem; color: #1A1A1A; background: #fff; border: 1px solid #E0E0DB; border-radius: 6px; padding: 3px 10px; cursor: pointer; margin-top: 5px; font-family: inherit; }
 .day-suggest-btn:hover { border-color: #1A1A1A; }
 #nextWeekSection { margin-top: 34px; padding-top: 26px; border-top: 1px solid #EAEAE7; }
@@ -3048,20 +3060,53 @@ function closePieceZoom() {
   document.getElementById('pieceZoomOverlay').style.display = 'none';
 }
 
+// Filtro da lista de looks montados. Os "Casa N" são gerados em lote e iam
+// diluindo os que ela montou à mão na mesma lista.
+var montadosFiltro = 'todos'; // 'todos' | 'meus' | 'casa'
+
+function setMontadosFiltro(f) {
+  montadosFiltro = f;
+  renderLooksMontados();
+}
+
+function renderMontadosFiltro() {
+  var bar = document.getElementById('montadosFiltro');
+  if (!bar) return;
+  var nCasa = montagens.filter(function(m){ return m.casa; }).length;
+  var nMeus = montagens.length - nCasa;
+  bar.innerHTML = '';
+  // sem look de casa nenhum, o filtro só ocuparia espaço
+  if (!nCasa) { bar.style.display = 'none'; return; }
+  bar.style.display = 'flex';
+  [['todos','Todos', montagens.length], ['meus','Meus', nMeus], ['casa','De casa', nCasa]].forEach(function(o){
+    var pill = document.createElement('div');
+    pill.className = 'pc-cat-pill' + (montadosFiltro === o[0] ? ' active' : '');
+    pill.textContent = o[1] + ' (' + o[2] + ')';
+    pill.onclick = (function(f){ return function(){ setMontadosFiltro(f); }; })(o[0]);
+    bar.appendChild(pill);
+  });
+}
+
 function renderLooksMontados() {
   renderWeekPlanner();
+  renderMontadosFiltro();
   var grid = document.getElementById('montadosGrid');
   var countEl = document.getElementById('montadosCount');
+  var lista = montagens.filter(function(m){
+    if (montadosFiltro === 'casa') return !!m.casa;
+    if (montadosFiltro === 'meus') return !m.casa;
+    return true;
+  });
   if (countEl) {
-    countEl.textContent = montagens.length + (montagens.length === 1 ? ' look montado' : ' looks montados');
+    countEl.textContent = lista.length + (lista.length === 1 ? ' look montado' : ' looks montados');
   }
   if (!grid) return;
   grid.innerHTML = '';
-  if (montagens.length === 0) {
+  if (lista.length === 0) {
     grid.innerHTML = '<div class="no-results" style="grid-column:1/-1;">Nenhum look montado ainda. Clique em "<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><circle cx="12" cy="12" r="8.5"/><path d="M12 8.2v7.6M8.2 12h7.6"/></svg> Novo Look" pra começar.</div>';
     return;
   }
-  montagens.slice().reverse().forEach(function(m) {
+  lista.slice().reverse().forEach(function(m) {
     var card = document.createElement('div');
     card.className = 'montado-card';
     var flatlay = document.createElement('div');
@@ -9035,6 +9080,7 @@ function renderCal() {
         pw.appendChild(pm);
       }
       var tag = document.createElement('div');
+      tag.className = 'cal-planejado-tag';
       tag.style.cssText = 'font-size:.55rem;color:#A8A8A4;text-align:center;';
       tag.textContent = 'planejado';
       pw.appendChild(tag);
@@ -9392,7 +9438,7 @@ function applySuggestions() {
     <button onclick="calNextMonth()" style="background:#F5F4F1;border:1px solid #E0E0DB;border-radius:8px;padding:6px 14px;cursor:pointer;font-size:1rem;">›</button>
     <span id="calMonthCount" style="font-size:.78rem;color:#A8A8A4;margin-left:4px;"></span>
   </div>
-  <div id="calGrid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;"></div>
+  <div id="calGrid"></div>
 </div>
 
 <div id="statsView" style="display:none;padding:24px;max-width:900px;margin:0 auto;">
@@ -9520,6 +9566,7 @@ function applySuggestions() {
     <p style="color:#666666;font-size:.82rem;margin-bottom:14px;">Monte looks combinando as peças importadas do Alta. Fica separado do catálogo de looks prontos e da lista de peças — nada aqui mexe no resto do app.</p>
     <div style="font-size:.82rem;font-weight:700;color:#666666;margin-bottom:6px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg> Planejador da semana</div>
     <div id="weekPlanner" class="week-planner"></div>
+    <div id="montadosFiltro" style="display:none;gap:6px;flex-wrap:wrap;margin-top:16px;"></div>
     <div id="montadosCount" style="font-size:.82rem;color:#666666;margin:18px 0 14px;"></div>
     <div id="montadosGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;"></div>
   </div>
