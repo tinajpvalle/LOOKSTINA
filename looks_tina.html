@@ -4880,10 +4880,57 @@ function renderDayPickerGrid(day, filterText) {
     })
     .slice().sort(byNewestFirst);
 
+  // Looks montados também podem ir pro dia — antes só o catálogo aparecia aqui,
+  // então a única forma de usar um montado era pelo detalhe dele. Vêm primeiro
+  // porque são poucos e se perderiam no meio de centenas de fotos.
+  var campoM = campoMontadoDe(dayPickerTarget);
+  var kDia = chaveDoDia(day);
+  var mont = montagens.filter(function(m){
+    if (!(m.pieceIds||[]).length) return false;
+    if (!q) return true;
+    var nome = (m.name || '').toLowerCase();
+    var pecas = m.pieceIds.map(findPieceById).filter(Boolean)
+      .map(function(x){ return (x.name+' '+x.brand+' '+x.color).toLowerCase(); }).join(' ');
+    return nome.indexOf(q) !== -1 || pecas.indexOf(q) !== -1;
+  });
+
   grid.innerHTML = '';
-  if(!pool.length) {
+  if(!pool.length && !mont.length) {
     grid.innerHTML = '<p style="color:#A8A8A4;font-size:.85rem;grid-column:1/-1;">Nenhum look encontrado' + (q ? ' pra "' + filterText + '"' : '') + '.</p>';
   }
+
+  if (mont.length) {
+    var tit = document.createElement('p');
+    tit.style.cssText = 'grid-column:1/-1;margin:2px 0 0;font-size:.72rem;color:#A8A8A4;text-transform:uppercase;letter-spacing:.08em;';
+    tit.textContent = 'Looks montados';
+    grid.appendChild(tit);
+    mont.forEach(function(m){
+      var card = document.createElement('div');
+      card.className = 'daypick-card';
+      var fl = document.createElement('div'); fl.className = 'flatlay-canvas';
+      fl.style.cssText = 'max-width:none;aspect-ratio:1;border-radius:0;';
+      renderFlatLay(fl, m.pieceIds.map(findPieceById).filter(Boolean));
+      card.appendChild(fl);
+      var lb = document.createElement('div'); lb.className = 'daypick-card-label';
+      var ondeM = WEEKDAYS.find(function(w){ return m[campoM] === w.key; });
+      lb.textContent = (m[campoM] === kDia) ? 'look atual' : (ondeM ? 'já em ' + ondeM.label : (m.name || 'Look montado'));
+      card.appendChild(lb);
+      card.onclick = (function(mid){ return function(){
+        clearWeekOccupants(day, dayPickerTarget);
+        var mm = montagens.find(function(x){ return x.id === mid; });
+        if (mm) { mm[campoM] = kDia; saveMontagens(); }
+        saveToStorage(); renderGrid(); renderWeek();
+        closeDayPicker();
+        showSavedToast('Look montado colocado em ' + day + '.');
+      }; })(m.id);
+      grid.appendChild(card);
+    });
+    var tit2 = document.createElement('p');
+    tit2.style.cssText = 'grid-column:1/-1;margin:10px 0 0;font-size:.72rem;color:#A8A8A4;text-transform:uppercase;letter-spacing:.08em;';
+    tit2.textContent = 'Do catálogo';
+    grid.appendChild(tit2);
+  }
+
   pool.forEach(function(p){
     var card = document.createElement('div');
     card.className = 'daypick-card';
