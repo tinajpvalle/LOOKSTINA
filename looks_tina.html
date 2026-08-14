@@ -6616,11 +6616,30 @@ function profileFor(tmax, rainy) {
 // e guardada. FORECAST aponta pra semana que está sendo planejada no momento;
 // CURRENT_WEEK_FORECAST guarda sempre a semana de hoje, porque a sugestão diária
 // precisa do clima de hoje mesmo enquanto o assistente planeja a semana que vem.
+// Última previsão boa, guardada por semana (chave = a segunda-feira dela).
+// Sem isso, uma falha de rede fazia o app tratar a semana inteira como "ameno"
+// em silêncio — e clima é o critério de maior peso na escolha dos looks.
+var FORECAST_CACHE_KEY = 'looks_tina_previsao_v1';
+
+function lerCachePrevisao() {
+  return safeParse(lsGet(FORECAST_CACHE_KEY), {}) || {};
+}
+function guardarCachePrevisao(chave, lista) {
+  var c = lerCachePrevisao();
+  c[chave] = { dias: lista, em: new Date().toISOString() };
+  // só interessa a semana atual e a próxima; o resto é lixo
+  var validas = Object.keys(c).sort().slice(-3);
+  var limpo = {};
+  validas.forEach(function(k){ limpo[k] = c[k]; });
+  lsSet(FORECAST_CACHE_KEY, JSON.stringify(limpo));
+}
+
 function loadForecast(offset) {
   offset = offset || 0;
   if (forecastPromises[offset]) return forecastPromises[offset];
   var monday = mondayOfCurrentWeek();
   monday.setDate(monday.getDate() + offset * 7);
+  var chaveSemana = isoDate(monday);
   var days = [];
   for (var i=0;i<7;i++) { var d = new Date(monday); d.setDate(monday.getDate()+i); days.push(d); }
 
@@ -6631,20 +6650,24 @@ function loadForecast(offset) {
     return list;
   }
 
-  function neutralFallback(err) {
-    if (err) console.warn('Não foi possível buscar a previsão do tempo real, usando estimativa neutra.', err);
+  // Falhou: usa a última previsão boa DESTA MESMA semana, se houver. Ela é real,
+  // só foi buscada antes — muito melhor que fingir que todo dia é ameno.
+  function fallback(err) {
+    if (err) console.warn('Previsão indisponível agora.', err);
+    // não memoriza a falha: a próxima chamada tenta de novo
+    delete forecastPromises[offset];
+    var guardada = lerCachePrevisao()[chaveSemana];
+    if (guardada && guardada.dias && guardada.dias.length === 7) {
+      return publish(guardada.dias.map(function(f){ return Object.assign({}, f, { deCache: true }); }));
+    }
     return publish(days.map(function(day, i){
       return {day: DAYS_PT[i], date: brDate(day), temp: '—', cond: 'Previsão indisponível', profile: 'ameno'};
     }));
   }
 
   // Blindado: se fetch não existir (preview/sandbox restrito) ou a chamada falhar
-  // de qualquer forma (rede, CSP, offline), nunca deixa o resto da página travar —
-  // sempre resolve com um FORECAST neutro em vez de propagar o erro.
-  if (typeof fetch !== 'function') {
-    forecastPromises[offset] = Promise.resolve(neutralFallback());
-    return forecastPromises[offset];
-  }
+  // de qualquer forma (rede, CSP, offline), nunca deixa o resto da página travar.
+  if (typeof fetch !== 'function') return Promise.resolve(fallback());
 
   try {
     var url = 'https://api.open-meteo.com/v1/forecast?latitude='+SP_LAT+'&longitude='+SP_LON
@@ -6655,24 +6678,44 @@ function loadForecast(offset) {
       .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
       .then(function(json){
         var d = json.daily;
-        return publish(days.map(function(day, i){
+        var lista = days.map(function(day, i){
           var tmax = Math.round(d.temperature_2m_max[i]);
           var tmin = Math.round(d.temperature_2m_min[i]);
           var wc = WMO_MAP[d.weathercode[i]] || ['Tempo variável', false];
           return {day: DAYS_PT[i], date: brDate(day), temp: tmin+'–'+tmax+'°C', cond: wc[0], profile: profileFor(tmax, wc[1])};
-        }));
+        });
+        guardarCachePrevisao(chaveSemana, lista);
+        return publish(lista);
       })
-      .catch(function(err){ return neutralFallback(err); });
+      .catch(function(err){ return fallback(err); });
   } catch (e) {
-    forecastPromises[offset] = Promise.resolve(neutralFallback(e));
+    return Promise.resolve(fallback(e));
   }
   return forecastPromises[offset];
+}
+
+// Uma tentativa a mais pouco depois de carregar: falha de rede na abertura é
+// quase sempre passageira, e sem isso a semana toda ficava sem clima até ela
+// recarregar a página na mão.
+function reporPrevisaoSeFaltou() {
+  var atual = CURRENT_WEEK_FORECAST || [];
+  var faltou = !atual.length || atual.every(function(f){ return f.temp === '—'; });
+  if (!faltou) return;
+  setTimeout(function(){
+    delete forecastPromises[0];
+    loadForecast(0).then(function(){
+      if (typeof renderTodaySuggestion === 'function' && !todaySuggestionDismissed) renderTodaySuggestion();
+      if (typeof renderWeek === 'function' && document.getElementById('weekGrid')) renderWeek();
+    });
+  }, 8000);
 }
 // Começa a buscar assim que a página carrega, pra já estar pronta quando
 // a Semana ou o assistente de sugestão precisarem (não bloqueia nada).
 // try/catch extra aqui porque essa chamada roda no carregamento inicial da
 // página — um erro não tratado aqui poderia interromper o resto do script.
-try { loadForecast(); } catch(e) { console.warn('loadForecast falhou ao iniciar', e); }
+try {
+  loadForecast().then(function(){ reporPrevisaoSeFaltou(); });
+} catch(e) { console.warn('loadForecast falhou ao iniciar', e); }
 
 function setWizardOcasiao(o) {
   wizardOcasiao = (wizardOcasiao===o) ? null : o;
