@@ -1205,7 +1205,7 @@ function lsSet(key, value) {
 // Se o servidor não responder (ex: site aberto direto do GitHub Pages, sem
 // backend, ou sem internet), tudo falha silenciosamente e o app continua
 // funcionando 100% localmente, como sempre funcionou.
-var SYNC_KEYS = ['looks_tina_catalog_v1', 'looks_tina_montados_v1', 'looks_tina_pecas_avulsas_v1', 'looks_tina_proxsemana_v1', 'looks_tina_pecas_arquivadas_v1'];
+var SYNC_KEYS = ['looks_tina_catalog_v1', 'looks_tina_montados_v1', 'looks_tina_pecas_avulsas_v1', 'looks_tina_proxsemana_v1', 'looks_tina_pecas_arquivadas_v1', 'looks_tina_proxsemana_dias_v1'];
 function syncPut(key, jsonValue) {
   if (SYNC_KEYS.indexOf(key) === -1) return;
   try {
@@ -1244,6 +1244,16 @@ function pullRemoteUpdates() {
         pecasArquivadas = JSON.parse(res.value) || [];
         lsSet('looks_tina_pecas_arquivadas_v1', res.value);
         if (typeof renderPecas === 'function' && document.getElementById('pecasGrid')) renderPecas();
+      } catch (e) {}
+    }
+  });
+  syncGet('looks_tina_proxsemana_dias_v1').then(function(res) {
+    if (!res || res.value == null) return;
+    if (res.value !== JSON.stringify(nextWeekDays)) {
+      try {
+        nextWeekDays = JSON.parse(res.value) || {};
+        lsSet('looks_tina_proxsemana_dias_v1', res.value);
+        if (typeof renderWeek === 'function' && document.getElementById('weekGrid')) renderWeek();
       } catch (e) {}
     }
   });
@@ -4600,6 +4610,7 @@ function clearNextWeek() {
       !montagens.some(function(m){ return m.weekdayNext; })) return;
   if (!confirm('Limpar o plano da próxima semana?')) return;
   nextWeekPlan = {}; saveNextWeekPlan();
+  nextWeekDays = {}; saveNextWeekDays();
   montagens.forEach(function(m){ m.weekdayNext = null; });
   saveMontagens();
   renderGrid(); renderWeek();
@@ -4636,7 +4647,21 @@ function renderNextWeekGrid() {
     var dayKey = (WEEKDAYS.find(function(x){ return x.label === day; }) || {}).key;
     var montado = dayKey ? montagens.find(function(m){ return m.weekdayNext === dayKey; }) : null;
 
-    if (look) {
+    if (casaNoDia(day, 'proxima') && !look && !montado) {
+      var dc = document.createElement('div'); dc.className = 'day-empty';
+      dc.style.cssText = 'background:#FAFAF8;border:1.5px dashed #E0E0DB;position:relative;';
+      dc.innerHTML = '<span style="font-size:1.4rem"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3.8 10.4 8.2-6.6 8.2 6.6V19a1.6 1.6 0 0 1-1.6 1.6H5.4A1.6 1.6 0 0 1 3.8 19v-8.6z"/></svg></span><span class="add-look-hint" style="color:#C4985A;">Em casa</span>';
+      var un = document.createElement('button');
+      un.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"/></svg>';
+      un.style.cssText = 'position:absolute;top:4px;right:4px;background:none;border:none;cursor:pointer;color:#C4985A;line-height:1;padding:2px;';
+      un.onclick = (function(dd){ return function(e){ e.stopPropagation(); setCasaNoDia(dd, 'proxima', false); }; })(day);
+      dc.appendChild(un);
+      var cb = document.createElement('button'); cb.className = 'day-suggest-btn';
+      cb.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><circle cx="7.8" cy="7.6" r="2.8"/><path d="M7.8 2.4v1.4M3.6 3.4l1 1M2.4 7.6h1.4M12 3.4l-1 1"/><path d="M9.4 19.4a3.7 3.7 0 0 1 .6-7.4 4.8 4.8 0 0 1 9.1 1.4 3.1 3.1 0 0 1-.6 6h-9.1z"/></svg> Look de casa';
+      cb.onclick = (function(dd){ return function(e){ e.stopPropagation(); sugerirLookParaDia(dd, 'proxima'); }; })(day);
+      dc.appendChild(cb);
+      col.appendChild(dc);
+    } else if (look) {
       var dl = document.createElement('div'); dl.className = 'day-look';
       ligarArrastarLook(dl, day, 'proxima');
       var img = document.createElement('img'); img.src = lookThumb(look); img.alt = '';
@@ -4676,10 +4701,32 @@ function renderNextWeekGrid() {
     } else {
       var de = document.createElement('div'); de.className = 'day-empty';
       de.innerHTML = '<span style="font-size:1.4rem"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7.2a2.1 2.1 0 1 1 2.1-2.1c0 1.1-1 1.5-2.1 2.1v2"/><path d="M12 9.2 3.6 15.3A1.5 1.5 0 0 0 4.5 18h15a1.5 1.5 0 0 0 .9-2.7L12 9.2z"/></svg></span><span class="add-look-hint">Adicionar look</span>'
+        + '<button onclick="event.stopPropagation();setCasaNoDia(\''+day+'\', \'proxima\', true)" class="day-suggest-btn" style="color:#C4985A;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="m3.8 10.4 8.2-6.6 8.2 6.6V19a1.6 1.6 0 0 1-1.6 1.6H5.4A1.6 1.6 0 0 1 3.8 19v-8.6z"/></svg> Em casa</button>'
         + '<button onclick="event.stopPropagation();sugerirLookParaDia(\''+day+'\', \'proxima\')" class="day-suggest-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><circle cx="7.8" cy="7.6" r="2.8"/><path d="M7.8 2.4v1.4M3.6 3.4l1 1M2.4 7.6h1.4M12 3.4l-1 1"/><path d="M9.4 19.4a3.7 3.7 0 0 1 .6-7.4 4.8 4.8 0 0 1 9.1 1.4 3.1 3.1 0 0 1-.6 6h-9.1z"/></svg> Sugerir look</button>';
       de.onclick = (function(dd){ return function(){ openDayPicker(dd, 'proxima'); }; })(day);
       col.appendChild(de);
     }
+
+    // Nota do dia, "em casa" e ocasião — agora também na próxima semana, com
+    // registro próprio (nextWeekDays), pra não escrever por cima da semana atual.
+    var nt = document.createElement('textarea');
+    nt.className = 'day-note'; nt.rows = 2;
+    nt.placeholder = 'Nota do dia...';
+    nt.value = notaDoDia(day, 'proxima');
+    nt.addEventListener('input', function(){ nt.style.height='auto'; nt.style.height = nt.scrollHeight+'px'; });
+    nt.addEventListener('blur', (function(dd){ return function(){ setNotaDoDia(dd, 'proxima', nt.value.trim()); }; })(day));
+    col.appendChild(nt);
+
+    var ocRow = document.createElement('div'); ocRow.className = 'day-ocasiao-row';
+    DAY_OCASIAO_OPTS.forEach(function(opt){
+      var b = document.createElement('button'); b.className = 'day-ocasiao-btn';
+      b.innerHTML = opt.emoji; b.title = opt.label;
+      if (ocasiaoDoDia(day, 'proxima') === opt.key) b.classList.add('active');
+      b.onclick = (function(dd,k){ return function(e){ e.stopPropagation(); setOcasiaoDoDia(dd, 'proxima', k); }; })(day, opt.key);
+      ocRow.appendChild(b);
+    });
+    col.appendChild(ocRow);
+
     grid.appendChild(col);
   });
 }
@@ -6029,6 +6076,57 @@ function saveWeekNote(day, val) {
   lsSet('looks_tina_weeknotes_v1', JSON.stringify(weekNotes));
 }
 
+// Nota, "em casa" e ocasião da PRÓXIMA semana
+// Os três da semana corrente moram em listas separadas por dia. Reaproveitá-las
+// pra próxima sobrescreveria os dados desta, então a próxima tem um registro só,
+// {Seg:{nota, casa, ocasiao}}, promovido na virada da segunda.
+var NEXT_WEEK_DAYS_KEY = 'looks_tina_proxsemana_dias_v1';
+var nextWeekDays = safeParse(lsGet(NEXT_WEEK_DAYS_KEY), {}) || {};
+
+function saveNextWeekDays() {
+  var json = JSON.stringify(nextWeekDays);
+  lsSet(NEXT_WEEK_DAYS_KEY, json);
+  syncPut(NEXT_WEEK_DAYS_KEY, json);
+}
+function diaProx(day) {
+  if (!nextWeekDays[day]) nextWeekDays[day] = {};
+  return nextWeekDays[day];
+}
+
+function notaDoDia(day, alvo) {
+  return (alvo === 'proxima') ? (diaProx(day).nota || '') : (weekNotes[day] || '');
+}
+function setNotaDoDia(day, alvo, val) {
+  if (alvo === 'proxima') { diaProx(day).nota = val; saveNextWeekDays(); return; }
+  saveWeekNote(day, val);
+}
+function casaNoDia(day, alvo) {
+  return (alvo === 'proxima') ? !!diaProx(day).casa : !!weekCasaDays[day];
+}
+function setCasaNoDia(day, alvo, isCasa) {
+  if (alvo === 'proxima') {
+    if (isCasa) { diaProx(day).casa = true; delete nextWeekPlan[day]; saveNextWeekPlan(); }
+    else delete diaProx(day).casa;
+    saveNextWeekDays(); renderWeek();
+    showSavedToast(isCasa ? 'Dia marcado como em casa' : 'Dia liberado');
+    return;
+  }
+  toggleCasaDay(day, isCasa);
+}
+function ocasiaoDoDia(day, alvo) {
+  return (alvo === 'proxima') ? (diaProx(day).ocasiao || null) : (weekDayOcasiao[day] || null);
+}
+function setOcasiaoDoDia(day, alvo, key) {
+  if (alvo === 'proxima') {
+    var d = diaProx(day);
+    d.ocasiao = (d.ocasiao === key) ? null : key;
+    if (!d.ocasiao) delete d.ocasiao;
+    saveNextWeekDays(); renderWeek();
+    return;
+  }
+  setDayOcasiao(day, key);
+}
+
 function toggleCompareMode() {
   compareMode = !compareMode;
   if (!compareMode) { clearCompare(); return; }
@@ -7192,7 +7290,7 @@ function sugerirLookParaDia(day, alvo) {
   // recencyBonus dá a eles o mesmo 3 de quem nunca foi usado — que é a verdade.
   var campo = campoMontadoDe(info.alvo), k = chaveDoDia(day);
   // Dia marcado "em casa" pede look de casa: se existe algum, só eles concorrem.
-  var emCasa = (info.alvo === 'atual') && !!weekCasaDays[day];
+  var emCasa = casaNoDia(day, info.alvo);
   var temCasa = montagens.some(function(m){ return m.casa && !m[campo]; });
   if (emCasa && temCasa) cands = [];
   montagens.forEach(function(m){
@@ -7802,9 +7900,21 @@ function checkWeekRollover() {
       if (m.weekdayNext) { m.weekday = m.weekdayNext; m.weekdayNext = null; montPromovidos++; }
     });
     if (montPromovidos) saveMontagens();
-    weekCasaDays = {}; lsSet('looks_tina_casadays_v1', '{}');
-    weekNotes = {}; lsSet('looks_tina_weeknotes_v1', '{}');
-    weekDayOcasiao = {}; lsSet('looks_tina_dayocasiao_v1', '{}');
+
+    // Nota, "em casa" e ocasião: a semana que passou é descartada e a próxima
+    // toma o lugar. Tem que ser nesta ordem — a limpeza vinha depois e apagava
+    // o que acabara de ser promovido.
+    weekNotes = {}; weekCasaDays = {}; weekDayOcasiao = {};
+    DAYS.forEach(function(d){
+      var nd = nextWeekDays[d]; if (!nd) return;
+      if (nd.nota) weekNotes[d] = nd.nota;
+      if (nd.casa) weekCasaDays[d] = true;
+      if (nd.ocasiao) weekDayOcasiao[d] = nd.ocasiao;
+    });
+    nextWeekDays = {}; saveNextWeekDays();
+    lsSet('looks_tina_weeknotes_v1', JSON.stringify(weekNotes));
+    lsSet('looks_tina_casadays_v1', JSON.stringify(weekCasaDays));
+    lsSet('looks_tina_dayocasiao_v1', JSON.stringify(weekDayOcasiao));
     saveToStorage();
     if (archived) {
       var oldMonday = new Date(storedMonday + 'T00:00:00');
