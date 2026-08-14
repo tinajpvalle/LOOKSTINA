@@ -3062,6 +3062,7 @@ function renderLooksMontados() {
     var dayLabel = m.weekday ? (WEEKDAYS.find(function(d) { return d.key === m.weekday; }) || {}).label : null;
     body.innerHTML =
       '<div class="pc-card-name">' + (m.name ? m.name.replace(/</g,'&lt;') : 'Look sem nome') +
+        (m.casa ? ' <span class="week-day-badge">casa</span>' : '') +
         (dayLabel ? ' <span class="week-day-badge">' + dayLabel + '</span>' : '') + '</div>' +
       '<div class="pc-card-meta">' + m.pieceIds.length + (m.pieceIds.length === 1 ? ' peça' : ' peças') + '</div>';
     card.appendChild(body);
@@ -3091,7 +3092,7 @@ function openMontadoDetail(id) {
   if (nameEl) nameEl.textContent = m.name ? m.name : 'Look sem nome';
   if (metaEl) {
     metaEl.textContent = m.pieceIds.length + (m.pieceIds.length === 1 ? ' peça' : ' peças') +
-      (m.source === 'auto' ? ' · gerado por sugestão automática' : ' · montado manualmente');
+      (m.casa ? ' · look de casa' : m.source === 'auto' ? ' · gerado por sugestão automática' : ' · montado manualmente');
   }
   var dayBar = document.getElementById('montadoDetailWeekday');
   if (dayBar) {
@@ -4425,6 +4426,12 @@ function renderWeek() {
       unmarkBtn.onclick = (function(d){ return function(e){ e.stopPropagation(); toggleCasaDay(d, false); }; })(day);
       de.style.position = 'relative';
       de.appendChild(unmarkBtn);
+      // Em casa não quer dizer sem roupa: um look simples também serve.
+      var casaBtn = document.createElement('button');
+      casaBtn.className = 'day-suggest-btn';
+      casaBtn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><circle cx="7.8" cy="7.6" r="2.8"/><path d="M7.8 2.4v1.4M3.6 3.4l1 1M2.4 7.6h1.4M12 3.4l-1 1"/><path d="M9.4 19.4a3.7 3.7 0 0 1 .6-7.4 4.8 4.8 0 0 1 9.1 1.4 3.1 3.1 0 0 1-.6 6h-9.1z"/></svg> Look de casa';
+      casaBtn.onclick = (function(d){ return function(e){ e.stopPropagation(); sugerirLookParaDia(d, 'atual'); }; })(day);
+      de.appendChild(casaBtn);
       col.appendChild(de);
     } else {
       var de = document.createElement('div'); de.className = 'day-empty';
@@ -7091,6 +7098,57 @@ function infoParaDia(label, alvo) {
 // Tags aproximadas de um look montado, pra ele ser pontuado pelos mesmos
 // critérios do catálogo. Saem da categoria e da cor das peças, traduzidas pras
 // palavras que o weatherScore reconhece (sandália x sapato fechado, saia x calça).
+// Looks de casa
+// O catálogo é foto de look de sair — moletom ninguém fotografa. Então look de
+// casa é montado na hora, a partir das peças: parte de baixo confortável +
+// camiseta, sem bolsa nem casaco. Fica salvo como look montado, marcado casa:true.
+var CASA_BOTTOM = /jean|denim|sweat|jogger|track|legging|knit pant|lounge/i;
+var CASA_TOP = /t-?shirt|\btee\b|tank|camiseta|regata|sweatshirt|hoodie|jersey/i;
+var CASA_SHOE = /sneaker|trainer|slide|flip|clog|slipper/i;
+
+function pecasDeCasa() {
+  var todas = allPecas();
+  return {
+    bottoms: todas.filter(function(p){ return p.category==='Bottoms' && CASA_BOTTOM.test(p.name||''); }),
+    tops:    todas.filter(function(p){ return p.category==='Tops' && CASA_TOP.test(p.name||''); }),
+    shoes:   todas.filter(function(p){ return p.category==='Shoes' && CASA_SHOE.test(p.name||''); })
+  };
+}
+
+function gerarLooksDeCasa(quantos) {
+  var pecas = pecasDeCasa();
+  if (!pecas.bottoms.length || !pecas.tops.length) {
+    alert('Não achei peças suficientes pra montar looks de casa (preciso de calça jeans/moletom e camiseta).');
+    return;
+  }
+  var jaExistem = montagens.filter(function(m){ return m.casa; })
+    .map(function(m){ return (m.pieceIds||[]).slice().sort().join('|'); });
+  var criados = 0, tentativas = 0;
+  while (criados < quantos && tentativas < quantos * 40) {
+    tentativas++;
+    var b = pecas.bottoms[Math.floor(Math.random()*pecas.bottoms.length)];
+    var t = pecas.tops[Math.floor(Math.random()*pecas.tops.length)];
+    if (colorCompatibility(b.color, t.color) < 0.4) continue; // deixa o par fazer sentido
+    var ids = [t.id, b.id];
+    if (pecas.shoes.length && Math.random() < 0.7) {
+      ids.push(pecas.shoes[Math.floor(Math.random()*pecas.shoes.length)].id);
+    }
+    var chave = ids.slice().sort().join('|');
+    if (jaExistem.indexOf(chave) !== -1) continue; // não repete combinação
+    jaExistem.push(chave);
+    montagens.push({
+      id: 'm_' + Date.now() + '_' + Math.floor(Math.random()*100000),
+      name: 'Casa ' + (montagens.filter(function(m){ return m.casa; }).length + 1),
+      pieceIds: ids, createdAt: new Date().toISOString(),
+      source: 'auto', casa: true, weekday: null, weekdayNext: null
+    });
+    criados++;
+  }
+  saveMontagens();
+  renderLooksMontados();
+  showSavedToast(criados + ' look' + (criados>1?'s':'') + ' de casa criado' + (criados>1?'s':'') + '.');
+}
+
 function tagsDoMontado(m) {
   var CAT_PT = { Outerwear:'casaco', Tops:'blusa', Bottoms:'calça', Shoes:'sapato',
                  Bags:'bolsa', Jewelry:'colar', Accessories:'acessório' };
@@ -7133,10 +7191,15 @@ function sugerirLookParaDia(day, alvo) {
   // Looks montados entram no mesmo páreo. Sem lastWorn nem wornCount, o
   // recencyBonus dá a eles o mesmo 3 de quem nunca foi usado — que é a verdade.
   var campo = campoMontadoDe(info.alvo), k = chaveDoDia(day);
+  // Dia marcado "em casa" pede look de casa: se existe algum, só eles concorrem.
+  var emCasa = (info.alvo === 'atual') && !!weekCasaDays[day];
+  var temCasa = montagens.some(function(m){ return m.casa && !m[campo]; });
+  if (emCasa && temCasa) cands = [];
   montagens.forEach(function(m){
     if (!(m.pieceIds||[]).length) return;
     if (m[campo]) return; // já está em algum dia desta semana
     if (ocupa.montado && ocupa.montado.id === m.id) return;
+    if (emCasa && temCasa && !m.casa) return;
     // Bônus por ser feito à mão: são poucos contra 851 do catálogo, e vários
     // empatam na nota máxima — sem isso eles quase nunca sairiam sorteados. Um
     // look que ela montou peça por peça diz mais de intenção do que uma foto.
@@ -9342,6 +9405,7 @@ function applySuggestions() {
       <div style="font-size:1.2rem;font-weight:700;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M12 7.2a2.1 2.1 0 1 1 2.1-2.1c0 1.1-1 1.5-2.1 2.1v2"/><path d="M12 9.2 3.6 15.3A1.5 1.5 0 0 0 4.5 18h15a1.5 1.5 0 0 0 .9-2.7L12 9.2z"/></svg> Looks Montados</div>
       <button class="btn btn-ghost" onclick="openSuggestionBuilder()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><rect x="3.6" y="3.6" width="16.8" height="16.8" rx="3"/><circle cx="8.6" cy="8.6" r="1.1"/><circle cx="15.4" cy="15.4" r="1.1"/><circle cx="12" cy="12" r="1.1"/></svg> Sugestão automática</button>
       <button class="btn btn-week" onclick="openLookBuilder()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><circle cx="12" cy="12" r="8.5"/><path d="M12 8.2v7.6M8.2 12h7.6"/></svg> Novo Look</button>
+      <button class="btn btn-ghost" onclick="gerarLooksDeCasa(6)" title="Combinações simples de calça confortável + camiseta, pros dias em casa"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="m3.8 10.4 8.2-6.6 8.2 6.6V19a1.6 1.6 0 0 1-1.6 1.6H5.4A1.6 1.6 0 0 1 3.8 19v-8.6z"/></svg> Gerar looks de casa</button>
     </div>
     <p style="color:#666666;font-size:.82rem;margin-bottom:14px;">Monte looks combinando as peças importadas do Alta. Fica separado do catálogo de looks prontos e da lista de peças — nada aqui mexe no resto do app.</p>
     <div style="font-size:.82rem;font-weight:700;color:#666666;margin-bottom:6px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg> Planejador da semana</div>
