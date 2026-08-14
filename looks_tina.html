@@ -465,6 +465,8 @@ body.week-pick-mode .card-week-btn { display: block; }
 #calGrid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
 #calGrid > div { min-width: 0; }
 #calGrid img { max-width: 100%; }
+.cal-usei-btn { font-size: .55rem; color: #1A1A1A; background: #fff; border: 1px solid #E0E0DB; border-radius: 5px; padding: 1px 4px; cursor: pointer; font-family: inherit; width: 100%; }
+.cal-usei-btn:hover { background: #1A1A1A; color: #fff; border-color: #1A1A1A; }
 @media (max-width: 700px) {
   #calGrid { gap: 2px; }
   #calGrid > div { min-height: 56px !important; padding: 2px !important; border-radius: 6px !important; }
@@ -7458,6 +7460,21 @@ function trocarLookDoDia() {
 
 // Registra que o look foi usado hoje. É isso que alimenta o Calendário, o filtro
 // "esquecidos", o Relatório e o peso de "tempo sem usar" nas sugestões.
+// Registra uso numa data específica (o "usei" do Calendário). Diferente do
+// marcarUsoDoLook, que é sempre hoje.
+function registrarUsoEmData(pid, dataISO) {
+  var p = data.find(function(x){ return x.id === pid; });
+  if (!p) return;
+  if (p.lastWorn === dataISO) { showSavedToast('Esse look já está registrado nesse dia.'); return; }
+  p.lastWorn = dataISO;
+  p.wornCount = (p.wornCount || 0) + 1;
+  saveToStorage();
+  if (typeof renderGrid === 'function') renderGrid();
+  if (typeof renderCal === 'function') renderCal();
+  var d = dataISO.split('-');
+  showSavedToast('Uso registrado em ' + d[2] + '/' + d[1] + '.');
+}
+
 function marcarUsoDoLook(pid) {
   var p = data.find(function(x){ return x.id === pid; });
   if (!p) return false;
@@ -9122,11 +9139,27 @@ function renderCal() {
         pm.onclick = (function(mid){ return function(){ switchTab('montados'); openMontadoDetail(mid); }; })(plano.montado.id);
         pw.appendChild(pm);
       }
-      var tag = document.createElement('div');
-      tag.className = 'cal-planejado-tag';
-      tag.style.cssText = 'font-size:.55rem;color:#A8A8A4;text-align:center;';
-      tag.textContent = 'planejado';
-      pw.appendChild(tag);
+      // Dia que já passou (ou hoje) com look planejado: um toque confirma que ela
+      // usou. Sem isso, esquecer o botão de manhã fazia o dia sumir do histórico
+      // pra sempre — e o look já está aqui, não faz sentido pedir pra procurar.
+      var passou = dateStr <= today;
+      if (passou && plano.look) {
+        var usei = document.createElement('button');
+        usei.className = 'cal-usei-btn';
+        usei.textContent = '✓ usei';
+        usei.title = 'Registrar que você usou este look em ' + day + '/' + (calMonth+1);
+        usei.onclick = (function(pid, ds){ return function(e){
+          e.stopPropagation();
+          registrarUsoEmData(pid, ds);
+        }; })(plano.look.id, dateStr);
+        pw.appendChild(usei);
+      } else {
+        var tag = document.createElement('div');
+        tag.className = 'cal-planejado-tag';
+        tag.style.cssText = 'font-size:.55rem;color:#A8A8A4;text-align:center;';
+        tag.textContent = 'planejado';
+        pw.appendChild(tag);
+      }
       cell.appendChild(pw);
     }
 
