@@ -474,8 +474,9 @@ body.week-pick-mode .card-week-btn { display: block; }
 }
 .day-noite-add { width: calc(100% - 12px); margin: 6px 6px 0; font-size: .66rem; color: #666666; background: transparent; border: 1px dashed #E0E0DB; border-radius: 6px; padding: 3px 6px; cursor: pointer; font-family: inherit; }
 .day-noite-add:hover { border-color: #1A1A1A; color: #1A1A1A; }
-.day-noite { position: relative; margin: 6px 6px 0; }
-.day-noite img { width: 100%; aspect-ratio: 16/10; object-fit: cover; border-radius: 6px; display: block; cursor: pointer; }
+/* mesma proporção e largura do look do dia — a foto da noite estava achatada */
+.day-noite { position: relative; margin: 6px 0 0; }
+.day-noite img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; cursor: pointer; }
 .day-noite-label { position: absolute; left: 4px; bottom: 4px; background: rgba(0,0,0,.6); color: #fff; font-size: .58rem; border-radius: 5px; padding: 1px 5px; }
 .day-noite-rm { position: absolute; top: 3px; right: 3px; background: rgba(0,0,0,.55); color: #fff; border: none; border-radius: 50%; width: 18px; height: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 .day-suggest-btn { font-size: .68rem; color: #1A1A1A; background: #fff; border: 1px solid #E0E0DB; border-radius: 6px; padding: 3px 10px; cursor: pointer; margin-top: 5px; font-family: inherit; }
