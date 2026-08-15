@@ -561,6 +561,10 @@ body.week-pick-mode .card-week-btn { display: block; }
 #lookZoomBox { display: flex; flex-direction: column; align-items: center; }
 #lookZoomFlatlay { height: 78vh; width: auto; max-width: 92vw; aspect-ratio: 3/4; background: #FAFAF8; border-radius: 12px; }
 #lookZoomName { color: #fff; text-align: center; margin-top: 12px; font-size: .9rem; }
+.insp-card img { width: 100%; display: block; }
+.insp-palette { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-bottom: 6px; }
+.insp-dot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(0,0,0,.12); display: inline-block; }
+.insp-palette-txt { font-size: .66rem; color: #A8A8A4; }
 .daypick-link { grid-column: 1/-1; background: none; border: none; color: #1A1A1A; font-size: .82rem; font-family: inherit; cursor: pointer; text-align: left; padding: 2px 0 6px; text-decoration: underline; text-underline-offset: 3px; }
 .daypick-link:hover { color: #8C8C88; }
 .sugg-pick-pill { border-color:#1A1A1A; color:#1A1A1A; font-weight:600; }
@@ -790,6 +794,7 @@ body.compare-mode .card-compare-btn { display: flex; }
   <div class="tab" id="tabWeek" onclick="switchTab('week')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg> Looks da Semana</div>
   <div class="tab" id="tabCal" onclick="switchTab('cal')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg> Calendário</div>
   <div class="tab" id="tabPecas" onclick="switchTab('pecas')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg> Peças Avulsas</div>
+  <div class="tab" id="tabInsp" onclick="switchTab('insp')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="m12 3.5 2.4 5.4 5.9.6-4.4 4 1.2 5.8L12 16.4 6.9 19.3l1.2-5.8-4.4-4 5.9-.6L12 3.5z"/></svg> Inspirações</div>
   <div class="tab" id="tabMontados" onclick="switchTab('montados')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M12 7.2a2.1 2.1 0 1 1 2.1-2.1c0 1.1-1 1.5-2.1 2.1v2"/><path d="M12 9.2 3.6 15.3A1.5 1.5 0 0 0 4.5 18h15a1.5 1.5 0 0 0 .9-2.7L12 9.2z"/></svg> Looks Montados</div>
   <div class="tab" id="tabAdmin" onclick="switchTab('admin')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M3.5 11.4V5.2A1.7 1.7 0 0 1 5.2 3.5h6.2l9.1 9.1-7.9 7.9-9.1-9.1z"/><circle cx="7.8" cy="7.8" r="1.3"/></svg> Tags</div>
   <div class="tab" id="tabStats" onclick="switchTab('stats')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M3.5 20.5h17"/><path d="M6.5 17.5v-5M12 17.5V5.5M17.5 17.5v-8"/></svg> Relatório</div>
@@ -1238,7 +1243,7 @@ function lsSet(key, value) {
 // Se o servidor não responder (ex: site aberto direto do GitHub Pages, sem
 // backend, ou sem internet), tudo falha silenciosamente e o app continua
 // funcionando 100% localmente, como sempre funcionou.
-var SYNC_KEYS = ['looks_tina_catalog_v1', 'looks_tina_montados_v1', 'looks_tina_pecas_avulsas_v1', 'looks_tina_proxsemana_v1', 'looks_tina_pecas_arquivadas_v1', 'looks_tina_proxsemana_dias_v1', 'looks_tina_proxsemana_noite_v1'];
+var SYNC_KEYS = ['looks_tina_catalog_v1', 'looks_tina_montados_v1', 'looks_tina_pecas_avulsas_v1', 'looks_tina_proxsemana_v1', 'looks_tina_pecas_arquivadas_v1', 'looks_tina_proxsemana_dias_v1', 'looks_tina_proxsemana_noite_v1', 'looks_tina_inspiracoes_v1'];
 function syncPut(key, jsonValue) {
   if (SYNC_KEYS.indexOf(key) === -1) return;
   try {
@@ -5272,6 +5277,247 @@ function handleImportDrop(e) {
 // Sem isso, fotos de celular em alta resolução (vários MB cada, em base64) esgotam
 // rápido a cota de localStorage do navegador (~5-10MB no total) e o Import passa
 // a falhar silenciosamente depois de poucas fotos.
+// Inspirações
+// Prints de looks que ela vê por aí (Instagram não deixa ler o perfil de outra
+// pessoa por API, então a foto vem dela mesma). Guarda a foto e a paleta lida
+// dos pixels, e a partir dela monta um look com as peças que ela tem.
+var INSPIRACOES_KEY = 'looks_tina_inspiracoes_v1';
+var inspiracoes = safeParse(lsGet(INSPIRACOES_KEY), []) || [];
+
+function saveInspiracoes() {
+  var json = JSON.stringify(inspiracoes);
+  lsSet(INSPIRACOES_KEY, json);
+  syncPut(INSPIRACOES_KEY, json);
+}
+
+// Cores nomeadas, pra casar com o campo `color` das peças do Alta
+var CORES_REF = [
+  ['preto',[20,20,20]], ['branco',[245,245,245]], ['cinza',[130,130,130]],
+  ['bege',[214,196,166]], ['creme',[238,228,205]], ['marrom',[110,75,50]],
+  ['caramelo',[168,110,55]], ['vinho',[105,35,50]], ['vermelho',[190,45,45]],
+  ['rosa',[225,145,170]], ['laranja',[225,125,50]], ['amarelo',[230,200,80]],
+  ['verde',[85,130,80]], ['verde militar',[95,100,65]], ['azul',[70,105,175]],
+  ['azul marinho',[40,50,85]], ['jeans',[110,140,180]], ['roxo',[110,75,140]]
+];
+
+function nomeDaCor(rgb) {
+  var melhor = null, menor = Infinity;
+  CORES_REF.forEach(function(c){
+    var d = Math.pow(rgb[0]-c[1][0],2) + Math.pow(rgb[1]-c[1][1],2) + Math.pow(rgb[2]-c[1][2],2);
+    if (d < menor) { menor = d; melhor = c[0]; }
+  });
+  return melhor;
+}
+
+// Lê os pixels e devolve as cores dominantes. Ignora as bordas (costumam ser
+// fundo/parede) e tons quase brancos/pretos puros, que dominariam a contagem
+// sem dizer nada sobre a roupa.
+// Isola a pessoa antes de ler as cores. Numa foto de rua o fundo costuma ser
+// maior que o look — a foto do carrinho de sorvete daria "branco, azul, vermelho"
+// do caminhão. Usa o mesmo modelo de recorte das peças avulsas.
+function paletaDoLookNaFoto(dataUrl, callback) {
+  var img = new Image();
+  img.onload = function(){
+    var cv = document.createElement('canvas');
+    cv.width = img.width; cv.height = img.height;
+    cv.getContext('2d').drawImage(img, 0, 0);
+    carregarRemovedorDeFundo().then(function(mod){
+      return new Promise(function(res, rej){
+        cv.toBlob(function(blob){
+          if (!blob) return rej(new Error('canvas vazio'));
+          res(mod.removeBackground(blob, {
+            publicPath: new URL('vendor/bgremoval/data/', location.href).toString(),
+            model: 'isnet_quint8', device: 'cpu', output: { format: 'image/png' }
+          }));
+        }, 'image/png');
+      });
+    }).then(function(blobSemFundo){
+      var url = URL.createObjectURL(blobSemFundo);
+      paletaDaImagem(url, function(pal){ URL.revokeObjectURL(url); callback(pal, true); }, true);
+    }).catch(function(){
+      // sem o modelo (offline, aparelho fraco): lê a imagem inteira e avisa
+      paletaDaImagem(dataUrl, function(pal){ callback(pal, false); });
+    });
+  };
+  img.onerror = function(){ callback([], false); };
+  img.src = dataUrl;
+}
+
+function paletaDaImagem(dataUrl, callback, soPessoa) {
+  var img = new Image();
+  img.onload = function(){
+    try {
+      var L = 80;
+      var cv = document.createElement('canvas'); cv.width = L; cv.height = L;
+      var ctx = cv.getContext('2d');
+      ctx.drawImage(img, 0, 0, L, L);
+      var px = ctx.getImageData(0, 0, L, L).data;
+      var contagem = {};
+      var m = soPessoa ? 0 : 8; // sem recorte, corta a borda (costuma ser fundo)
+      for (var y = m; y < L-m; y++) {
+        for (var x = m; x < L-m; x++) {
+          var i = (y*L + x) * 4;
+          var r = px[i], g = px[i+1], b = px[i+2], a = px[i+3];
+          if (a < 200) continue;                     // fundo removido
+          var max = Math.max(r,g,b), min = Math.min(r,g,b);
+          if (!soPessoa && max > 240 && min > 235) continue; // branco de fundo
+          // pele e cabelo entrariam na conta e não dizem nada sobre a roupa
+          if (r > 95 && g > 55 && b > 40 && r > g && g > b && (r-b) > 15 && (r-b) < 90) continue;
+          var nome = nomeDaCor([r,g,b]);
+          contagem[nome] = (contagem[nome] || 0) + 1;
+        }
+      }
+      var ordenado = Object.keys(contagem).sort(function(a,b){ return contagem[b]-contagem[a]; });
+      callback(ordenado.slice(0, 4));
+    } catch(e) { callback([]); }
+  };
+  img.onerror = function(){ callback([]); };
+  img.src = dataUrl;
+}
+
+function addInspiracaoFile(fileList) {
+  var arquivos = Array.from(fileList || []).filter(function(f){ return f.type.indexOf('image/') === 0; });
+  if (!arquivos.length) return;
+  var faltam = arquivos.length;
+  arquivos.forEach(function(file){
+    var reader = new FileReader();
+    reader.onload = function(e){
+      // 900px e qualidade 0.8: print de celular vem grande demais pro armazenamento
+      resizeImageDataUrl(e.target.result, 900, 0.8, function(menor){
+        paletaDoLookNaFoto(menor, function(pal, recortou){
+          inspiracoes.unshift({ id: 'insp_' + Date.now() + '_' + Math.floor(Math.random()*100000),
+                                img: menor, palette: pal, recortou: !!recortou, nota: '', addedAt: Date.now() });
+          if (--faltam === 0) { saveInspiracoes(); renderInspiracoes(); showSavedToast('Inspiração guardada.'); }
+          else renderInspiracoes();
+        });
+      });
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function removerInspiracao(id) {
+  if (!confirm('Apagar esta inspiração?')) return;
+  inspiracoes = inspiracoes.filter(function(x){ return x.id !== id; });
+  saveInspiracoes(); renderInspiracoes();
+}
+
+function salvarNotaInspiracao(id, txt) {
+  var it = inspiracoes.find(function(x){ return x.id === id; });
+  if (!it) return;
+  it.nota = txt; saveInspiracoes();
+}
+
+// Monta um look com as peças dela puxando pras cores da inspiração.
+function montarLookInspirado(id) {
+  var insp = inspiracoes.find(function(x){ return x.id === id; });
+  if (!insp) return;
+  var alvo = insp.palette || [];
+  if (!alvo.length) { showSavedToast('Não consegui ler cores dessa foto.'); return; }
+
+  function nota(p) {
+    var c = nomeDaCor(corParaRgb(p.color));
+    var i = alvo.indexOf(c);
+    return i === -1 ? 0 : (alvo.length - i);   // quanto mais dominante, mais peso
+  }
+  function melhorDaCategoria(cat) {
+    var lista = allPecas().filter(function(p){ return p.category === cat; });
+    if (!lista.length) return null;
+    var pontuadas = shuffledCopy(lista).map(function(p){ return {p:p, s:nota(p)}; })
+      .sort(function(a,b){ return b.s - a.s; });
+    var topo = pontuadas.filter(function(x){ return x.s === pontuadas[0].s; });
+    return topo[Math.floor(Math.random()*topo.length)].p;
+  }
+
+  var ids = [];
+  ['Tops','Bottoms','Shoes','Bags'].forEach(function(cat){
+    var p = melhorDaCategoria(cat);
+    if (p) ids.push(p.id);
+  });
+  if (ids.length < 2) { showSavedToast('Não achei peças suficientes.'); return; }
+
+  montagens.push({
+    id: 'm_' + Date.now() + '_' + Math.floor(Math.random()*100000),
+    name: 'Inspirado · ' + alvo.slice(0,2).join(' + '),
+    pieceIds: ids, createdAt: new Date().toISOString(),
+    source: 'auto', inspiradoEm: id, weekday: null, weekdayNext: null
+  });
+  saveMontagens();
+  switchTab('montados');
+  openMontadoDetail(montagens[montagens.length-1].id);
+  showSavedToast('Look inspirado criado — ajuste as peças se quiser.');
+}
+
+// as peças do Alta têm cor por extenso em inglês; converte pro RGB aproximado
+var COR_EN_RGB = {
+  black:[20,20,20], white:[245,245,245], gray:[130,130,130], grey:[130,130,130],
+  beige:[214,196,166], cream:[238,228,205], brown:[110,75,50], tan:[190,150,110],
+  camel:[168,110,55], burgundy:[105,35,50], red:[190,45,45], pink:[225,145,170],
+  orange:[225,125,50], yellow:[230,200,80], gold:[200,170,90], green:[85,130,80],
+  olive:[110,115,70], khaki:[150,140,100], blue:[70,105,175], navy:[40,50,85],
+  denim:[110,140,180], purple:[110,75,140], silver:[180,180,185], nude:[220,190,170],
+  // as três que faltavam nas peças dela: sem elas, um look vinho de referência
+  // não achava nenhuma peça vinho porque as dela são "maroon"
+  maroon:[105,35,50], caramel:[168,110,55], teal:[45,120,125]
+};
+function corParaRgb(cor) {
+  var t = (cor || '').toLowerCase();
+  var achou = null;
+  Object.keys(COR_EN_RGB).forEach(function(k){ if (!achou && t.indexOf(k) !== -1) achou = COR_EN_RGB[k]; });
+  return achou || [128,128,128];
+}
+
+function renderInspiracoes() {
+  var grid = document.getElementById('inspiracoesGrid');
+  var cont = document.getElementById('inspiracoesCount');
+  if (cont) cont.textContent = inspiracoes.length + (inspiracoes.length === 1 ? ' inspiração' : ' inspirações');
+  if (!grid) return;
+  grid.innerHTML = '';
+  if (!inspiracoes.length) {
+    grid.innerHTML = '<div class="no-results" style="grid-column:1/-1;">Nenhuma inspiração ainda. Salve o print de um look que você gostou e adicione aqui.</div>';
+    return;
+  }
+  inspiracoes.forEach(function(it){
+    var card = document.createElement('div'); card.className = 'pc-card insp-card';
+    var img = document.createElement('img'); img.src = it.img; img.alt = '';
+    img.style.cssText = 'cursor:zoom-in;object-fit:cover;aspect-ratio:3/4;';
+    img.onclick = (function(src){ return function(){ openZoom(src, [], 0); }; })(it.img);
+    card.appendChild(img);
+    var body = document.createElement('div'); body.className = 'pc-card-body';
+    if ((it.palette||[]).length) {
+      var pal = document.createElement('div'); pal.className = 'insp-palette';
+      it.palette.forEach(function(c){
+        var dot = document.createElement('span'); dot.className = 'insp-dot';
+        var rgb = (CORES_REF.find(function(x){ return x[0] === c; })||[null,[200,200,200]])[1];
+        dot.style.background = 'rgb(' + rgb.join(',') + ')';
+        dot.title = c;
+        pal.appendChild(dot);
+      });
+      var txt = document.createElement('span'); txt.className = 'insp-palette-txt';
+      txt.textContent = it.palette.join(' · ') + (it.recortou === false ? ' (cores da foto toda)' : '');
+      if (it.recortou === false) txt.title = 'Não consegui isolar a pessoa nessa foto, então a paleta pode ter pego o fundo.';
+      pal.appendChild(txt);
+      body.appendChild(pal);
+    }
+    var nota = document.createElement('textarea');
+    nota.className = 'day-note'; nota.rows = 2; nota.placeholder = 'O que você gostou nesse look...';
+    nota.value = it.nota || '';
+    nota.addEventListener('blur', (function(iid){ return function(){ salvarNotaInspiracao(iid, nota.value.trim()); }; })(it.id));
+    body.appendChild(nota);
+    var b1 = document.createElement('button'); b1.className = 'btn btn-ghost'; b1.style.marginTop = '6px';
+    b1.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M12 7.2a2.1 2.1 0 1 1 2.1-2.1c0 1.1-1 1.5-2.1 2.1v2"/><path d="M12 9.2 3.6 15.3A1.5 1.5 0 0 0 4.5 18h15a1.5 1.5 0 0 0 .9-2.7L12 9.2z"/></svg> Montar com as minhas peças';
+    b1.onclick = (function(iid){ return function(){ montarLookInspirado(iid); }; })(it.id);
+    body.appendChild(b1);
+    var b2 = document.createElement('button'); b2.className = 'btn btn-ghost';
+    b2.style.cssText = 'margin-top:6px;color:#8C8C88;';
+    b2.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14"/></svg> Apagar';
+    b2.onclick = (function(iid){ return function(){ removerInspiracao(iid); }; })(it.id);
+    body.appendChild(b2);
+    card.appendChild(body);
+    grid.appendChild(card);
+  });
+}
+
 function resizeImageDataUrl(dataUrl, maxDim, quality, callback) {
   var img = new Image();
   img.onload = function() {
@@ -5755,6 +6001,7 @@ function switchTab(tab) {
   document.getElementById('tabImport').classList.toggle('active', tab==='import');
   document.getElementById('tabPecas').classList.toggle('active', tab==='pecas');
   document.getElementById('tabMontados').classList.toggle('active', tab==='montados');
+  document.getElementById('tabInsp').classList.toggle('active', tab==='insp');
   document.getElementById('catalogView').style.display = tab==='catalog' ? '' : 'none';
   document.getElementById('weekView').classList.toggle('show', tab==='week');
   document.getElementById('adminView').classList.toggle('show', tab==='admin');
@@ -5763,11 +6010,13 @@ function switchTab(tab) {
   document.getElementById('importView').style.display = tab==='import' ? '' : 'none';
   document.getElementById('pecasView').style.display = tab==='pecas' ? '' : 'none';
   document.getElementById('montadosView').style.display = tab==='montados' ? '' : 'none';
+  document.getElementById('inspView').style.display = tab==='insp' ? '' : 'none';
   if (tab==='week') renderWeek();
   if (tab==='admin') renderAdmin();
   if (tab==='stats') renderStats();
   if (tab==='cal') renderCal();
   if (tab==='import') renderImportView();
+  if (tab==='insp') renderInspiracoes();
   if (tab==='pecas') renderPecas();
   if (tab==='montados') renderLooksMontados();
 }
@@ -9916,6 +10165,20 @@ function applySuggestions() {
   </div>
 
   <div id="importPreviews" style="margin-top:20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;"></div>
+</div>
+
+<div id="inspView" style="display:none;padding:24px;">
+  <div style="max-width:1100px;margin:0 auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:4px;">
+      <div style="font-size:1.2rem;font-weight:700;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="m12 3.5 2.4 5.4 5.9.6-4.4 4 1.2 5.8L12 16.4 6.9 19.3l1.2-5.8-4.4-4 5.9-.6L12 3.5z"/></svg> Inspirações</div>
+      <label class="btn btn-week" style="cursor:pointer;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><circle cx="12" cy="12" r="8.5"/><path d="M12 8.2v7.6M8.2 12h7.6"/></svg> Adicionar print
+        <input type="file" accept="image/*" multiple style="display:none;" onchange="addInspiracaoFile(this.files); this.value='';">
+      </label>
+    </div>
+    <p style="color:#666666;font-size:.82rem;margin-bottom:8px;">Guarde aqui os prints de looks que você gosta. O app lê as cores da foto e monta uma combinação com as suas peças — o print fica só como referência, não vira look.</p>
+    <span id="inspiracoesCount" style="font-size:.82rem;color:#666666;"></span>
+    <div id="inspiracoesGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:14px;margin-top:14px;"></div>
+  </div>
 </div>
 
 <div id="pecasView" style="display:none;padding:24px;">
