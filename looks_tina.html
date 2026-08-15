@@ -4668,7 +4668,29 @@ function clearWeekLookFor(day, alvo, turno) {
 // O que ocupa um dia pode ser um look do catálogo, um look montado, ou os dois.
 // Arrastar mexia só no do catálogo, então look montado ficava preso no dia em
 // que estava. Aqui o dia vira um pacote, e a troca leva o que houver nele.
-function campoMontadoDe(alvo) { return (alvo === 'proxima') ? 'weekdayNext' : 'weekday'; }
+function campoMontadoDe(alvo, turno) {
+  if (turno === 'noite') return (alvo === 'proxima') ? 'weekdayNoiteNext' : 'weekdayNoite';
+  return (alvo === 'proxima') ? 'weekdayNext' : 'weekday';
+}
+
+// Quem ocupa a noite de um dia: look do catálogo ou look montado.
+function noiteDoDia(day, alvo) {
+  var look = weekLookFor(day, alvo, 'noite');
+  if (look) return { look: look };
+  var campo = campoMontadoDe(alvo, 'noite'), k = chaveDoDia(day);
+  var m = k ? montagens.find(function(x){ return x[campo] === k; }) : null;
+  return m ? { montado: m } : null;
+}
+function limparNoiteDoDia(day, alvo) {
+  clearWeekLookFor(day, alvo, 'noite');
+  var campo = campoMontadoDe(alvo, 'noite'), k = chaveDoDia(day);
+  montagens.forEach(function(m){ if (m[campo] === k) m[campo] = null; });
+}
+function porNoiteNoDia(day, alvo, occ) {
+  if (!occ) return;
+  if (occ.look) setWeekLookFor(day, occ.look.id, alvo, 'noite');
+  if (occ.montado) occ.montado[campoMontadoDe(alvo, 'noite')] = chaveDoDia(day);
+}
 function chaveDoDia(day) { return (WEEKDAYS.find(function(d){ return d.label === day; }) || {}).key; }
 
 function weekOccupants(day, alvo) {
@@ -4713,13 +4735,13 @@ function trocarDias(origem, origemAlvo, destino, destinoAlvo) {
 function trocarNoites(origem, origemAlvo, destino, destinoAlvo) {
   if (!origem || !destino) return;
   if (origem === destino && origemAlvo === destinoAlvo) return;
-  var a = weekLookFor(origem, origemAlvo, 'noite');
-  var b = weekLookFor(destino, destinoAlvo, 'noite');
-  clearWeekLookFor(origem, origemAlvo, 'noite');
-  clearWeekLookFor(destino, destinoAlvo, 'noite');
-  if (a) setWeekLookFor(destino, a.id, destinoAlvo, 'noite');
-  if (b) setWeekLookFor(origem, b.id, origemAlvo, 'noite');
-  saveToStorage(); renderGrid(); renderWeek();
+  var a = noiteDoDia(origem, origemAlvo);
+  var b = noiteDoDia(destino, destinoAlvo);
+  limparNoiteDoDia(origem, origemAlvo);
+  limparNoiteDoDia(destino, destinoAlvo);
+  porNoiteNoDia(destino, destinoAlvo, a);
+  porNoiteNoDia(origem, origemAlvo, b);
+  saveMontagens(); saveToStorage(); renderGrid(); renderWeek();
   var nome = function(d, alvo){ return d + (alvo === 'proxima' ? ' da próxima' : ''); };
   showSavedToast(b ? ('Noites de ' + nome(origem, origemAlvo) + ' e ' + nome(destino, destinoAlvo) + ' trocadas.')
                    : ('Look da noite movido pra ' + nome(destino, destinoAlvo) + '.'));
@@ -4767,7 +4789,7 @@ function clearNextWeek() {
   nextWeekPlan = {}; saveNextWeekPlan();
   nextWeekNoite = {}; saveNextWeekNoite();
   nextWeekDays = {}; saveNextWeekDays();
-  montagens.forEach(function(m){ m.weekdayNext = null; });
+  montagens.forEach(function(m){ m.weekdayNext = null; m.weekdayNoiteNext = null; });
   saveMontagens();
   renderGrid(); renderWeek();
   showSavedToast('Plano da próxima semana limpo.');
@@ -4892,8 +4914,9 @@ function renderNextWeekGrid() {
 // Bloco da noite dentro da coluna do dia. Fica menor e abaixo do look principal,
 // e só aparece quando existe — dia sem compromisso à noite continua como antes.
 function blocoDaNoite(col, day, alvo) {
-  var noite = weekLookFor(day, alvo, 'noite');
-  if (!noite) {
+  var occ = noiteDoDia(day, alvo);
+  var noite = occ && occ.look;
+  if (!occ) {
     var add = document.createElement('button');
     add.className = 'day-noite-add';
     add.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.6 8.6 0 1 0 11.1 11.1z"/></svg> + noite';
@@ -4904,17 +4927,25 @@ function blocoDaNoite(col, day, alvo) {
   }
   var wrap = document.createElement('div'); wrap.className = 'day-noite';
   ligarArrastarLook(wrap, day, alvo, 'noite');
-  var img = document.createElement('img'); img.src = lookThumb(noite); img.alt = ''; img.loading = 'lazy';
-  applyRotation(img, noite);
-  img.onclick = (function(pid){ return function(){ switchTab('catalog'); openView(pid); }; })(noite.id);
-  wrap.appendChild(img);
+  if (noite) {
+    var img = document.createElement('img'); img.src = lookThumb(noite); img.alt = ''; img.loading = 'lazy';
+    applyRotation(img, noite);
+    img.onclick = (function(pid){ return function(){ switchTab('catalog'); openView(pid); }; })(noite.id);
+    wrap.appendChild(img);
+  } else {
+    var fl = document.createElement('div'); fl.className = 'flatlay-canvas';
+    fl.style.cssText = 'max-width:none;aspect-ratio:1;border-radius:0;cursor:pointer;';
+    renderFlatLay(fl, occ.montado.pieceIds.map(findPieceById).filter(Boolean));
+    fl.onclick = (function(mid){ return function(){ switchTab('montados'); openMontadoDetail(mid); }; })(occ.montado.id);
+    wrap.appendChild(fl);
+  }
   var lb = document.createElement('span'); lb.className = 'day-noite-label';
   lb.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.6 8.6 0 1 0 11.1 11.1z"/></svg> noite';
   wrap.appendChild(lb);
   var rm = document.createElement('button'); rm.className = 'day-noite-rm';
   rm.title = 'Tirar o look da noite';
   rm.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"/></svg>';
-  rm.onclick = (function(d,a){ return function(e){ e.stopPropagation(); clearWeekLookFor(d, a, 'noite'); saveToStorage(); renderGrid(); renderWeek(); }; })(day, alvo);
+  rm.onclick = (function(d,a){ return function(e){ e.stopPropagation(); limparNoiteDoDia(d, a); saveMontagens(); saveToStorage(); renderGrid(); renderWeek(); }; })(day, alvo);
   wrap.appendChild(rm);
   col.appendChild(wrap);
 }
@@ -4973,7 +5004,7 @@ function renderDayPickerGrid(day, filterText) {
   // Duas páginas no mesmo seletor: o catálogo abre por padrão (é o caso comum)
   // e os montados ficam atrás de um link no topo. Trocar de página mantém o dia
   // que está sendo escolhido, que é o que importa aqui.
-  var campoM = campoMontadoDe(dayPickerTarget);
+  var campoM = campoMontadoDe(dayPickerTarget, dayPickerTurno);
   var kDia = chaveDoDia(day);
   var mont = montagens.filter(function(m){
     if (!(m.pieceIds||[]).length) return false;
@@ -4988,7 +5019,6 @@ function renderDayPickerGrid(day, filterText) {
 
   var link = document.createElement('button');
   link.className = 'daypick-link';
-  if (dayPickerTurno === 'noite') link.style.display = 'none';
   if (dayPickerModo === 'montados') {
     link.innerHTML = '&lsaquo; Voltar aos looks do catálogo';
     link.onclick = function(){ dayPickerModo = 'catalogo'; renderDayPickerGrid(day, filterText); };
@@ -5017,12 +5047,17 @@ function renderDayPickerGrid(day, filterText) {
       lb.textContent = (m[campoM] === kDia) ? 'look atual' : (ondeM ? 'já em ' + ondeM.label : (m.name || 'Look montado'));
       card.appendChild(lb);
       card.onclick = (function(mid){ return function(){
-        clearWeekOccupants(day, dayPickerTarget);
         var mm = montagens.find(function(x){ return x.id === mid; });
-        if (mm) { mm[campoM] = kDia; saveMontagens(); }
-        saveToStorage(); renderGrid(); renderWeek();
+        if (dayPickerTurno === 'noite') {
+          limparNoiteDoDia(day, dayPickerTarget);
+          if (mm) mm[campoMontadoDe(dayPickerTarget, 'noite')] = kDia;
+        } else {
+          clearWeekOccupants(day, dayPickerTarget);
+          if (mm) mm[campoM] = kDia;
+        }
+        saveMontagens(); saveToStorage(); renderGrid(); renderWeek();
         closeDayPicker();
-        showSavedToast('Look montado colocado em ' + day + '.');
+        showSavedToast('Look montado colocado ' + (dayPickerTurno === 'noite' ? 'na noite de ' : 'em ') + day + '.');
       }; })(m.id);
       grid.appendChild(card);
     });
@@ -5051,6 +5086,7 @@ function renderDayPickerGrid(day, filterText) {
     card.appendChild(label);
     card.onclick = (function(pid){ return function(){
       if (dayPickerTurno === 'noite') {
+        limparNoiteDoDia(day, dayPickerTarget); saveMontagens();
         setWeekLookFor(day, pid, dayPickerTarget, 'noite');
         saveToStorage(); renderGrid(); renderWeek();
       } else {
@@ -5583,6 +5619,8 @@ function clearWeek() {
   var snap = buildWeekSnapshot();
   var archived = archiveWeekToHistory(isoDate(mondayOfCurrentWeek()), snap);
   data.forEach(function(p){ p.weekday = null; p.weekdayNoite = null; });
+  montagens.forEach(function(m){ m.weekday = null; m.weekdayNoite = null; });
+  saveMontagens();
   renderGrid(); renderWeek();
   if (archived) showHistoryToast('Semana limpa · guardada no histórico');
   else showSavedToast();
@@ -8241,6 +8279,10 @@ function checkWeekRollover() {
     var montPromovidos = 0;
     montagens.forEach(function(m){
       if (m.weekdayNext) { m.weekday = m.weekdayNext; m.weekdayNext = null; montPromovidos++; }
+      else if (m.weekday) { m.weekday = null; montPromovidos++; }
+      // mesma coisa pro espaço da noite
+      if (m.weekdayNoiteNext) { m.weekdayNoite = m.weekdayNoiteNext; m.weekdayNoiteNext = null; montPromovidos++; }
+      else if (m.weekdayNoite) { m.weekdayNoite = null; montPromovidos++; }
     });
     if (montPromovidos) saveMontagens();
 
