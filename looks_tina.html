@@ -478,6 +478,8 @@ body.week-pick-mode .card-week-btn { display: block; }
 .day-noite { position: relative; margin: 6px 0 0; }
 .day-noite img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; cursor: pointer; }
 .day-noite-label { position: absolute; left: 4px; bottom: 4px; background: rgba(0,0,0,.6); color: #fff; font-size: .58rem; border-radius: 5px; padding: 1px 5px; }
+.day-turno-btn { position: absolute; bottom: 4px; right: 4px; background: rgba(0,0,0,.55); color: #fff; border: none; border-radius: 50%; width: 22px; height: 22px; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 5; }
+.day-turno-btn:hover { background: #1A1A1A; }
 .day-noite-rm { position: absolute; top: 3px; right: 3px; background: rgba(0,0,0,.55); color: #fff; border: none; border-radius: 50%; width: 18px; height: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 .day-suggest-btn { font-size: .68rem; color: #1A1A1A; background: #fff; border: 1px solid #E0E0DB; border-radius: 6px; padding: 3px 10px; cursor: pointer; margin-top: 5px; font-family: inherit; }
 .day-suggest-btn:hover { border-color: #1A1A1A; }
@@ -4537,7 +4539,9 @@ function renderWeek() {
       var resugg = document.createElement('button'); resugg.className = 'day-look-resuggest'; resugg.title = 'Sugerir outro look pra este dia';
       resugg.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M20.3 12a8.3 8.3 0 1 1-2.7-6.1"/><path d="M20.3 3.6v4.7h-4.7"/></svg>';
       resugg.onclick = (function(d){ return function(e){ e.stopPropagation(); sugerirLookParaDia(d, 'atual'); }; })(day);
-      dl.appendChild(img); dl.appendChild(rm); dl.appendChild(resugg); col.appendChild(dl);
+      dl.appendChild(img); dl.appendChild(rm); dl.appendChild(resugg);
+      botaoTrocarTurno(dl, day, 'atual', 'dia');
+      col.appendChild(dl);
       // Dia com look do catálogo E look montado: o montado entra como etiqueta
       // embaixo, pra não sumir da vista (mesma ideia usada no Calendário).
       if (montado) {
@@ -4570,6 +4574,7 @@ function renderWeek() {
       mrs.onclick = (function(dd){ return function(e){ e.stopPropagation(); sugerirLookParaDia(dd, 'atual'); }; })(day);
       dm.appendChild(mrs);
       dm.appendChild(mrm);
+      botaoTrocarTurno(dm, day, 'atual', 'dia');
       dm.onclick = (function(mid){ return function(){ switchTab('montados'); openMontadoDetail(mid); }; })(montado.id);
       col.appendChild(dm);
     } else if (weekCasaDays[day]) {
@@ -4877,7 +4882,9 @@ function renderNextWeekGrid() {
       rs.title = 'Sugerir outro look pra este dia';
       rs.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.3 12a8.3 8.3 0 1 1-2.7-6.1"/><path d="M20.3 3.6v4.7h-4.7"/></svg>';
       rs.onclick = (function(dd){ return function(e){ e.stopPropagation(); sugerirLookParaDia(dd, 'proxima'); }; })(day);
-      dl.appendChild(img); dl.appendChild(rm); dl.appendChild(rs); col.appendChild(dl);
+      dl.appendChild(img); dl.appendChild(rm); dl.appendChild(rs);
+      botaoTrocarTurno(dl, day, 'proxima', 'dia');
+      col.appendChild(dl);
     } else if (montado) {
       var dm = document.createElement('div'); dm.className = 'day-look day-look-montado';
       ligarArrastarLook(dm, day, 'proxima');
@@ -4897,6 +4904,7 @@ function renderNextWeekGrid() {
       mrs.onclick = (function(dd){ return function(e){ e.stopPropagation(); sugerirLookParaDia(dd, 'proxima'); }; })(day);
       dm.appendChild(mrs);
       dm.appendChild(mrm);
+      botaoTrocarTurno(dm, day, 'proxima', 'dia');
       dm.onclick = (function(mid){ return function(){ switchTab('montados'); openMontadoDetail(mid); }; })(montado.id);
       col.appendChild(dm);
     } else {
@@ -4936,6 +4944,32 @@ function renderNextWeekGrid() {
 
 // Bloco da noite dentro da coluna do dia. Fica menor e abaixo do look principal,
 // e só aparece quando existe — dia sem compromisso à noite continua como antes.
+// Trocar o look de lugar dentro do mesmo dia. Sem isso, passar o look do dia
+// pra noite exigia decorar qual era, tirar, abrir "+ noite" e procurar de novo.
+// Se a noite estiver vazia, é uma mudança; se tiver look, os dois trocam.
+function moverEntreDiaENoite(day, alvo) {
+  var dia = weekOccupants(day, alvo);
+  var noite = noiteDoDia(day, alvo);
+  if (!dia.look && !dia.montado && !noite) return;
+  clearWeekOccupants(day, alvo);
+  limparNoiteDoDia(day, alvo);
+  if (dia.look || dia.montado) porNoiteNoDia(day, alvo, dia);
+  if (noite) setWeekOccupants(day, noite, alvo);
+  saveMontagens(); saveToStorage(); renderGrid(); renderWeek();
+  showSavedToast(noite ? ('Dia e noite de ' + day + ' trocados.') : ('Look movido pra noite de ' + day + '.'));
+}
+
+function botaoTrocarTurno(el, day, alvo, deOndeVem) {
+  var b = document.createElement('button');
+  b.className = 'day-turno-btn';
+  b.title = (deOndeVem === 'dia') ? 'Passar este look pra noite' : 'Passar este look pro dia';
+  b.innerHTML = (deOndeVem === 'dia')
+    ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.6 8.6 0 1 0 11.1 11.1z"/></svg>'
+    : '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"/></svg>';
+  b.onclick = (function(d,a){ return function(e){ e.stopPropagation(); moverEntreDiaENoite(d, a); }; })(day, alvo);
+  el.appendChild(b);
+}
+
 function blocoDaNoite(col, day, alvo) {
   var occ = noiteDoDia(day, alvo);
   var noite = occ && occ.look;
@@ -4970,6 +5004,7 @@ function blocoDaNoite(col, day, alvo) {
   rm.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"/></svg>';
   rm.onclick = (function(d,a){ return function(e){ e.stopPropagation(); limparNoiteDoDia(d, a); saveMontagens(); saveToStorage(); renderGrid(); renderWeek(); }; })(day, alvo);
   wrap.appendChild(rm);
+  botaoTrocarTurno(wrap, day, alvo, 'noite');
   col.appendChild(wrap);
 }
 
