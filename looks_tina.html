@@ -472,6 +472,12 @@ body.week-pick-mode .card-week-btn { display: block; }
   #calGrid > div { min-height: 56px !important; padding: 2px !important; border-radius: 6px !important; }
   #calGrid .cal-planejado-tag { display: none; }
 }
+.day-noite-add { width: calc(100% - 12px); margin: 6px 6px 0; font-size: .66rem; color: #666666; background: transparent; border: 1px dashed #E0E0DB; border-radius: 6px; padding: 3px 6px; cursor: pointer; font-family: inherit; }
+.day-noite-add:hover { border-color: #1A1A1A; color: #1A1A1A; }
+.day-noite { position: relative; margin: 6px 6px 0; }
+.day-noite img { width: 100%; aspect-ratio: 16/10; object-fit: cover; border-radius: 6px; display: block; cursor: pointer; }
+.day-noite-label { position: absolute; left: 4px; bottom: 4px; background: rgba(0,0,0,.6); color: #fff; font-size: .58rem; border-radius: 5px; padding: 1px 5px; }
+.day-noite-rm { position: absolute; top: 3px; right: 3px; background: rgba(0,0,0,.55); color: #fff; border: none; border-radius: 50%; width: 18px; height: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 .day-suggest-btn { font-size: .68rem; color: #1A1A1A; background: #fff; border: 1px solid #E0E0DB; border-radius: 6px; padding: 3px 10px; cursor: pointer; margin-top: 5px; font-family: inherit; }
 .day-suggest-btn:hover { border-color: #1A1A1A; }
 #nextWeekSection { margin-top: 34px; padding-top: 26px; border-top: 1px solid #EAEAE7; }
@@ -1221,7 +1227,7 @@ function lsSet(key, value) {
 // Se o servidor não responder (ex: site aberto direto do GitHub Pages, sem
 // backend, ou sem internet), tudo falha silenciosamente e o app continua
 // funcionando 100% localmente, como sempre funcionou.
-var SYNC_KEYS = ['looks_tina_catalog_v1', 'looks_tina_montados_v1', 'looks_tina_pecas_avulsas_v1', 'looks_tina_proxsemana_v1', 'looks_tina_pecas_arquivadas_v1', 'looks_tina_proxsemana_dias_v1'];
+var SYNC_KEYS = ['looks_tina_catalog_v1', 'looks_tina_montados_v1', 'looks_tina_pecas_avulsas_v1', 'looks_tina_proxsemana_v1', 'looks_tina_pecas_arquivadas_v1', 'looks_tina_proxsemana_dias_v1', 'looks_tina_proxsemana_noite_v1'];
 function syncPut(key, jsonValue) {
   if (SYNC_KEYS.indexOf(key) === -1) return;
   try {
@@ -1260,6 +1266,16 @@ function pullRemoteUpdates() {
         pecasArquivadas = JSON.parse(res.value) || [];
         lsSet('looks_tina_pecas_arquivadas_v1', res.value);
         if (typeof renderPecas === 'function' && document.getElementById('pecasGrid')) renderPecas();
+      } catch (e) {}
+    }
+  });
+  syncGet('looks_tina_proxsemana_noite_v1').then(function(res) {
+    if (!res || res.value == null) return;
+    if (res.value !== JSON.stringify(nextWeekNoite)) {
+      try {
+        nextWeekNoite = JSON.parse(res.value) || {};
+        lsSet('looks_tina_proxsemana_noite_v1', res.value);
+        if (typeof renderWeek === 'function' && document.getElementById('weekGrid')) renderWeek();
       } catch (e) {}
     }
   });
@@ -3868,8 +3884,8 @@ function loadFromStorage() {
     savedData.forEach(function(p){ savedMap[p.id] = p; });
     var catalogMerged = CATALOG.map(function(p) {
       var s = savedMap[p.id];
-      if (s) return {id:p.id, thumb:p.thumb, tags:(s.tags&&s.tags.length>0)?s.tags:p.tags.slice(), archived:s.archived||false, weekday:s.weekday||null, favorite:s.favorite||false, wornCount:s.wornCount||0, lastWorn:s.lastWorn||null, note:s.note||'', palette:s.palette||null, rotation:s.rotation||0};
-      return {id:p.id, thumb:p.thumb, tags:p.tags.slice(), archived:p.archived||false, weekday:p.weekday||null, favorite:false, wornCount:0, lastWorn:null, note:'', palette:null, rotation:0};
+      if (s) return {id:p.id, thumb:p.thumb, tags:(s.tags&&s.tags.length>0)?s.tags:p.tags.slice(), archived:s.archived||false, weekday:s.weekday||null, weekdayNoite:s.weekdayNoite||null, favorite:s.favorite||false, wornCount:s.wornCount||0, lastWorn:s.lastWorn||null, note:s.note||'', palette:s.palette||null, rotation:s.rotation||0};
+      return {id:p.id, thumb:p.thumb, tags:p.tags.slice(), archived:p.archived||false, weekday:p.weekday||null, weekdayNoite:null, favorite:false, wornCount:0, lastWorn:null, note:'', palette:null, rotation:0};
     });
     // Also restore imported looks (isImported:true) that were saved to localStorage
     var importedRestored = savedData.filter(function(p){ return p.isImported; });
@@ -4559,6 +4575,8 @@ function renderWeek() {
       col.appendChild(de);
     }
 
+    blocoDaNoite(col, day, 'atual');
+
     // Note textarea
     var nt = document.createElement('textarea');
     nt.className = 'day-note'; nt.rows = 2;
@@ -4606,31 +4624,42 @@ function saveNextWeekPlan() {
 // `alvo` opcional: 'atual' ou 'proxima'. Sem ele, segue a semana aberta na aba
 // Semana — mas as telas de detalhe passam o alvo explicitamente, porque de lá
 // não dá pra ver qual semana está aberta lá atrás.
-function weekLookFor(day, alvo) {
+// `turno` opcional: 'dia' (padrão) ou 'noite'. Tem dia que pede os dois — um
+// look pro trabalho e outro pro jantar —, então cada dia tem dois espaços.
+// O da noite mora em campos paralelos, pra não mexer no que já estava salvo.
+function campoDoTurno(turno) { return (turno === 'noite') ? 'weekdayNoite' : 'weekday'; }
+function planoDoTurno(turno) { return (turno === 'noite') ? nextWeekNoite : nextWeekPlan; }
+function salvarPlanoDoTurno(turno) { return (turno === 'noite') ? saveNextWeekNoite() : saveNextWeekPlan(); }
+
+function weekLookFor(day, alvo, turno) {
   if ((alvo || weekView) === 'proxima') {
-    var id = nextWeekPlan[day];
+    var id = planoDoTurno(turno)[day];
     if (id == null) return null;
     return data.find(function(p){ return p.id === id; }) || null;
   }
-  return data.find(function(p){ return p.weekday === day; });
+  var campo = campoDoTurno(turno);
+  return data.find(function(p){ return p[campo] === day; });
 }
 
-function setWeekLookFor(day, pid, alvo) {
+function setWeekLookFor(day, pid, alvo, turno) {
   if ((alvo || weekView) === 'proxima') {
-    Object.keys(nextWeekPlan).forEach(function(d){ if(nextWeekPlan[d] === pid) delete nextWeekPlan[d]; });
-    nextWeekPlan[day] = pid;
-    saveNextWeekPlan();
+    var plano = planoDoTurno(turno);
+    Object.keys(plano).forEach(function(d){ if(plano[d] === pid) delete plano[d]; });
+    plano[day] = pid;
+    salvarPlanoDoTurno(turno);
     return;
   }
-  data.forEach(function(p){ if(p.weekday === day) p.weekday = null; });
+  var campo = campoDoTurno(turno);
+  data.forEach(function(p){ if(p[campo] === day) p[campo] = null; });
   var p = data.find(function(x){ return x.id === pid; });
-  if(p) p.weekday = day;
+  if(p) p[campo] = day;
 }
 
-function clearWeekLookFor(day, alvo) {
-  if ((alvo || weekView) === 'proxima') { delete nextWeekPlan[day]; saveNextWeekPlan(); return; }
-  var look = data.find(function(p){ return p.weekday === day; });
-  if (look) look.weekday = null;
+function clearWeekLookFor(day, alvo, turno) {
+  if ((alvo || weekView) === 'proxima') { delete planoDoTurno(turno)[day]; salvarPlanoDoTurno(turno); return; }
+  var campo = campoDoTurno(turno);
+  var look = data.find(function(p){ return p[campo] === day; });
+  if (look) look[campo] = null;
 }
 
 // Arrastar entre dias
@@ -4716,6 +4745,7 @@ function clearNextWeek() {
       !montagens.some(function(m){ return m.weekdayNext; })) return;
   if (!confirm('Limpar o plano da próxima semana?')) return;
   nextWeekPlan = {}; saveNextWeekPlan();
+  nextWeekNoite = {}; saveNextWeekNoite();
   nextWeekDays = {}; saveNextWeekDays();
   montagens.forEach(function(m){ m.weekdayNext = null; });
   saveMontagens();
@@ -4813,6 +4843,8 @@ function renderNextWeekGrid() {
       col.appendChild(de);
     }
 
+    blocoDaNoite(col, day, 'proxima');
+
     // Nota do dia, "em casa" e ocasião — agora também na próxima semana, com
     // registro próprio (nextWeekDays), pra não escrever por cima da semana atual.
     var nt = document.createElement('textarea');
@@ -4837,6 +4869,35 @@ function renderNextWeekGrid() {
   });
 }
 
+// Bloco da noite dentro da coluna do dia. Fica menor e abaixo do look principal,
+// e só aparece quando existe — dia sem compromisso à noite continua como antes.
+function blocoDaNoite(col, day, alvo) {
+  var noite = weekLookFor(day, alvo, 'noite');
+  if (!noite) {
+    var add = document.createElement('button');
+    add.className = 'day-noite-add';
+    add.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.6 8.6 0 1 0 11.1 11.1z"/></svg> + noite';
+    add.title = 'Escolher um look pra noite de ' + day;
+    add.onclick = (function(d,a){ return function(e){ e.stopPropagation(); openDayPicker(d, a, 'noite'); }; })(day, alvo);
+    col.appendChild(add);
+    return;
+  }
+  var wrap = document.createElement('div'); wrap.className = 'day-noite';
+  var img = document.createElement('img'); img.src = lookThumb(noite); img.alt = ''; img.loading = 'lazy';
+  applyRotation(img, noite);
+  img.onclick = (function(pid){ return function(){ switchTab('catalog'); openView(pid); }; })(noite.id);
+  wrap.appendChild(img);
+  var lb = document.createElement('span'); lb.className = 'day-noite-label';
+  lb.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.6 8.6 0 1 0 11.1 11.1z"/></svg> noite';
+  wrap.appendChild(lb);
+  var rm = document.createElement('button'); rm.className = 'day-noite-rm';
+  rm.title = 'Tirar o look da noite';
+  rm.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"/></svg>';
+  rm.onclick = (function(d,a){ return function(e){ e.stopPropagation(); clearWeekLookFor(d, a, 'noite'); saveToStorage(); renderGrid(); renderWeek(); }; })(day, alvo);
+  wrap.appendChild(rm);
+  col.appendChild(wrap);
+}
+
 function removeFromWeek(day) {
   if (weekView === 'atual') {
     delete weekCasaDays[day];
@@ -4850,9 +4911,11 @@ function removeFromWeek(day) {
 var dayPickerCurrentDay = null;
 var dayPickerTarget = 'atual'; // em qual semana o picker vai colocar o look
 var dayPickerModo = 'catalogo'; // 'catalogo' | 'montados'
-function openDayPicker(day, alvo) {
+var dayPickerTurno = 'dia';     // 'dia' | 'noite'
+function openDayPicker(day, alvo, turno) {
   dayPickerCurrentDay = day;
   dayPickerTarget = alvo || 'atual';
+  dayPickerTurno = turno || 'dia';
   dayPickerModo = 'catalogo';
   var overlay = document.getElementById('dayPickerOverlay');
   var title = document.getElementById('dayPickerTitle');
@@ -4860,8 +4923,10 @@ function openDayPicker(day, alvo) {
   var searchInput = document.getElementById('dayPickerSearch');
   if(!overlay) return;
 
-  title.textContent = 'Trocar o look de ' + day;
-  subtitle.textContent = 'Clique em um look para colocar em ' + day + '. O look atual desse dia é liberado.';
+  title.textContent = (dayPickerTurno === 'noite' ? 'Look da noite de ' : 'Trocar o look de ') + day;
+  subtitle.textContent = dayPickerTurno === 'noite'
+    ? 'Clique em um look para usar na noite de ' + day + '. O look do dia continua onde está.'
+    : 'Clique em um look para colocar em ' + day + '. O look atual desse dia é liberado.';
   if(searchInput) searchInput.value = '';
 
   renderDayPickerGrid(day, '');
@@ -4902,6 +4967,7 @@ function renderDayPickerGrid(day, filterText) {
 
   var link = document.createElement('button');
   link.className = 'daypick-link';
+  if (dayPickerTurno === 'noite') link.style.display = 'none';
   if (dayPickerModo === 'montados') {
     link.innerHTML = '&lsaquo; Voltar aos looks do catálogo';
     link.onclick = function(){ dayPickerModo = 'catalogo'; renderDayPickerGrid(day, filterText); };
@@ -4958,11 +5024,19 @@ function renderDayPickerGrid(day, filterText) {
     card.appendChild(img);
     var label = document.createElement('div');
     label.className = 'daypick-card-label';
-    var aqui = weekLookFor(day, dayPickerTarget);
-    var jaEm = DAYS.find(function(d){ var l = weekLookFor(d, dayPickerTarget); return l && l.id === p.id; });
+    var aqui = weekLookFor(day, dayPickerTarget, dayPickerTurno);
+    var jaEm = DAYS.find(function(d){ var l = weekLookFor(d, dayPickerTarget, dayPickerTurno); return l && l.id === p.id; });
     label.textContent = (aqui && aqui.id === p.id) ? 'look atual' : (jaEm ? 'já em ' + jaEm : '');
     card.appendChild(label);
-    card.onclick = (function(pid){ return function(){ assignDay(pid, day, dayPickerTarget); closeDayPicker(); }; })(p.id);
+    card.onclick = (function(pid){ return function(){
+      if (dayPickerTurno === 'noite') {
+        setWeekLookFor(day, pid, dayPickerTarget, 'noite');
+        saveToStorage(); renderGrid(); renderWeek();
+      } else {
+        assignDay(pid, day, dayPickerTarget);
+      }
+      closeDayPicker();
+    }; })(p.id);
     grid.appendChild(card);
   });
 }
@@ -5298,6 +5372,8 @@ function exportWeekToICS() {
   DAYS.forEach(function(day) {
     var p = data.find(function(x){ return x.weekday === day; });
     if(p) weekLooks.push({day: day, look: p});
+    var n = data.find(function(x){ return x.weekdayNoite === day; });
+    if(n) weekLooks.push({day: day, look: n, noite: true});
   });
   if(weekLooks.length === 0) {
     alert('Nenhum look planejado na semana ainda.');
@@ -5364,10 +5440,10 @@ function exportWeekToICS() {
       return CLOTHING.indexOf(cat) !== -1;
     }).map(function(t){ return t.split(':')[1]||''; }).join(', ');
 
-    var summary = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M12 7.2a2.1 2.1 0 1 1 2.1-2.1c0 1.1-1 1.5-2.1 2.1v2"/><path d="M12 9.2 3.6 15.3A1.5 1.5 0 0 0 4.5 18h15a1.5 1.5 0 0 0 .9-2.7L12 9.2z"/></svg> Look do dia' + (keyTags ? ': ' + keyTags : ' #' + p.id);
+    var summary = (item.noite ? 'Look da noite' : 'Look do dia') + (keyTags ? ': ' + keyTags : ' #' + p.id);
 
     lines.push('BEGIN:VEVENT');
-    lines.push('UID:look-' + p.id + '-' + dtStart + '@lookstina');
+    lines.push('UID:look-' + p.id + '-' + dtStart + (item.noite ? '-noite' : '') + '@lookstina');
     lines.push('DTSTAMP:' + dtStamp);
     lines.push('DTSTART;VALUE=DATE:' + dtStart);
     lines.push('DTEND;VALUE=DATE:' + dtEnd);
@@ -5485,7 +5561,7 @@ function clearWeek() {
   if (!confirm('Limpar todos os looks da semana?')) return;
   var snap = buildWeekSnapshot();
   var archived = archiveWeekToHistory(isoDate(mondayOfCurrentWeek()), snap);
-  data.forEach(function(p){ p.weekday = null; });
+  data.forEach(function(p){ p.weekday = null; p.weekdayNoite = null; });
   renderGrid(); renderWeek();
   if (archived) showHistoryToast('Semana limpa · guardada no histórico');
   else showSavedToast();
@@ -6248,6 +6324,14 @@ function saveWeekNote(day, val) {
 // Os três da semana corrente moram em listas separadas por dia. Reaproveitá-las
 // pra próxima sobrescreveria os dados desta, então a próxima tem um registro só,
 // {Seg:{nota, casa, ocasiao}}, promovido na virada da segunda.
+var NEXT_WEEK_NOITE_KEY = 'looks_tina_proxsemana_noite_v1';
+var nextWeekNoite = safeParse(lsGet(NEXT_WEEK_NOITE_KEY), {}) || {};
+function saveNextWeekNoite() {
+  var json = JSON.stringify(nextWeekNoite);
+  lsSet(NEXT_WEEK_NOITE_KEY, json);
+  syncPut(NEXT_WEEK_NOITE_KEY, json);
+}
+
 var NEXT_WEEK_DAYS_KEY = 'looks_tina_proxsemana_dias_v1';
 var nextWeekDays = safeParse(lsGet(NEXT_WEEK_DAYS_KEY), {}) || {};
 
@@ -8112,6 +8196,9 @@ function checkWeekRollover() {
     DAYS.forEach(function(day){
       var look = data.find(function(p){ return p.weekday === day; });
       if (look) look.weekday = null;
+      // a noite da semana que passou também sai, senão vazaria pra semana nova
+      var noite = data.find(function(p){ return p.weekdayNoite === day; });
+      if (noite) noite.weekdayNoite = null;
     });
     // O que ela deixou programado pra "próxima semana" vira a semana atual agora.
     var promovidos = 0;
@@ -8121,7 +8208,14 @@ function checkWeekRollover() {
       var p = data.find(function(x){ return x.id === id; });
       if (p) { p.weekday = day; promovidos++; }
     });
+    DAYS.forEach(function(day){
+      var idN = nextWeekNoite[day];
+      if (idN == null) return;
+      var pn = data.find(function(x){ return x.id === idN; });
+      if (pn) pn.weekdayNoite = day;
+    });
     nextWeekPlan = {}; saveNextWeekPlan();
+    nextWeekNoite = {}; saveNextWeekNoite();
     // O mesmo vale pros looks montados marcados pra próxima semana.
     var montPromovidos = 0;
     montagens.forEach(function(m){
@@ -8865,9 +8959,13 @@ function printWeekPlan() {
 }
 
 function printWeekPlanFromWeek() {
-  var assigned = DAYS.map(function(day){
-    return { day: day, look: data.find(function(p){ return p.weekday === day; }) };
-  }).filter(function(d){ return d.look; });
+  var assigned = [];
+  DAYS.forEach(function(day){
+    var dia = data.find(function(p){ return p.weekday === day; });
+    if (dia) assigned.push({ day: day, look: dia });
+    var noite = data.find(function(p){ return p.weekdayNoite === day; });
+    if (noite) assigned.push({ day: day, look: noite, noite: true });
+  });
 
   if(!assigned.length) { alert('Nenhum look atribuído à semana ainda.'); return; }
 
@@ -8893,7 +8991,7 @@ function printWeekPlanFromWeek() {
       return '<span style="display:inline-block;background:#F5F4F1;border-radius:4px;padding:1px 5px;font-size:5.5pt;margin:1px;color:#666666;">'+p.val+'</span>';
     }).join('');
     return '<div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;padding:3mm 2mm;border:1px solid #e8e3dc;border-radius:4mm;background:#FAFAF8;">'
-      +'<div style="font-size:8pt;font-weight:700;color:#1A1A1A;margin-bottom:0px;">'+FULL_DAYS[d.day]+'</div>'
+      +'<div style="font-size:8pt;font-weight:700;color:#1A1A1A;margin-bottom:0px;">'+FULL_DAYS[d.day]+(d.noite?' · noite':'')+'</div>'
       +(fc?'<div style="font-size:6pt;color:#666666;margin-bottom:2mm;">'+fc.date+' · '+fc.temp+'</div>':'<div style="margin-bottom:2mm;"></div>')
       +'<img src="'+lookThumb(d.look)+'" style="width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:3mm;margin-bottom:2mm;">'
       +'<div style="text-align:center;line-height:1.4;">'+piecesHtml+'</div>'
