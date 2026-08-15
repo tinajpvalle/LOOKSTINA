@@ -3916,7 +3916,8 @@ var DAYS = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
 var DAYS_PT = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
 var MESES_PT = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
 var dragSourceDay = null;
-var dragSourceAlvo = null; // 'atual' | 'proxima' — impede arrastar entre semanas
+var dragSourceAlvo = null;  // 'atual' | 'proxima'
+var dragSourceTurno = 'dia'; // 'dia' | 'noite' — noite troca com noite
 function safeParse(json, fallback) { try { return JSON.parse(json); } catch(e) { return fallback; } }
 var weekNotes = safeParse(lsGet('looks_tina_weeknotes_v1'), {}) || {};
 var weekCasaDays = safeParse(lsGet('looks_tina_casadays_v1'), {}) || {};
@@ -4707,6 +4708,23 @@ function trocarDias(origem, origemAlvo, destino, destinoAlvo) {
     : ('Look movido pra ' + nome(destino, destinoAlvo) + '.'));
 }
 
+// Arrastar a foto da noite troca noite com noite. O look do dia de cada um fica
+// onde está — os dois espaços são independentes, e mover um não deve levar o outro.
+function trocarNoites(origem, origemAlvo, destino, destinoAlvo) {
+  if (!origem || !destino) return;
+  if (origem === destino && origemAlvo === destinoAlvo) return;
+  var a = weekLookFor(origem, origemAlvo, 'noite');
+  var b = weekLookFor(destino, destinoAlvo, 'noite');
+  clearWeekLookFor(origem, origemAlvo, 'noite');
+  clearWeekLookFor(destino, destinoAlvo, 'noite');
+  if (a) setWeekLookFor(destino, a.id, destinoAlvo, 'noite');
+  if (b) setWeekLookFor(origem, b.id, origemAlvo, 'noite');
+  saveToStorage(); renderGrid(); renderWeek();
+  var nome = function(d, alvo){ return d + (alvo === 'proxima' ? ' da próxima' : ''); };
+  showSavedToast(b ? ('Noites de ' + nome(origem, origemAlvo) + ' e ' + nome(destino, destinoAlvo) + ' trocadas.')
+                   : ('Look da noite movido pra ' + nome(destino, destinoAlvo) + '.'));
+}
+
 // mantido pro caso de uma chamada dentro da mesma semana
 function trocarDiasDaSemana(origem, destino, alvo) {
   trocarDias(origem, alvo, destino, alvo);
@@ -4720,22 +4738,23 @@ function ligarSoltarNoDia(col, day, alvo) {
     e.preventDefault();
     col.classList.remove('drag-over');
     if (!dragSourceDay || (dragSourceDay === day && dragSourceAlvo === alvo)) return;
-    trocarDias(dragSourceDay, dragSourceAlvo, day, alvo);
-    dragSourceDay = null; dragSourceAlvo = null;
+    if (dragSourceTurno === 'noite') trocarNoites(dragSourceDay, dragSourceAlvo, day, alvo);
+    else trocarDias(dragSourceDay, dragSourceAlvo, day, alvo);
+    dragSourceDay = null; dragSourceAlvo = null; dragSourceTurno = 'dia';
   });
 }
 
-function ligarArrastarLook(el, day, alvo) {
+function ligarArrastarLook(el, day, alvo, turno) {
   el.draggable = true;
   el.dataset.day = day;
   el.addEventListener('dragstart', function(e){
-    dragSourceDay = day; dragSourceAlvo = alvo;
+    dragSourceDay = day; dragSourceAlvo = alvo; dragSourceTurno = turno || 'dia';
     setTimeout(function(){ el.classList.add('dragging'); }, 0);
     e.dataTransfer.effectAllowed = 'move';
   });
   el.addEventListener('dragend', function(){
     el.classList.remove('dragging');
-    dragSourceDay = null; dragSourceAlvo = null;
+    dragSourceDay = null; dragSourceAlvo = null; dragSourceTurno = 'dia';
     document.querySelectorAll('.day-col').forEach(function(c){ c.classList.remove('drag-over'); });
   });
 }
@@ -4884,6 +4903,7 @@ function blocoDaNoite(col, day, alvo) {
     return;
   }
   var wrap = document.createElement('div'); wrap.className = 'day-noite';
+  ligarArrastarLook(wrap, day, alvo, 'noite');
   var img = document.createElement('img'); img.src = lookThumb(noite); img.alt = ''; img.loading = 'lazy';
   applyRotation(img, noite);
   img.onclick = (function(pid){ return function(){ switchTab('catalog'); openView(pid); }; })(noite.id);
