@@ -565,6 +565,7 @@ body.week-pick-mode .card-week-btn { display: block; }
 .insp-palette { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-bottom: 6px; }
 .insp-dot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(0,0,0,.12); display: inline-block; }
 .insp-palette-txt { font-size: .66rem; color: #A8A8A4; }
+.insp-btn { width: 100%; box-sizing: border-box; justify-content: center; white-space: normal; text-align: center; line-height: 1.25; }
 .daypick-link { grid-column: 1/-1; background: none; border: none; color: #1A1A1A; font-size: .82rem; font-family: inherit; cursor: pointer; text-align: left; padding: 2px 0 6px; text-decoration: underline; text-underline-offset: 3px; }
 .daypick-link:hover { color: #8C8C88; }
 .sugg-pick-pill { border-color:#1A1A1A; color:#1A1A1A; font-weight:600; }
@@ -5504,11 +5505,11 @@ function renderInspiracoes() {
     nota.value = it.nota || '';
     nota.addEventListener('blur', (function(iid){ return function(){ salvarNotaInspiracao(iid, nota.value.trim()); }; })(it.id));
     body.appendChild(nota);
-    var b1 = document.createElement('button'); b1.className = 'btn btn-ghost'; b1.style.marginTop = '6px';
-    b1.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M12 7.2a2.1 2.1 0 1 1 2.1-2.1c0 1.1-1 1.5-2.1 2.1v2"/><path d="M12 9.2 3.6 15.3A1.5 1.5 0 0 0 4.5 18h15a1.5 1.5 0 0 0 .9-2.7L12 9.2z"/></svg> Montar com as minhas peças';
+    var b1 = document.createElement('button'); b1.className = 'btn btn-ghost insp-btn'; b1.style.marginTop = '6px';
+    b1.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M12 7.2a2.1 2.1 0 1 1 2.1-2.1c0 1.1-1 1.5-2.1 2.1v2"/><path d="M12 9.2 3.6 15.3A1.5 1.5 0 0 0 4.5 18h15a1.5 1.5 0 0 0 .9-2.7L12 9.2z"/></svg> Montar com minhas peças';
     b1.onclick = (function(iid){ return function(){ montarLookInspirado(iid); }; })(it.id);
     body.appendChild(b1);
-    var b2 = document.createElement('button'); b2.className = 'btn btn-ghost';
+    var b2 = document.createElement('button'); b2.className = 'btn btn-ghost insp-btn';
     b2.style.cssText = 'margin-top:6px;color:#8C8C88;';
     b2.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14"/></svg> Apagar';
     b2.onclick = (function(iid){ return function(){ removerInspiracao(iid); }; })(it.id);
