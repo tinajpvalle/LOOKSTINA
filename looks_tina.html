@@ -5060,7 +5060,11 @@ function openDayPicker(day, alvo, turno) {
   var searchInput = document.getElementById('dayPickerSearch');
   if(!overlay) return;
 
-  var jaTem = !!weekLookFor(day, dayPickerTarget, dayPickerTurno);
+  // 'assistente': a escolha vai pro rascunho da semana sugerida (assignedLooks),
+  // que só vira plano de verdade quando ela clica em "Aplicar na minha semana".
+  var jaTem = (dayPickerTarget === 'assistente')
+    ? !!(assignedLooks && assignedLooks[day])
+    : !!weekLookFor(day, dayPickerTarget, dayPickerTurno);
   title.textContent = (dayPickerTurno === 'noite' ? 'Look da noite de ' : (jaTem ? 'Trocar o look de ' : 'Escolher o look de ')) + day;
   subtitle.textContent = dayPickerTurno === 'noite'
     ? 'Clique em um look para usar na noite de ' + day + '. O look do dia continua onde está.'
@@ -5090,7 +5094,8 @@ function renderDayPickerGrid(day, filterText) {
   // Duas páginas no mesmo seletor: o catálogo abre por padrão (é o caso comum)
   // e os montados ficam atrás de um link no topo. Trocar de página mantém o dia
   // que está sendo escolhido, que é o que importa aqui.
-  var campoM = campoMontadoDe(dayPickerTarget, dayPickerTurno);
+  var noAssistente = (dayPickerTarget === 'assistente');
+  var campoM = campoMontadoDe(noAssistente ? alvoDoAssistente() : dayPickerTarget, dayPickerTurno);
   var kDia = chaveDoDia(day);
   var mont = montagens.filter(function(m){
     if (!(m.pieceIds||[]).length) return false;
@@ -5133,11 +5138,15 @@ function renderDayPickerGrid(day, filterText) {
       renderFlatLay(fl, m.pieceIds.map(findPieceById).filter(Boolean));
       card.appendChild(fl);
       var lb = document.createElement('div'); lb.className = 'daypick-card-label';
-      var ondeM = WEEKDAYS.find(function(w){ return m[campoM] === w.key; });
-      lb.textContent = (m[campoM] === kDia) ? 'look atual' : (ondeM ? 'já em ' + ondeM.label : (m.name || 'Look montado'));
+      var ondeM = noAssistente
+        ? DAYS.find(function(d){ var x = assignedLooks[d]; return x && x.montadoId === m.id; })
+        : (WEEKDAYS.find(function(w){ return m[campoM] === w.key; })||{}).label;
+      var aquiM = noAssistente ? (assignedLooks[day] && assignedLooks[day].montadoId === m.id) : (m[campoM] === kDia);
+      lb.textContent = aquiM ? 'look atual' : (ondeM ? 'já em ' + ondeM : (m.name || 'Look montado'));
       card.appendChild(lb);
       card.onclick = (function(mid){ return function(){
         var mm = montagens.find(function(x){ return x.id === mid; });
+        if (noAssistente) { escolherNoAssistente(day, null, mid); closeDayPicker(); return; }
         if (dayPickerTurno === 'noite') {
           limparNoiteDoDia(day, dayPickerTarget);
           if (mm) mm[campoMontadoDe(dayPickerTarget, 'noite')] = kDia;
@@ -5170,11 +5179,16 @@ function renderDayPickerGrid(day, filterText) {
     card.appendChild(img);
     var label = document.createElement('div');
     label.className = 'daypick-card-label';
-    var aqui = weekLookFor(day, dayPickerTarget, dayPickerTurno);
-    var jaEm = DAYS.find(function(d){ var l = weekLookFor(d, dayPickerTarget, dayPickerTurno); return l && l.id === p.id; });
+    var aqui = noAssistente
+      ? (assignedLooks[day] ? data.find(function(x){ return x.id === assignedLooks[day].curId; }) : null)
+      : weekLookFor(day, dayPickerTarget, dayPickerTurno);
+    var jaEm = noAssistente
+      ? DAYS.find(function(d){ var x = assignedLooks[d]; return x && x.curId === p.id; })
+      : DAYS.find(function(d){ var l = weekLookFor(d, dayPickerTarget, dayPickerTurno); return l && l.id === p.id; });
     label.textContent = (aqui && aqui.id === p.id) ? 'look atual' : (jaEm ? 'já em ' + jaEm : '');
     card.appendChild(label);
     card.onclick = (function(pid){ return function(){
+      if (noAssistente) { escolherNoAssistente(day, pid, null); closeDayPicker(); return; }
       if (dayPickerTurno === 'noite') {
         limparNoiteDoDia(day, dayPickerTarget); saveMontagens();
         setWeekLookFor(day, pid, dayPickerTarget, 'noite');
@@ -9266,7 +9280,31 @@ function renderAssignGrid() {
       col.appendChild(ocRow);
     }
 
-    if(a) {
+    if(a && a.montadoId) {
+      // Look montado escolhido à mão: não tem foto única, então entra como o
+      // flat lay das peças — o mesmo desenho que a aba Semana usa.
+      var m = montagens.find(function(x){ return x.id === a.montadoId; });
+      if (m) {
+        var wrapM = document.createElement('div'); wrapM.className = 'assign-look';
+        var flM = document.createElement('div'); flM.className = 'flatlay-canvas';
+        flM.style.cssText = 'max-width:none;aspect-ratio:1;border-radius:8px;';
+        renderFlatLay(flM, m.pieceIds.map(findPieceById).filter(Boolean));
+        wrapM.appendChild(flM);
+        var rmM = document.createElement('button'); rmM.className = 'day-look-remove';
+        rmM.title = 'Tirar este look do dia';
+        rmM.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"/></svg>';
+        rmM.onclick = (function(d){ return function(e){ e.stopPropagation(); removeAssignedLook(d); }; })(f.day);
+        wrapM.appendChild(rmM);
+        col.appendChild(wrapM);
+        var labM = document.createElement('div'); labM.className='assign-look-piece';
+        labM.textContent = m.name || 'look montado';
+        col.appendChild(labM);
+        var hintM = document.createElement('div');
+        hintM.style.cssText = 'font-size:.58rem;color:#A8A8A4;text-align:center;padding:2px 4px;';
+        hintM.textContent = 'look montado · escolhido por você';
+        col.appendChild(hintM);
+      }
+    } else if(a) {
       var wrap = document.createElement('div'); wrap.className = 'assign-look';
       var img = document.createElement('img'); img.src = a.curThumb; img.alt = f.day;
       img.style.cursor = 'zoom-in';
@@ -9330,9 +9368,15 @@ function renderAssignGrid() {
         }
       }
     } else {
-      var empty = document.createElement('div');
-      empty.style.cssText='height:120px;display:flex;align-items:center;justify-content:center;color:#B0B0AC;font-size:.75rem;flex-direction:column;gap:4px;';
-      empty.innerHTML = casaNoDia(f.day, alvoDoAssistente()) ? '<span style="font-size:1.4rem;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="m3.8 10.4 8.2-6.6 8.2 6.6V19a1.6 1.6 0 0 1-1.6 1.6H5.4A1.6 1.6 0 0 1 3.8 19v-8.6z"/></svg></span><span>em casa</span>' : 'sem look';
+      var empty = document.createElement('button');
+      empty.type = 'button';
+      empty.style.cssText='height:120px;width:100%;display:flex;align-items:center;justify-content:center;color:#B0B0AC;font-size:.75rem;flex-direction:column;gap:4px;background:#FAFAF8;border:1.5px dashed #E0E0DB;border-radius:8px;cursor:pointer;font-family:inherit;';
+      empty.innerHTML = (casaNoDia(f.day, alvoDoAssistente())
+        ? '<span style="font-size:1.4rem;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="m3.8 10.4 8.2-6.6 8.2 6.6V19a1.6 1.6 0 0 1-1.6 1.6H5.4A1.6 1.6 0 0 1 3.8 19v-8.6z"/></svg></span><span>em casa</span>'
+        : '<span>sem look</span>')
+        + '<span style="color:#8C8C88;text-decoration:underline;text-underline-offset:3px;">escolher look</span>';
+      empty.title = 'Escolher um look pra ' + f.day + ' (catálogo ou montado)';
+      empty.onclick = (function(d){ return function(){ openDayPicker(d, 'assistente'); }; })(f.day);
       col.appendChild(empty);
     }
     grid.appendChild(col);
@@ -9342,6 +9386,48 @@ function renderAssignGrid() {
 function removeAssignedLook(day) {
   delete assignedLooks[day];
   renderAssignGrid();
+}
+
+// Escolher à mão um look pra um dia da semana sugerida — do catálogo (pid) ou
+// montado (mid). Antes o dia sem look era um texto morto ("sem look", "em casa")
+// e não havia como colocar nada ali sem sair do assistente.
+function escolherNoAssistente(day, pid, mid) {
+  Object.keys(assignedLooks).forEach(function(d){
+    if (d === day) return;
+    var o = assignedLooks[d];
+    if (o && ((pid && o.curId === pid) || (mid && o.montadoId === mid))) delete assignedLooks[d];
+  });
+
+  if (mid) {
+    var m = montagens.find(function(x){ return x.id === mid; });
+    if (!m) return;
+    assignedLooks[day] = {
+      montadoId: mid, curId: null, curThumb: null,
+      curTags: tagsDoMontado ? tagsDoMontado(m) : [],
+      piece: 'peça: ' + (m.name || 'look montado'),
+      allPool: [], poolIdx: 0, escolhidoAMao: true
+    };
+  } else {
+    var look = data.find(function(x){ return x.id === pid; });
+    if (!look) return;
+    var etiqueta = (look.tags||[]).find(function(t){
+      var cat = t.split(':')[0].trim().toLowerCase();
+      return t.indexOf(':') !== -1 && cat !== 'marca';
+    }) || 'peça: escolhida por você';
+    var a = assignedLooks[day];
+    if (a && !a.montadoId) {
+      a.curId = pid; a.curThumb = lookThumb(look); a.curTags = look.tags || [];
+      a.piece = etiqueta; a.escolhidoAMao = true;
+      if (!a.allPool.some(function(x){ return x.id === pid; })) a.allPool.unshift(look);
+    } else {
+      assignedLooks[day] = {
+        origId: pid, curId: pid, curThumb: lookThumb(look), curTags: look.tags || [],
+        piece: etiqueta, allPool: [look], poolIdx: 0, escolhidoAMao: true
+      };
+    }
+  }
+  renderAssignGrid();
+  showSavedToast('Look de ' + day + ' escolhido por você.');
 }
 
 function rotateAssignedLookDay(day) {
@@ -9381,7 +9467,9 @@ function descartarLookDaSugestao(id) {
     if (sub) {
       a.curId = sub.id; a.curThumb = lookThumb(sub); a.curTags = sub.tags || [];
     } else {
+      // Pool esgotado: melhor buscar outro no catálogo do que deixar o dia órfão.
       delete assignedLooks[day];
+      regenerateAssignedDay(day);
     }
     mexeu = true;
   });
@@ -10239,17 +10327,32 @@ function applySuggestions() {
     : data.some(function(p){ return p.weekday !== null; });
   if(hasExisting && !confirm('Isso vai substituir os looks já atribuídos a ' + alvo + '. Continuar?')) return;
 
+  // Dia com look montado escolhido à mão vai pro campo do montado, não pro plano
+  // do catálogo — são dois registros diferentes pra mesma semana.
+  var campoMont = paraProxima ? 'weekdayNext' : 'weekday';
+  montagens.forEach(function(m){
+    if (DAYS.some(function(d){ var a = assignedLooks[d]; return a && a.montadoId === m.id; })) return;
+    if (FORECAST.some(function(f){ return m[campoMont] === (WEEKDAYS.find(function(w){ return w.label === f.day; })||{}).key; })) m[campoMont] = null;
+  });
+  FORECAST.forEach(function(f){
+    var a = assignedLooks[f.day];
+    if (!a || !a.montadoId) return;
+    var m = montagens.find(function(x){ return x.id === a.montadoId; });
+    if (m) m[campoMont] = (WEEKDAYS.find(function(w){ return w.label === f.day; })||{}).key;
+  });
+  saveMontagens();
+
   if (paraProxima) {
     nextWeekPlan = {};
     FORECAST.forEach(function(f){
-      var a = assignedLooks[f.day]; if(!a) return;
+      var a = assignedLooks[f.day]; if(!a || !a.curId) return;
       nextWeekPlan[f.day] = a.curId;
     });
     saveNextWeekPlan();
   } else {
     data.forEach(function(p){ p.weekday = null; });
     FORECAST.forEach(function(f){
-      var a = assignedLooks[f.day]; if(!a) return;
+      var a = assignedLooks[f.day]; if(!a || !a.curId) return;
       var p = data.find(function(x){ return x.id === a.curId; });
       if(p) p.weekday = f.day;
     });
