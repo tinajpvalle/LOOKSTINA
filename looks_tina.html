@@ -9241,6 +9241,45 @@ function rotateAssignedLookDay(day) {
   renderAssignGrid();
 }
 
+// O pool guarda o objeto do look como ele estava quando o pool foi montado —
+// arquivar depois não mexe nessa cópia. Quem sabe a verdade é o catálogo.
+// (findPieceById é das peças avulsas, não serve aqui.)
+function lookArquivado(p) {
+  var atual = data.find(function(x){ return x.id === p.id; });
+  return !!(atual ? atual.archived : p.archived);
+}
+
+// Arquivar um look com o assistente aberto: além de sumir das setas (acima), ele
+// precisa sair do dia em que está agora — ela arquivou justamente olhando aquela
+// sugestão. O dia recebe o próximo look do próprio pool que ninguém mais está
+// usando.
+function descartarLookDaSugestao(id) {
+  if (!assignedLooks) return;
+  var mexeu = false;
+  Object.keys(assignedLooks).forEach(function(day){
+    var a = assignedLooks[day];
+    if (!a) return;
+    var antes = a.allPool.length;
+    a.allPool = a.allPool.filter(function(p){ return p.id !== id; });
+    if (a.allPool.length !== antes) mexeu = true;
+    if (a.curId !== id) return;
+
+    var ocupados = {};
+    Object.keys(assignedLooks).forEach(function(d){
+      if (d !== day && assignedLooks[d]) ocupados[assignedLooks[d].curId] = true;
+    });
+    var sub = a.allPool.find(function(p){ return !lookArquivado(p) && !ocupados[p.id]; });
+    if (sub) {
+      a.curId = sub.id; a.curThumb = lookThumb(sub); a.curTags = sub.tags || [];
+    } else {
+      delete assignedLooks[day];
+    }
+    mexeu = true;
+  });
+  var step2 = document.getElementById('suggestStep2');
+  if (mexeu && step2 && step2.classList.contains('active')) renderAssignGrid();
+}
+
 function cycleAssignLook(day, dir) {
   var a = assignedLooks[day]; if(!a) return;
   // Build set of curIds used by OTHER days
@@ -9248,8 +9287,13 @@ function cycleAssignLook(day, dir) {
   FORECAST.forEach(function(f){
     if(f.day !== day && assignedLooks[f.day]) otherUsed.add(assignedLooks[f.day].curId);
   });
-  // Filter pool to exclude looks currently in use by other days
-  var available = a.allPool.filter(function(p){ return !otherUsed.has(p.id) || p.id === a.curId; });
+  // Filter pool to exclude looks currently in use by other days.
+  // O `archived` é relido agora, e não só quando o pool foi montado: ela arquiva
+  // um look olhando a sugestão, e a seta não pode trazer ele de volta.
+  var available = a.allPool.filter(function(p){
+    if (lookArquivado(p) && p.id !== a.curId) return false;
+    return !otherUsed.has(p.id) || p.id === a.curId;
+  });
   if(available.length <= 1) return;
   var curIdx = available.findIndex(function(p){ return p.id === a.curId; });
   if(curIdx === -1) curIdx = 0;
@@ -9307,6 +9351,7 @@ function openZoom(src, tags, rotation, lookId) {
         alvo.archived = !alvo.archived;
         if (alvo.archived) { alvo.weekday = null; alvo.weekdayNoite = null; }
         saveToStorage(); renderGrid(); renderWeek();
+        if (alvo.archived) descartarLookDaSugestao(alvo.id);
         showSavedToast(alvo.archived ? 'Look arquivado — sai das sugestões.' : 'Look de volta ao catálogo.');
         ov.style.display = 'none';
       };
