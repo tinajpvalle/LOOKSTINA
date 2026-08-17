@@ -3979,8 +3979,8 @@ function setDayOcasiao(day, key) {
 
 // Ocasião específica do dia tem prioridade; se não tiver, cai pro filtro
 // global (opcional) do assistente de sugestão (wizardOcasiao).
-function ocasiaoBoost(p, day) {
-  var oc = weekDayOcasiao[day] || wizardOcasiao;
+function ocasiaoBoost(p, day, alvo) {
+  var oc = ocasiaoDoDia(day, alvo || 'atual') || wizardOcasiao;
   if (!oc) return 0;
   var isMatch = (p.tags||[]).some(function(t){
     return t.toLowerCase().indexOf(oc)!==-1 && t.toLowerCase().indexOf('ocasi')!==-1;
@@ -6748,6 +6748,8 @@ function setOcasiaoDoDia(day, alvo, key) {
     d.ocasiao = (d.ocasiao === key) ? null : key;
     if (!d.ocasiao) delete d.ocasiao;
     saveNextWeekDays(); renderWeek();
+    if (document.getElementById('setupOcasiaoGrid')) renderSetupStep();
+    if (assignedLooks && assignedLooks[day]) regenerateAssignedDay(day); // mesmo efeito que setDayOcasiao já dá na semana atual
     return;
   }
   setDayOcasiao(day, key);
@@ -7412,7 +7414,7 @@ function renderSetupStep() {
           var b = document.createElement('button'); b.type = 'button'; b.className = 'day-ocasiao-btn';
           b.innerHTML = opt.emoji; b.title = opt.label;
           if (ocasiaoDoDia(day, alvoDoAssistente()) === opt.key) b.classList.add('active');
-          b.onclick = (function(d, k){ return function(){ setOcasiaoDoDia(d, alvoDoAssistente(), k); renderSetupStep(); }; })(day, opt.key);
+          b.onclick = (function(d, k){ return function(){ setOcasiaoDoDia(d, alvoDoAssistente(), k); }; })(day, opt.key);
           row.appendChild(b);
         });
         ocGrid.appendChild(row);
@@ -7766,12 +7768,62 @@ function pecasDeDestaque(tags) {
 // Tira do páreo quem repete peça de destaque já usada na semana. A penalidade
 // por repetição existia, mas só rebaixava a nota — e como a faixa de sorteio é
 // 10% do acervo, o look repetido continuava caindo nela e podia ser sorteado.
-function semRepetirDestaque(pool, usadas) {
+// `isentas`: as peças que ela escolheu no passo 1. Pedir "semana com jeans" e
+// receber jeans todo dia é o combinado — a repetição que incomoda é o resto do
+// look. Sem essa isenção a regra se anulava justamente aí: todo look do pool
+// tinha a peça pedida, o filtro zerava e caía no `pool` inteiro, sem nenhuma
+// exigência de variedade.
+function semRepetirDestaque(pool, usadas, isentas) {
   if (!usadas || !usadas.length) return pool;
+  var ignora = isentas || [];
   var limpo = pool.filter(function(p){
-    return !pecasDeDestaque(p.tags).some(function(t){ return usadas.indexOf(t) !== -1; });
+    return !pecasDeDestaque(p.tags).some(function(t){
+      return ignora.indexOf(t) === -1 && usadas.indexOf(t) !== -1;
+    });
   });
   return limpo.length ? limpo : pool; // sem candidato sobrando, melhor repetir do que deixar o dia vazio
+}
+
+// ── Memória entre semanas ──
+// Cada geração começava do zero: o mesmo look podia voltar semana após semana,
+// porque nada registrava que ele já tinha sido sugerido. Aqui ficam os ids das
+// últimas gerações, somados ao que o histórico e os planos das duas semanas já
+// sabem.
+var sugestoesRecentes = safeParse(lsGet('looks_tina_sugeridos_v1'), []) || [];
+var SUGESTOES_RECENTES_MAX = 60;
+
+function guardarSugestoes(ids) {
+  ids.forEach(function(id){
+    var i = sugestoesRecentes.indexOf(id);
+    if (i !== -1) sugestoesRecentes.splice(i, 1);
+    sugestoesRecentes.unshift(id);
+  });
+  if (sugestoesRecentes.length > SUGESTOES_RECENTES_MAX) sugestoesRecentes.length = SUGESTOES_RECENTES_MAX;
+  lsSet('looks_tina_sugeridos_v1', JSON.stringify(sugestoesRecentes));
+}
+
+function idsVistosRecentemente() {
+  var vistos = {};
+  sugestoesRecentes.forEach(function(id){ vistos[id] = true; });
+  weekHistory.slice(0, 3).forEach(function(w){
+    (w.days||[]).forEach(function(d){ if (d.pieceId) vistos[d.pieceId] = true; });
+  });
+  DAYS.forEach(function(d){
+    ['atual','proxima'].forEach(function(alvo){
+      ['dia','noite'].forEach(function(turno){
+        var l = weekLookFor(d, alvo, turno);
+        if (l) vistos[l.id] = true;
+      });
+    });
+  });
+  return vistos;
+}
+
+// Tira do pool o que ela viu há pouco, mas só enquanto sobrar escolha de verdade:
+// num catálogo apertado, repetir é melhor do que ficar sem sugestão.
+function evitarVistosRecentes(pool, vistos, minimo) {
+  var novos = pool.filter(function(p){ return !vistos[p.id]; });
+  return novos.length >= (minimo || 12) ? novos : pool;
 }
 
 function pickWithVariety(pool, scoreFn, minBand) {
@@ -8925,11 +8977,12 @@ function proceedToStep2() {
   var usedIds = new Set();
   var usedTagFreq = {};
   var destaquesUsados = []; // peças de destaque já usadas nesta semana
+  var vistos = idsVistosRecentemente(); // o que já rodou nas últimas semanas
   var tempAssign = {};
 
   var staleFactor = wizardPrioritizeStale ? 3 : 1; // ligado na telinha de setup rápido
   FORECAST.forEach(function(f){
-    if (weekCasaDays[f.day]) return; // marcado como "fico em casa" no setup — sem look esse dia
+    if (casaNoDia(f.day, alvoDoAssistente())) return; // marcado como "fico em casa" no setup — sem look esse dia
     var outerPiece = outerForDay[f.day] || null;
 
     function score(p) {
@@ -8941,7 +8994,7 @@ function proceedToStep2() {
            + weatherScore(p.tags, f.profile) * 3
            + seasonScore(p.tags, seasonForProfile(f.profile))
            + recencyBonus(p) * 2 * staleFactor
-           + ocasiaoBoost(p, f.day)
+           + ocasiaoBoost(p, f.day, alvoDoAssistente())
            - diversityPenalty(p.tags, usedTagFreq);
     }
 
@@ -8962,7 +9015,8 @@ function proceedToStep2() {
       pool = data.filter(function(p){ return !p.archived && !usedIds.has(p.id) && (p.tags||[]).length>0; });
     }
 
-    var best = pickWithVariety(semRepetirDestaque(pool, destaquesUsados), score, 10);
+    var best = pickWithVariety(
+      evitarVistosRecentes(semRepetirDestaque(pool, destaquesUsados, piecesArr), vistos), score, 10);
     if(best) {
       usedIds.add(best.id);
       pecasDeDestaque(best.tags).forEach(function(t){ destaquesUsados.push(t); });
@@ -8994,11 +9048,13 @@ function proceedToStep2() {
       || 'peça: destaque do look';
 
     // All looks with the assigned piece (excluding only this day's own best)
+    function scoreNav(p) { return scoreForPool(p) - (vistos[p.id] ? 5 : 0); }
+
     var altsWithPiece = data.filter(function(p){
       if(p.archived || p.id === best.id) return false;
       if(outerPiece) return (p.tags||[]).some(function(t){ return t.trim()===outerPiece; });
       return (p.tags||[]).some(function(t){ return piecesArr.indexOf(t.trim())!==-1; });
-    }).sort(function(a,b){ return scoreForPool(b)-scoreForPool(a); });
+    }).sort(function(a,b){ return scoreNav(b)-scoreNav(a); });
 
     // Pad with weather-scored looks only if very few piece matches
     if(altsWithPiece.length < 5) {
@@ -9006,7 +9062,7 @@ function proceedToStep2() {
       altIds.add(best.id);
       var pad = data.filter(function(p){
         return !p.archived && !altIds.has(p.id) && (p.tags||[]).length>0;
-      }).sort(function(a,b){ return scoreForPool(b)-scoreForPool(a); }).slice(0, 8 - altsWithPiece.length);
+      }).sort(function(a,b){ return scoreNav(b)-scoreNav(a); }).slice(0, 8 - altsWithPiece.length);
       altsWithPiece = altsWithPiece.concat(pad);
     }
 
@@ -9017,6 +9073,8 @@ function proceedToStep2() {
       allPool: [best].concat(altsWithPiece), poolIdx: 0
     };
   });
+
+  guardarSugestoes(Object.keys(assignedLooks).map(function(d){ return assignedLooks[d].curId; }));
 
   document.getElementById('suggestStep1').classList.remove('active');
   document.getElementById('suggestStep2').classList.add('active');
@@ -9048,7 +9106,7 @@ function regenerateAssignedDay(day) {
          + weatherScore(p.tags, f.profile) * 3
          + seasonScore(p.tags, seasonForProfile(f.profile))
          + recencyBonus(p) * 2 * staleFactor
-         + ocasiaoBoost(p, day) * 3
+         + ocasiaoBoost(p, day, alvoDoAssistente()) * 3
          - diversityPenalty(p.tags, usedTagFreq);
   }
 
@@ -9060,11 +9118,13 @@ function regenerateAssignedDay(day) {
   if (!pool.length) {
     pool = data.filter(function(p){ return !p.archived && !usedIds.has(p.id) && (p.tags||[]).length>0; });
   }
-  var best = pickWithVariety(semRepetirDestaque(pool, destaquesUsados), score, 10);
+  var best = pickWithVariety(
+    evitarVistosRecentes(semRepetirDestaque(pool, destaquesUsados, piecesArr), idsVistosRecentemente()), score, 10);
   if (!best) return;
+  guardarSugestoes([best.id]);
 
   function scoreForPool(p) {
-    return pieceMatchScore(p, piecesArr) * 4 + weatherScore(p.tags, f.profile) * 2 + seasonScore(p.tags, seasonForProfile(f.profile)) + recencyBonus(p) + ocasiaoBoost(p, day) * 2;
+    return pieceMatchScore(p, piecesArr) * 4 + weatherScore(p.tags, f.profile) * 2 + seasonScore(p.tags, seasonForProfile(f.profile)) + recencyBonus(p) + ocasiaoBoost(p, day, alvoDoAssistente()) * 2;
   }
 
   var pieceLabel = (piecesArr.length ? (piecesArr.find(function(sp){
@@ -9144,14 +9204,14 @@ function renderAssignGrid() {
     wx.innerHTML = f.cond + '<br><span class="assign-day-temp">' + f.temp + '</span>';
     col.appendChild(wx);
 
-    if (!weekCasaDays[f.day]) {
+    if (!casaNoDia(f.day, alvoDoAssistente())) {
       var ocRow = document.createElement('div'); ocRow.className = 'assign-day-ocasiao';
       DAY_OCASIAO_OPTS.forEach(function(opt){
         var b = document.createElement('button'); b.className = 'day-ocasiao-btn';
         b.innerHTML = opt.emoji;
         b.title = opt.label + ' (prioriza esse estilo pra este dia)';
-        if (weekDayOcasiao[f.day] === opt.key) b.classList.add('active');
-        b.onclick = (function(d, k){ return function(e){ e.stopPropagation(); setDayOcasiao(d, k); }; })(f.day, opt.key);
+        if (ocasiaoDoDia(f.day, alvoDoAssistente()) === opt.key) b.classList.add('active');
+        b.onclick = (function(d, k){ return function(e){ e.stopPropagation(); setOcasiaoDoDia(d, alvoDoAssistente(), k); }; })(f.day, opt.key);
         ocRow.appendChild(b);
       });
       col.appendChild(ocRow);
@@ -9223,7 +9283,7 @@ function renderAssignGrid() {
     } else {
       var empty = document.createElement('div');
       empty.style.cssText='height:120px;display:flex;align-items:center;justify-content:center;color:#B0B0AC;font-size:.75rem;flex-direction:column;gap:4px;';
-      empty.innerHTML = weekCasaDays[f.day] ? '<span style="font-size:1.4rem;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="m3.8 10.4 8.2-6.6 8.2 6.6V19a1.6 1.6 0 0 1-1.6 1.6H5.4A1.6 1.6 0 0 1 3.8 19v-8.6z"/></svg></span><span>em casa</span>' : 'sem look';
+      empty.innerHTML = casaNoDia(f.day, alvoDoAssistente()) ? '<span style="font-size:1.4rem;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="m3.8 10.4 8.2-6.6 8.2 6.6V19a1.6 1.6 0 0 1-1.6 1.6H5.4A1.6 1.6 0 0 1 3.8 19v-8.6z"/></svg></span><span>em casa</span>' : 'sem look';
       col.appendChild(empty);
     }
     grid.appendChild(col);
