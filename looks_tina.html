@@ -932,7 +932,7 @@ body.compare-mode .card-compare-btn { display: flex; }
       </div>
 
       <div class="setup-block">
-        <div class="setup-q-label"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg> Quais dias você vai sair de casa?</div>
+        <div class="setup-q-label"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg> Quais dias você vai ficar em casa?</div>
         <div class="setup-day-row" id="setupOutDaysRow"></div>
       </div>
 
@@ -7329,6 +7329,7 @@ function setWizardWeek(offset) {
   if (b0) b0.classList.toggle('active', offset === 0);
   if (b1) b1.classList.toggle('active', offset === 1);
   assignedLooks = {}; // semana trocou: o que já tinha sido montado não vale mais
+  renderSetupStep(); // os dias em casa e as ocasiões são de cada semana, não os mesmos
   var range = document.getElementById('setupWeekRange');
   if (range) range.textContent = 'Buscando previsão…';
   loadForecast(offset).then(function(list){
@@ -7359,15 +7360,15 @@ function showSuggestions() {
   forecastReadyPromise = loadForecast(wizardWeekOffset);
 }
 
+// A semana que o assistente está montando — não necessariamente a atual.
+function alvoDoAssistente() { return (wizardWeekOffset === 1) ? 'proxima' : 'atual'; }
+
+// Marcar "fico em casa" escrevia sempre na semana corrente, mesmo com "Próxima
+// semana" escolhida lá em cima: marcar não surtia efeito nenhum na semana que
+// estava sendo montada.
 function setupToggleOutDay(day) {
-  if (weekCasaDays[day]) {
-    delete weekCasaDays[day];
-  } else {
-    weekCasaDays[day] = true;
-    data.forEach(function(p){ if (p.weekday === day) p.weekday = null; });
-    saveToStorage();
-  }
-  lsSet('looks_tina_casadays_v1', JSON.stringify(weekCasaDays));
+  var alvo = alvoDoAssistente();
+  setCasaNoDia(day, alvo, !casaNoDia(day, alvo));
   renderSetupStep();
 }
 
@@ -7378,9 +7379,12 @@ function renderSetupStep() {
     DAYS.forEach(function(day){
       var pill = document.createElement('button');
       pill.type = 'button';
-      pill.className = 'setup-day-pill' + (weekCasaDays[day] ? ' is-home' : '');
-      pill.textContent = weekCasaDays[day] ? (day + ' ') : day;
-      pill.title = weekCasaDays[day] ? 'Marcado como "fico em casa" — clique pra dizer que vai sair' : 'Clique se for ficar em casa nesse dia';
+      var emCasa = casaNoDia(day, alvoDoAssistente());
+      pill.className = 'setup-day-pill' + (emCasa ? ' is-home' : '');
+      pill.innerHTML = emCasa
+        ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="m3.8 10.4 8.2-6.6 8.2 6.6V19a1.6 1.6 0 0 1-1.6 1.6H5.4A1.6 1.6 0 0 1 3.8 19v-8.6z"/></svg> ' + day
+        : day;
+      pill.title = emCasa ? day + ': fico em casa — clique pra desmarcar' : 'Clique se for ficar em casa na ' + day;
       pill.onclick = (function(d){ return function(){ setupToggleOutDay(d); }; })(day);
       outRow.appendChild(pill);
     });
@@ -7389,9 +7393,9 @@ function renderSetupStep() {
   var ocGrid = document.getElementById('setupOcasiaoGrid');
   if (ocGrid) {
     ocGrid.innerHTML = '';
-    var outDays = DAYS.filter(function(d){ return !weekCasaDays[d]; });
+    var outDays = DAYS.filter(function(d){ return !casaNoDia(d, alvoDoAssistente()); });
     if (!outDays.length) {
-      ocGrid.innerHTML = '<div style="font-size:.76rem;color:#A8A8A4;">Nenhum dia marcado pra sair essa semana.</div>';
+      ocGrid.innerHTML = '<div style="font-size:.76rem;color:#A8A8A4;">Todos os dias estão marcados como em casa.</div>';
     } else {
       outDays.forEach(function(day){
         var row = document.createElement('div'); row.className = 'setup-ocasiao-day';
@@ -7400,8 +7404,8 @@ function renderSetupStep() {
         DAY_OCASIAO_OPTS.forEach(function(opt){
           var b = document.createElement('button'); b.type = 'button'; b.className = 'day-ocasiao-btn';
           b.innerHTML = opt.emoji; b.title = opt.label;
-          if (weekDayOcasiao[day] === opt.key) b.classList.add('active');
-          b.onclick = (function(d, k){ return function(){ setDayOcasiao(d, k); }; })(day, opt.key);
+          if (ocasiaoDoDia(day, alvoDoAssistente()) === opt.key) b.classList.add('active');
+          b.onclick = (function(d, k){ return function(){ setOcasiaoDoDia(d, alvoDoAssistente(), k); renderSetupStep(); }; })(day, opt.key);
           row.appendChild(b);
         });
         ocGrid.appendChild(row);
