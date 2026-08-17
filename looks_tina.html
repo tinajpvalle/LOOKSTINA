@@ -566,8 +566,10 @@ body.week-pick-mode .card-week-btn { display: block; }
 .insp-dot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(0,0,0,.12); display: inline-block; }
 .insp-palette-txt { font-size: .66rem; color: #A8A8A4; }
 .insp-btn { width: 100%; box-sizing: border-box; justify-content: center; white-space: normal; text-align: center; line-height: 1.25; }
-.daypick-link { grid-column: 1/-1; background: none; border: none; color: #1A1A1A; font-size: .82rem; font-family: inherit; cursor: pointer; text-align: left; padding: 2px 0 6px; text-decoration: underline; text-underline-offset: 3px; }
-.daypick-link:hover { color: #8C8C88; }
+.daypick-tabs { grid-column: 1/-1; display: flex; gap: 6px; padding: 0 0 8px; }
+.daypick-tab { flex: 1; background: #FAFAF8; border: 1px solid #E0E0DB; border-radius: 8px; color: #666666; font-size: .8rem; font-family: inherit; cursor: pointer; padding: 7px 10px; display: flex; align-items: center; justify-content: center; gap: 5px; }
+.daypick-tab:hover { border-color: #C4C4BE; color: #1A1A1A; }
+.daypick-tab.active { background: #1A1A1A; border-color: #1A1A1A; color: #fff; }
 .sugg-pick-pill { border-color:#1A1A1A; color:#1A1A1A; font-weight:600; }
 .daypick-card {
   border:2px solid transparent; border-radius:10px; overflow:hidden; cursor:pointer;
@@ -4607,7 +4609,7 @@ function renderWeek() {
         + '<span style="font-size:.65rem;color:#B0B0AC;margin-top:4px;display:block;">ou</span>'
         + '<button onclick="event.stopPropagation();toggleCasaDay(\''+day+'\', true)" style="font-size:.68rem;color:#C4985A;background:#FAFAF8;border:1px solid #E0E0DB;border-radius:6px;padding:2px 8px;cursor:pointer;margin-top:2px;font-family:inherit;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="m3.8 10.4 8.2-6.6 8.2 6.6V19a1.6 1.6 0 0 1-1.6 1.6H5.4A1.6 1.6 0 0 1 3.8 19v-8.6z"/></svg> Em casa</button>'
         + '<button onclick="event.stopPropagation();sugerirLookParaDia(\''+day+'\', \'atual\')" class="day-suggest-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><circle cx="7.8" cy="7.6" r="2.8"/><path d="M7.8 2.4v1.4M3.6 3.4l1 1M2.4 7.6h1.4M12 3.4l-1 1"/><path d="M9.4 19.4a3.7 3.7 0 0 1 .6-7.4 4.8 4.8 0 0 1 9.1 1.4 3.1 3.1 0 0 1-.6 6h-9.1z"/></svg> Sugerir look</button>';
-      de.onclick = function(){ switchTab('catalog'); startWeekPickMode(); };
+      de.onclick = (function(dd){ return function(){ openDayPicker(dd, 'atual'); }; })(day);
       col.appendChild(de);
     }
 
@@ -5039,10 +5041,11 @@ function openDayPicker(day, alvo, turno) {
   var searchInput = document.getElementById('dayPickerSearch');
   if(!overlay) return;
 
-  title.textContent = (dayPickerTurno === 'noite' ? 'Look da noite de ' : 'Trocar o look de ') + day;
+  var jaTem = !!weekLookFor(day, dayPickerTarget, dayPickerTurno);
+  title.textContent = (dayPickerTurno === 'noite' ? 'Look da noite de ' : (jaTem ? 'Trocar o look de ' : 'Escolher o look de ')) + day;
   subtitle.textContent = dayPickerTurno === 'noite'
     ? 'Clique em um look para usar na noite de ' + day + '. O look do dia continua onde está.'
-    : 'Clique em um look para colocar em ' + day + '. O look atual desse dia é liberado.';
+    : 'Clique em um look para colocar em ' + day + (jaTem ? '. O look atual desse dia é liberado.' : '.');
   if(searchInput) searchInput.value = '';
 
   renderDayPickerGrid(day, '');
@@ -5081,16 +5084,20 @@ function renderDayPickerGrid(day, filterText) {
 
   grid.innerHTML = '';
 
-  var link = document.createElement('button');
-  link.className = 'daypick-link';
-  if (dayPickerModo === 'montados') {
-    link.innerHTML = '&lsaquo; Voltar aos looks do catálogo';
-    link.onclick = function(){ dayPickerModo = 'catalogo'; renderDayPickerGrid(day, filterText); };
-  } else {
-    link.innerHTML = 'Ver meus looks montados (' + montagens.length + ') &rsaquo;';
-    link.onclick = function(){ dayPickerModo = 'montados'; renderDayPickerGrid(day, filterText); };
-  }
-  grid.appendChild(link);
+  // Como link de texto os montados passavam despercebidos — vira aba, que se lê
+  // como "tem outra lista aqui" sem precisar reparar no sublinhado.
+  var abas = document.createElement('div');
+  abas.className = 'daypick-tabs';
+  [['catalogo', 'Meus looks (' + pool.length + ')'], ['montados', 'Looks montados (' + mont.length + ')']]
+    .forEach(function(par){
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'daypick-tab' + (dayPickerModo === par[0] ? ' active' : '');
+      b.textContent = par[1];
+      b.onclick = (function(modo){ return function(){ dayPickerModo = modo; renderDayPickerGrid(day, filterText); }; })(par[0]);
+      abas.appendChild(b);
+    });
+  grid.appendChild(abas);
 
   if (dayPickerModo === 'montados') {
     if (!mont.length) {
