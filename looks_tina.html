@@ -7742,6 +7742,27 @@ function noveltyScore(p, range) {
 // valores), o desempate caía na ordem do catálogo. Dez gerações seguidas devolviam
 // a semana idêntica. Aqui embaralha antes de ordenar, pra empate sair em ordem
 // diferente a cada vez, e sorteia dentro da faixa de melhores em vez de fixar no 1º.
+// Peça de destaque: a que faz o look ser reconhecido como "aquele look". Duas
+// combinações diferentes com o mesmo casaco xadrez continuam parecendo a mesma
+// coisa na grade da semana.
+var CAT_DESTAQUE = /^(casaco|jaqueta|blazer|colete|moletom|suéter|sueter|cardigan|kimono|calça|saia|vestido|macacão)/i;
+
+function pecasDeDestaque(tags) {
+  return (tags||[]).map(function(t){ return t.trim(); })
+    .filter(function(t){ return CAT_DESTAQUE.test(t); });
+}
+
+// Tira do páreo quem repete peça de destaque já usada na semana. A penalidade
+// por repetição existia, mas só rebaixava a nota — e como a faixa de sorteio é
+// 10% do acervo, o look repetido continuava caindo nela e podia ser sorteado.
+function semRepetirDestaque(pool, usadas) {
+  if (!usadas || !usadas.length) return pool;
+  var limpo = pool.filter(function(p){
+    return !pecasDeDestaque(p.tags).some(function(t){ return usadas.indexOf(t) !== -1; });
+  });
+  return limpo.length ? limpo : pool; // sem candidato sobrando, melhor repetir do que deixar o dia vazio
+}
+
 function pickWithVariety(pool, scoreFn, minBand) {
   if (!pool || !pool.length) return null;
   var scored = shuffledCopy(pool).map(function(p){ return {p:p, s:scoreFn(p)}; })
@@ -8338,7 +8359,7 @@ function renderTripDayList() {
     var card = document.createElement('div'); card.className = 'trip-day-card';
     var img = document.createElement('img'); img.src = a.curThumb; img.alt = a.day;
     applyRotation(img, data.find(function(pp){ return pp.id === a.curId; }));
-    img.onclick = (function(thumb, tags, rot){ return function(){ openZoom(thumb, tags, rot); }; })(a.curThumb, a.curTags, getRotation(data.find(function(pp){ return pp.id === a.curId; })));
+    img.onclick = (function(thumb, tags, rot, lid){ return function(){ openZoom(thumb, tags, rot, lid); }; })(a.curThumb, a.curTags, getRotation(data.find(function(pp){ return pp.id === a.curId; })), a.curId);
     card.appendChild(img);
 
     var info = document.createElement('div'); info.className = 'trip-day-info';
@@ -8892,6 +8913,7 @@ function proceedToStep2() {
   // --- PASS 1: greedy assignment with diversity penalty ---
   var usedIds = new Set();
   var usedTagFreq = {};
+  var destaquesUsados = []; // peças de destaque já usadas nesta semana
   var tempAssign = {};
 
   var staleFactor = wizardPrioritizeStale ? 3 : 1; // ligado na telinha de setup rápido
@@ -8929,9 +8951,10 @@ function proceedToStep2() {
       pool = data.filter(function(p){ return !p.archived && !usedIds.has(p.id) && (p.tags||[]).length>0; });
     }
 
-    var best = pickWithVariety(pool, score, 10);
+    var best = pickWithVariety(semRepetirDestaque(pool, destaquesUsados), score, 10);
     if(best) {
       usedIds.add(best.id);
+      pecasDeDestaque(best.tags).forEach(function(t){ destaquesUsados.push(t); });
       (best.tags||[]).forEach(function(t){
         usedTagFreq[t.trim()] = (usedTagFreq[t.trim()]||0) + 1;
       });
@@ -8998,12 +9021,14 @@ function regenerateAssignedDay(day) {
 
   var usedIds = new Set();
   var usedTagFreq = {};
+  var destaquesUsados = [];
   Object.keys(assignedLooks).forEach(function(d){
     if (d === day) return;
     var other = assignedLooks[d];
     if (!other) return;
     usedIds.add(other.curId);
     (other.curTags||[]).forEach(function(t){ usedTagFreq[t.trim()] = (usedTagFreq[t.trim()]||0) + 1; });
+    pecasDeDestaque(other.curTags).forEach(function(t){ destaquesUsados.push(t); });
   });
 
   var staleFactor = wizardPrioritizeStale ? 3 : 1;
@@ -9024,7 +9049,7 @@ function regenerateAssignedDay(day) {
   if (!pool.length) {
     pool = data.filter(function(p){ return !p.archived && !usedIds.has(p.id) && (p.tags||[]).length>0; });
   }
-  var best = pickWithVariety(pool, score, 10);
+  var best = pickWithVariety(semRepetirDestaque(pool, destaquesUsados), score, 10);
   if (!best) return;
 
   function scoreForPool(p) {
@@ -9127,10 +9152,10 @@ function renderAssignGrid() {
       img.style.cursor = 'zoom-in';
       img.title = 'Clique para ampliar';
       applyRotation(img, data.find(function(pp){ return pp.id === a.curId; }));
-      img.onclick = (function(src, tags, rot){ return function(e){
+      img.onclick = (function(src, tags, rot, lid){ return function(e){
         e.stopPropagation();
-        openZoom(src, tags, rot);
-      }; })(a.curThumb, a.curTags, getRotation(data.find(function(pp){ return pp.id === a.curId; })));
+        openZoom(src, tags, rot, lid);
+      }; })(a.curThumb, a.curTags, getRotation(data.find(function(pp){ return pp.id === a.curId; })), a.curId);
       wrap.appendChild(img);
 
       var rotA = document.createElement('button'); rotA.className = 'day-look-remove'; rotA.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M20.3 12a8.3 8.3 0 1 1-2.7-6.1"/><path d="M20.3 3.6v4.7h-4.7"/></svg>';
@@ -9225,7 +9250,9 @@ function cycleAssignLook(day, dir) {
   renderAssignGrid();
 }
 
-function openZoom(src, tags, rotation) {
+// lookId opcional: com ele o zoom oferece arquivar, que é o momento em que ela
+// olha o look grande e decide que não quer mais ver aquilo nas sugestões.
+function openZoom(src, tags, rotation, lookId) {
   var ov = document.getElementById('zoomOverlay');
   if(!ov) {
     ov = document.createElement('div');
@@ -9240,6 +9267,11 @@ function openZoom(src, tags, rotation) {
     ztags.id = 'zoomTags';
     ztags.style.cssText = 'margin-top:14px;display:flex;flex-wrap:wrap;gap:6px;justify-content:center;max-width:700px;';
     ov.appendChild(ztags);
+    var zbtns = document.createElement('div');
+    zbtns.id = 'zoomBtns';
+    zbtns.style.cssText = 'margin-top:16px;display:flex;gap:10px;';
+    zbtns.onclick = function(e){ e.stopPropagation(); };
+    ov.appendChild(zbtns);
     document.body.appendChild(ov);
   }
   document.getElementById('zoomImg').src = src;
@@ -9252,6 +9284,24 @@ function openZoom(src, tags, rotation) {
     chip.textContent = t;
     zt.appendChild(chip);
   });
+  var zb = document.getElementById('zoomBtns');
+  zb.innerHTML = '';
+  if (lookId != null) {
+    var alvo = data.find(function(x){ return x.id === lookId; });
+    if (alvo) {
+      var arq = document.createElement('button');
+      arq.style.cssText = 'background:rgba(255,255,255,.16);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:8px;padding:8px 16px;cursor:pointer;font-size:.82rem;font-family:inherit;';
+      arq.innerHTML = alvo.archived ? 'Desarquivar look' : 'Arquivar look';
+      arq.onclick = function(){
+        alvo.archived = !alvo.archived;
+        if (alvo.archived) { alvo.weekday = null; alvo.weekdayNoite = null; }
+        saveToStorage(); renderGrid(); renderWeek();
+        showSavedToast(alvo.archived ? 'Look arquivado — sai das sugestões.' : 'Look de volta ao catálogo.');
+        ov.style.display = 'none';
+      };
+      zb.appendChild(arq);
+    }
+  }
   ov.style.display = 'flex';
 }
 
