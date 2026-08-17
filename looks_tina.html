@@ -2623,7 +2623,7 @@ function renderPecas() {
         '<div class="pc-card-name">' + p.name + '</div>' +
         '<div class="pc-card-meta">' + p.category + ' · ' + p.color + '</div>' +
         '<button class="btn btn-ghost peca-montar-btn" type="button"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M12 7.2a2.1 2.1 0 1 1 2.1-2.1c0 1.1-1 1.5-2.1 2.1v2"/><path d="M12 9.2 3.6 15.3A1.5 1.5 0 0 0 4.5 18h15a1.5 1.5 0 0 0 .9-2.7L12 9.2z"/></svg> Montar look</button>' +
-        '<button class="btn btn-ghost peca-arq-btn" type="button" style="margin-top:6px;color:#8C8C88;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><rect x="3" y="4" width="18" height="4.5" rx="1.2"/><path d="M5 8.5V19a1.5 1.5 0 0 0 1.5 1.5h11A1.5 1.5 0 0 0 19 19V8.5M10 12.5h4"/></svg> ' + (arquivada ? 'Voltar ao guarda-roupa' : 'Não tenho mais') + '</button>' +
+        '<button class="btn btn-ghost peca-combina-btn" type="button" style="margin-top:6px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><circle cx="9" cy="9" r="5.2"/><circle cx="15" cy="15" r="5.2"/></svg> Com o que combina?</button><button class="btn btn-ghost peca-arq-btn" type="button" style="margin-top:6px;color:#8C8C88;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><rect x="3" y="4" width="18" height="4.5" rx="1.2"/><path d="M5 8.5V19a1.5 1.5 0 0 0 1.5 1.5h11A1.5 1.5 0 0 0 19 19V8.5M10 12.5h4"/></svg> ' + (arquivada ? 'Voltar ao guarda-roupa' : 'Não tenho mais') + '</button>' +
         (isAvulsa ? '<button class="btn btn-ghost peca-remover-btn" type="button" style="margin-top:6px;color:#8C8C88;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14"/></svg> Apagar de vez</button>' : '') +
       '</div>';
     if (selected) {
@@ -2635,6 +2635,10 @@ function renderPecas() {
     card.querySelector('.peca-montar-btn').onclick = function(e) {
       e.stopPropagation();
       montarLookComPecas([p.id]);
+    };
+    card.querySelector('.peca-combina-btn').onclick = function(e) {
+      e.stopPropagation();
+      abrirCombinaCom(p.id);
     };
     card.querySelector('.peca-arq-btn').onclick = function(e) {
       e.stopPropagation();
@@ -3092,8 +3096,202 @@ function openPieceZoom(pieceId) {
   if (brand) brand.textContent = p.brand;
   if (name) name.textContent = p.name;
   if (meta) meta.textContent = p.category + ' · ' + p.color;
+  var acao = document.getElementById('pieceZoomCombina');
+  if (acao) acao.onclick = function(){ abrirCombinaCom(p.id); };
   document.getElementById('pieceZoomOverlay').style.display = 'flex';
 }
+
+// ── "Com o que essa peça combina?" ────────────────────────────────────────
+// Sem reconhecer a imagem: trabalha com a cor e a categoria que já estão
+// cadastradas em cada peça. Neutro combina com tudo, tom sobre tom combina,
+// oposto no círculo de cores combina; o que fica no meio do caminho é o que
+// costuma brigar.
+
+function rgbParaHsl(rgb) {
+  var r = rgb[0]/255, g = rgb[1]/255, b = rgb[2]/255;
+  var max = Math.max(r,g,b), min = Math.min(r,g,b), d = max-min;
+  var h = 0;
+  if (d) {
+    if (max === r) h = ((g-b)/d) % 6;
+    else if (max === g) h = (b-r)/d + 2;
+    else h = (r-g)/d + 4;
+    h *= 60; if (h < 0) h += 360;
+  }
+  var l = (max+min)/2;
+  var sat = d ? d/(1 - Math.abs(2*l - 1)) : 0;
+  return [h, sat, l];
+}
+
+// null quando a cor cadastrada não bate com nenhuma conhecida — melhor dizer
+// "não sei" do que fingir que é cinza (o que faria a peça combinar com tudo).
+function rgbDaCorConhecida(cor) {
+  var t = (cor || '').toLowerCase();
+  var achou = null, ondeAchou = Infinity, tamAchou = 0;
+  function considerar(chave, rgb) {
+    var i = t.indexOf(chave);
+    if (i === -1) return;
+    // "olive green" é verde-oliva, não verde: vale o termo que vem antes, e
+    // entre dois no mesmo lugar, o mais específico (mais longo).
+    if (i < ondeAchou || (i === ondeAchou && chave.length > tamAchou)) {
+      achou = rgb; ondeAchou = i; tamAchou = chave.length;
+    }
+  }
+  Object.keys(COR_EN_RGB).forEach(function(k){ considerar(k, COR_EN_RGB[k]); });
+  CORES_REF.forEach(function(c){ considerar(c[0], c[1]); });
+  return achou;
+}
+
+var NEUTRAS_DE_ARMARIO = ['preto','branco','cinza','bege','creme','marrom','caramelo','jeans','azul marinho'];
+
+function perfilDaCor(cor) {
+  var rgb = rgbDaCorConhecida(cor);
+  if (!rgb) return null;
+  var hsl = rgbParaHsl(rgb);
+  var h = hsl[0], sat = hsl[1], l = hsl[2];
+  var nome = nomeDaCor(rgb);
+  // Jeans e marinho são neutros no armário e a geometria não sabe disso: os dois
+  // têm azul saturado. Vale a lista, que é o que se usa pra vestir.
+  var neutra = NEUTRAS_DE_ARMARIO.indexOf(nome) !== -1
+    || sat < 0.2 || l < 0.16 || l > 0.86 || (h >= 15 && h <= 45 && sat < 0.55);
+  return { rgb: rgb, h: h, s: sat, l: l, neutra: neutra, nome: nome };
+}
+
+function notaDeCombinacao(a, b) {
+  if (!a || !b) return { n: 0, motivo: 'cor não cadastrada' };
+  if (a.neutra && b.neutra) return { n: 3, motivo: 'dois neutros' };
+  if (b.neutra) return { n: 4, motivo: b.nome + ' é neutro' };
+  if (a.neutra) return { n: 4, motivo: a.nome + ' combina com tudo' };
+  var d = Math.abs(a.h - b.h); if (d > 180) d = 360 - d;
+  if (d <= 25) return { n: 3, motivo: 'tom sobre tom' };
+  if (d >= 150) return { n: 3.5, motivo: 'cores opostas' };
+  if (d <= 55) return { n: 2, motivo: 'cores vizinhas' };
+  return { n: 0.5, motivo: 'contraste forte' };
+}
+
+// O que faz par com cada categoria. Bolsa, sapato e acessório entram em qualquer
+// look; parte de cima pede parte de baixo e vice-versa.
+var COMBINA_COM = {
+  'Tops':        ['Bottoms', 'Shoes', 'Outerwear', 'Bags'],
+  'Bottoms':     ['Tops', 'Shoes', 'Outerwear', 'Bags'],
+  'Outerwear':   ['Tops', 'Bottoms', 'Shoes', 'Bags'],
+  'Shoes':       ['Bottoms', 'Tops', 'Bags'],
+  'Bags':        ['Tops', 'Bottoms', 'Shoes'],
+  'Jewelry':     ['Tops', 'Bottoms', 'Shoes'],
+  'Accessories': ['Tops', 'Bottoms', 'Shoes']
+};
+
+function pecasQueCombinam(peca) {
+  var base = perfilDaCor(peca.color);
+  var cats = COMBINA_COM[peca.category] || ['Tops','Bottoms','Shoes','Bags'];
+  return cats.map(function(cat){
+    var lista = allPecas().filter(function(x){ return x.id !== peca.id && x.category === cat; })
+      .map(function(x){
+        var nota = notaDeCombinacao(base, perfilDaCor(x.color));
+        return { peca: x, nota: nota.n, motivo: nota.motivo };
+      })
+      .sort(function(a,b){ return b.nota - a.nota; })
+      .slice(0, 6);
+    return { categoria: cat, itens: lista };
+  }).filter(function(g){ return g.itens.length; });
+}
+
+// Looks do catálogo que já têm essa cor — a ponte entre a peça solta e as 851
+// fotos, que são etiquetadas em português.
+function looksComACor(peca) {
+  var base = perfilDaCor(peca.color);
+  if (!base) return [];
+  var raiz = base.nome.replace(/[oa]$/, ''); // vermelho/vermelha → vermelh
+  return data.filter(function(l){
+    if (l.archived) return false;
+    return (l.tags||[]).some(function(t){ return t.toLowerCase().indexOf(raiz) !== -1; });
+  }).slice(0, 12);
+}
+
+var combinaPecaId = null;
+
+function abrirCombinaCom(pieceId) {
+  var peca = findPieceById(pieceId);
+  if (!peca) return;
+  combinaPecaId = pieceId;
+  closePieceZoom();
+
+  var base = perfilDaCor(peca.color);
+  document.getElementById('combinaTitulo').textContent = 'Com o que combina: ' + peca.name;
+  document.getElementById('combinaSub').textContent = peca.category + ' · ' + peca.color +
+    (base ? (base.neutra ? ' · cor neutra, combina com quase tudo' : ' · lido como ' + base.nome) : ' · cor não reconhecida, mostrando por categoria');
+  var fotoBase = document.getElementById('combinaFoto');
+  if (fotoBase) fotoBase.src = peca.img;
+
+  var box = document.getElementById('combinaCorpo');
+  box.innerHTML = '';
+
+  pecasQueCombinam(peca).forEach(function(grupo){
+    var h = document.createElement('div');
+    h.style.cssText = 'font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#8C8C88;margin:14px 0 8px;';
+    h.textContent = NOME_CATEGORIA[grupo.categoria] || grupo.categoria;
+    box.appendChild(h);
+
+    var linha = document.createElement('div');
+    linha.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;';
+    grupo.itens.forEach(function(it){
+      var card = document.createElement('div');
+      card.className = 'pc-card';
+      card.style.cursor = 'pointer';
+      card.innerHTML = '<img src="' + it.peca.img + '" alt="" loading="lazy">' +
+        '<div class="pc-card-body"><div class="pc-card-name">' + it.peca.name + '</div>' +
+        '<div class="pc-card-meta" style="color:#A8A8A4;">' + it.motivo + '</div></div>';
+      card.onclick = (function(outroId){ return function(){ montarLookComPecas([peca.id, outroId]); fecharCombinaCom(); }; })(it.peca.id);
+      card.title = 'Montar um look com as duas';
+      linha.appendChild(card);
+    });
+    box.appendChild(linha);
+  });
+
+  var looks = looksComACor(peca);
+  if (looks.length) {
+    var h2 = document.createElement('div');
+    h2.style.cssText = 'font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#8C8C88;margin:18px 0 8px;';
+    h2.textContent = 'Looks seus que já usam essa cor';
+    box.appendChild(h2);
+    var grid = document.createElement('div');
+    grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;';
+    looks.forEach(function(l){
+      var c = document.createElement('div'); c.className = 'daypick-card';
+      var im = document.createElement('img'); im.src = lookThumb(l); im.loading = 'lazy';
+      applyRotation(im, l);
+      c.appendChild(im);
+      c.onclick = (function(lid){ return function(){ fecharCombinaCom(); switchTab('catalog'); openView(lid); }; })(l.id);
+      grid.appendChild(c);
+    });
+    box.appendChild(grid);
+  }
+
+  document.getElementById('combinaOverlay').style.display = 'flex';
+}
+
+function fecharCombinaCom() {
+  document.getElementById('combinaOverlay').style.display = 'none';
+  combinaPecaId = null;
+}
+
+// Monta o look inteiro: a peça mais a melhor de cada categoria que faz par.
+function montarLookCompletoComPeca() {
+  var peca = findPieceById(combinaPecaId);
+  if (!peca) return;
+  var ids = [peca.id];
+  pecasQueCombinam(peca).forEach(function(g){
+    if (['Tops','Bottoms','Shoes','Bags'].indexOf(g.categoria) === -1) return;
+    var topo = g.itens.filter(function(x){ return x.nota === g.itens[0].nota; });
+    ids.push(topo[Math.floor(Math.random()*topo.length)].peca.id);
+  });
+  fecharCombinaCom();
+  montarLookComPecas(ids);
+}
+
+var NOME_CATEGORIA = {
+  'Tops': 'Partes de cima', 'Bottoms': 'Partes de baixo', 'Outerwear': 'Casacos',
+  'Shoes': 'Sapatos', 'Bags': 'Bolsas', 'Jewelry': 'Joias', 'Accessories': 'Acessórios'
+};
 
 function closePieceZoom() {
   document.getElementById('pieceZoomOverlay').style.display = 'none';
@@ -10660,7 +10858,24 @@ function applySuggestions() {
       <div id="pieceZoomBrand" style="font-size:.72rem;color:#1A1A1A;font-weight:700;text-transform:uppercase;letter-spacing:.02em;"></div>
       <div id="pieceZoomName" style="font-size:1rem;color:#1a1a1a;margin-top:2px;"></div>
       <div id="pieceZoomMeta" style="font-size:.8rem;color:#A8A8A4;margin-top:6px;"></div>
+      <button id="pieceZoomCombina" class="btn btn-ghost" style="width:100%;justify-content:center;margin-top:12px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><circle cx="9" cy="9" r="5.2"/><circle cx="15" cy="15" r="5.2"/></svg> Com o que combina?</button>
     </div>
+  </div>
+</div>
+
+<div id="combinaOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:10004;align-items:center;justify-content:center;padding:20px;" onclick="if(event.target===this)fecharCombinaCom()">
+  <div style="background:#fff;border-radius:16px;max-width:680px;width:100%;max-height:86vh;overflow-y:auto;padding:24px;position:relative;">
+    <span style="position:absolute;top:16px;right:18px;cursor:pointer;line-height:1;" onclick="fecharCombinaCom()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"/></svg></span>
+    <div style="display:flex;gap:14px;align-items:center;margin-bottom:6px;padding-right:24px;">
+      <img id="combinaFoto" src="" alt="" style="width:64px;height:64px;object-fit:contain;background:#FAFAF8;border-radius:10px;flex-shrink:0;">
+      <div>
+        <div id="combinaTitulo" style="font-size:1.05rem;font-weight:700;"></div>
+        <div id="combinaSub" style="font-size:.76rem;color:#A8A8A4;margin-top:2px;"></div>
+      </div>
+    </div>
+    <button class="btn" onclick="montarLookCompletoComPeca()" style="width:100%;justify-content:center;margin:10px 0 4px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M12 7.2a2.1 2.1 0 1 1 2.1-2.1c0 1.1-1 1.5-2.1 2.1v2"/><path d="M12 9.2 3.6 15.3A1.5 1.5 0 0 0 4.5 18h15a1.5 1.5 0 0 0 .9-2.7L12 9.2z"/></svg> Montar um look inteiro com ela</button>
+    <div style="font-size:.7rem;color:#B0B0AC;text-align:center;">ou clique em uma peça abaixo pra montar só as duas</div>
+    <div id="combinaCorpo"></div>
   </div>
 </div>
 
