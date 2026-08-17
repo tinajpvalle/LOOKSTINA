@@ -1246,7 +1246,7 @@ function lsSet(key, value) {
 // Se o servidor não responder (ex: site aberto direto do GitHub Pages, sem
 // backend, ou sem internet), tudo falha silenciosamente e o app continua
 // funcionando 100% localmente, como sempre funcionou.
-var SYNC_KEYS = ['looks_tina_catalog_v1', 'looks_tina_montados_v1', 'looks_tina_pecas_avulsas_v1', 'looks_tina_proxsemana_v1', 'looks_tina_pecas_arquivadas_v1', 'looks_tina_proxsemana_dias_v1', 'looks_tina_proxsemana_noite_v1', 'looks_tina_inspiracoes_v1'];
+var SYNC_KEYS = ['looks_tina_catalog_v1', 'looks_tina_montados_v1', 'looks_tina_pecas_avulsas_v1', 'looks_tina_proxsemana_v1', 'looks_tina_pecas_arquivadas_v1', 'looks_tina_proxsemana_dias_v1', 'looks_tina_proxsemana_noite_v1', 'looks_tina_inspiracoes_v1', 'looks_tina_preferencias_v1'];
 function syncPut(key, jsonValue) {
   if (SYNC_KEYS.indexOf(key) === -1) return;
   try {
@@ -4176,6 +4176,64 @@ var weekDayOcasiao = safeParse(lsGet('looks_tina_dayocasiao_v1'), {}) || {}; // 
 var weekTemplates = safeParse(lsGet('looks_tina_weektemplates_v1'), []) || [];
 var weekHistory = safeParse(lsGet('looks_tina_weekhistory_v1'), []) || [];
 var WEEK_HISTORY_MAX = 30; // ~7 meses de semanas guardadas, evita crescer sem limite
+
+// ── Aprender do que ela recusa ────────────────────────────────────────────
+// A conta não é por look (851 looks, cada um aparece raramente — levaria anos
+// pra dizer algo), e sim por peça: recusar três looks com a mesma calça já
+// ensina alguma coisa sobre a calça. Guarda sim/não por etiqueta.
+var preferencias = safeParse(lsGet('looks_tina_preferencias_v1'), {}) || {};
+
+function savePreferencias() {
+  lsSet('looks_tina_preferencias_v1', JSON.stringify(preferencias));
+}
+
+// Só as peças de verdade: "marca: ..." e "ocasião: ..." não dizem se ela gostou
+// da roupa, e "estação:" é clima, que já tem critério próprio.
+function etiquetasQueContam(tags) {
+  return (tags||[]).map(function(t){ return t.trim(); }).filter(function(t){
+    if (t.indexOf(':') === -1) return false;
+    var cat = t.split(':')[0].trim().toLowerCase();
+    return ['marca','ocasião','ocasiao','estação','estacao'].indexOf(cat) === -1;
+  });
+}
+
+function registrarPreferencia(tags, sinal, peso) {
+  var etiquetas = etiquetasQueContam(tags);
+  if (!etiquetas.length) return;
+  var campo = sinal > 0 ? 'sim' : 'nao';
+  etiquetas.forEach(function(t){
+    if (!preferencias[t]) preferencias[t] = { sim: 0, nao: 0 };
+    preferencias[t][campo] += (peso || 1);
+  });
+  savePreferencias();
+}
+
+// Vale no máximo ±2,5: é um empurrão, não manda no resultado. Clima continua
+// decidindo — de nada adianta o look preferido num dia de 8°C.
+function preferenciaScore(tags) {
+  var etiquetas = etiquetasQueContam(tags);
+  if (!etiquetas.length) return 0;
+  var soma = 0, contadas = 0;
+  etiquetas.forEach(function(t){
+    var r = preferencias[t];
+    if (!r) return;
+    var total = r.sim + r.nao;
+    if (total < 2) return; // uma recusa isolada não vira regra
+    soma += (r.sim - r.nao) / total;
+    contadas++;
+  });
+  if (!contadas) return 0;
+  return Math.max(-2.5, Math.min(2.5, (soma / contadas) * 2.5));
+}
+
+function esquecerPreferencias() {
+  if (!confirm('Esquecer tudo o que o app aprendeu das suas recusas?')) return;
+  preferencias = {};
+  savePreferencias();
+  if (document.getElementById('statsContent')) renderStats();
+  showSavedToast('Aprendizado zerado.');
+}
+
 var DAY_OCASIAO_OPTS = [
   {key:'casual', emoji:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M3 16.5h10.5l5 1.9a2.8 2.8 0 0 1 1.8 2.6H3v-4.5z"/><path d="M3 16.5v-8h3.2L8.5 13"/></svg>', label:'Casual'},
   {key:'trabalho', emoji:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M9 7V4h6v3M3 13.5h18"/></svg>', label:'Trabalho'},
@@ -7153,6 +7211,7 @@ function markWorn() {
   if(!date) return;
   p.lastWorn = date;
   p.wornCount = (p.wornCount||0) + 1;
+  registrarPreferencia(p.tags, 1, 2); // usar de verdade é o aceite mais forte
   var wcd = document.getElementById('viewWornCountDisplay');
   if(wcd) wcd.textContent = p.wornCount;
   saveToStorage(); renderGrid();
@@ -8279,6 +8338,7 @@ function notaParaODia(tags, profile, extra) {
   return weatherScore(tags, profile) * 3
        + seasonScore(tags, seasonForProfile(profile))
        + recencyBonus(extra || {}) * 2
+       + preferenciaScore(tags)
        + ((extra && extra.favorite) ? 1.5 : 0)
        + ((extra && extra.rating) || 0) * 0.5;
 }
@@ -8387,6 +8447,7 @@ function registrarUsoEmData(pid, dataISO) {
   if (p.lastWorn === dataISO) { showSavedToast('Esse look já está registrado nesse dia.'); return; }
   p.lastWorn = dataISO;
   p.wornCount = (p.wornCount || 0) + 1;
+  registrarPreferencia(p.tags, 1, 2);
   saveToStorage();
   if (typeof renderGrid === 'function') renderGrid();
   if (typeof renderCal === 'function') renderCal();
@@ -8401,6 +8462,7 @@ function marcarUsoDoLook(pid) {
   if (p.lastWorn === hoje) return false; // já contado hoje
   p.lastWorn = hoje;
   p.wornCount = (p.wornCount || 0) + 1;
+  registrarPreferencia(p.tags, 1, 2);
   saveToStorage();
   if (typeof renderGrid === 'function') renderGrid();
   if (typeof renderCal === 'function' && document.getElementById('calGrid')) renderCal();
@@ -9256,6 +9318,7 @@ function proceedToStep2() {
            + seasonScore(p.tags, seasonForProfile(f.profile))
            + recencyBonus(p) * 2 * staleFactor
            + ocasiaoBoost(p, f.day, alvoDoAssistente())
+           + preferenciaScore(p.tags)
            - diversityPenalty(p.tags, usedTagFreq);
     }
 
@@ -9368,6 +9431,7 @@ function regenerateAssignedDay(day) {
          + seasonScore(p.tags, seasonForProfile(f.profile))
          + recencyBonus(p) * 2 * staleFactor
          + ocasiaoBoost(p, day, alvoDoAssistente()) * 3
+         + preferenciaScore(p.tags)
          - diversityPenalty(p.tags, usedTagFreq);
   }
 
@@ -9582,6 +9646,8 @@ function renderAssignGrid() {
 }
 
 function removeAssignedLook(day) {
+  var a = assignedLooks[day];
+  if (a && a.curTags) registrarPreferencia(a.curTags, -1, 1);
   delete assignedLooks[day];
   renderAssignGrid();
 }
@@ -9624,6 +9690,7 @@ function escolherNoAssistente(day, pid, mid) {
       };
     }
   }
+  registrarPreferencia((assignedLooks[day]||{}).curTags, 1, 1);
   renderAssignGrid();
   showSavedToast('Look de ' + day + ' escolhido por você.');
 }
@@ -9743,6 +9810,7 @@ function openZoom(src, tags, rotation, lookId) {
       arq.style.cssText = 'background:rgba(255,255,255,.16);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:8px;padding:8px 16px;cursor:pointer;font-size:.82rem;font-family:inherit;';
       arq.innerHTML = alvo.archived ? 'Desarquivar look' : 'Arquivar look';
       arq.onclick = function(){
+        if (!alvo.archived) registrarPreferencia(alvo.tags, -1, 2); // recusa mais clara que existe
         alvo.archived = !alvo.archived;
         if (alvo.archived) { alvo.weekday = null; alvo.weekdayNoite = null; }
         saveToStorage(); renderGrid(); renderWeek();
@@ -10435,6 +10503,34 @@ function renderStats() {
     +'<button onclick="runColorAnalysis()" style="background:#1A1A1A;color:#fff;border:none;border-radius:8px;padding:8px 16px;cursor:pointer;font-family:inherit;font-size:.85rem;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M12 3.2a8.8 8.8 0 0 0 0 17.6c1.4 0 2.1-.9 2.1-1.9 0-1.5-1.4-1.6-1.4-2.7 0-.9.7-1.5 1.7-1.5h1.7a4.1 4.1 0 0 0 4.1-4.1c0-4.3-3.9-7.4-8.2-7.4z"/><circle cx="7.6" cy="11.2" r="1"/><circle cx="11" cy="7.6" r="1"/><circle cx="15.4" cy="8.8" r="1"/></svg> Analisar paletas</button>'
     +' <span id="colorProgress" style="font-size:.78rem;color:#A8A8A4;margin-left:8px;"></span>'
   );
+
+  // O que o app aprendeu das recusas. Fica à vista de propósito: aprendizado
+  // escondido que muda a sugestão sem explicação é o tipo de coisa que faz
+  // parecer que o app "endoidou".
+  var aprendidas = Object.keys(preferencias).map(function(t){
+    var r = preferencias[t], total = r.sim + r.nao;
+    return { tag: t, saldo: (r.sim - r.nao) / total, total: total, sim: r.sim, nao: r.nao };
+  }).filter(function(x){ return x.total >= 2; });
+
+  if (aprendidas.length) {
+    var recusadas = aprendidas.filter(function(x){ return x.saldo < 0; })
+      .sort(function(a,b){ return a.saldo - b.saldo || b.total - a.total; }).slice(0,6);
+    var aceitas = aprendidas.filter(function(x){ return x.saldo > 0; })
+      .sort(function(a,b){ return b.saldo - a.saldo || b.total - a.total; }).slice(0,6);
+    function listaPref(itens, cor) {
+      return '<div style="display:flex;flex-direction:column;gap:5px;">' + itens.map(function(x){
+        return '<div style="display:flex;justify-content:space-between;gap:10px;font-size:.8rem;">'
+          + '<span>' + x.tag + '</span>'
+          + '<span style="color:' + cor + ';white-space:nowrap;">' + x.sim + ' sim · ' + x.nao + ' não</span></div>';
+      }).join('') + '</div>';
+    }
+    var corpo = '';
+    if (recusadas.length) corpo += '<div style="font-size:.72rem;color:#8C8C88;margin-bottom:6px;">Peças que você mais recusa</div>' + listaPref(recusadas, '#B4544F');
+    if (aceitas.length) corpo += '<div style="font-size:.72rem;color:#8C8C88;margin:14px 0 6px;">Peças que você mais aceita</div>' + listaPref(aceitas, '#5F8C63');
+    corpo += '<div style="font-size:.68rem;color:#B0B0AC;margin-top:12px;line-height:1.5;">Conta arquivar um look, tirar um look sugerido do dia, escolher um à mão e registrar uso. Vale como empurrão na sugestão — o clima continua decidindo.</div>';
+    corpo += '<button class="btn btn-ghost" onclick="esquecerPreferencias()" style="margin-top:10px;color:#8C8C88;">Esquecer o que foi aprendido</button>';
+    html += section('O QUE APRENDI DAS SUAS ESCOLHAS', corpo);
+  }
 
   el.innerHTML = html;
 }
