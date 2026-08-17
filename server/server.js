@@ -35,7 +35,7 @@ const ALLOWED_KEYS = new Set([
   'looks_tina_pecas_arquivadas_v1', // peças aposentadas (doadas, perdidas): ids
   'looks_tina_proxsemana_dias_v1',  // nota/em casa/ocasião de cada dia da próxima semana
   'looks_tina_proxsemana_noite_v1', // look da noite de cada dia da próxima semana
-  'looks_tina_inspiracoes_v1'       // prints de referência + paleta lida da foto,
+  'looks_tina_inspiracoes_v1',      // prints de referência + paleta lida da foto
   'looks_tina_preferencias_v1'      // sim/não por etiqueta, aprendido do que ela recusa
 ]);
 
