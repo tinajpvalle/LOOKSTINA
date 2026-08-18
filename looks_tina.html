@@ -566,6 +566,10 @@ body.week-pick-mode .card-week-btn { display: block; }
 .insp-dot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(0,0,0,.12); display: inline-block; }
 .insp-palette-txt { font-size: .66rem; color: #A8A8A4; }
 .insp-btn { width: 100%; box-sizing: border-box; justify-content: center; white-space: normal; text-align: center; line-height: 1.25; }
+.voto-linha { display:flex; gap:8px; margin-top:10px; }
+.voto-btn { flex:1; background:#FAFAF8; border:1px solid #E0E0DB; border-radius:8px; padding:8px; font-size:.8rem; font-family:inherit; color:#1A1A1A; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:5px; }
+.voto-btn:hover { border-color:#1A1A1A; }
+.voto-culpa { margin-top:10px; padding:9px 10px; background:#FAFAF8; border:1px solid #E0E0DB; border-radius:8px; }
 .etq-chip { background:#FAFAF8; border:1px solid #E0E0DB; border-radius:14px; padding:5px 11px; font-size:.78rem; font-family:inherit; color:#1A1A1A; cursor:pointer; }
 .etq-chip:hover { border-color:#C4C4BE; }
 .etq-chip-on { background:#1A1A1A; border-color:#1A1A1A; color:#fff; }
@@ -1125,6 +1129,7 @@ body.compare-mode .card-compare-btn { display: flex; }
       <div id="todaySuggestTags" style="font-size:.92rem;color:#333333;margin-bottom:14px;line-height:1.5;"></div>
       <button id="todaySuggestWornBtn" onclick="markTodaySuggestionWorn()" style="width:100%;background:#1A1A1A;color:#fff;border:none;border-radius:8px;padding:11px;cursor:pointer;font-size:.86rem;font-family:inherit;font-weight:600;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><polyline points="4.5 12.2 9.8 17.5 19.5 6.5"/></svg> Vou usar esse hoje</button>
       <button id="todaySuggestUseBtn" onclick="usarLookNesteDia()" style="display:none;width:100%;background:#1A1A1A;color:#fff;border:none;border-radius:8px;padding:11px;cursor:pointer;font-size:.86rem;font-family:inherit;font-weight:600;">Usar esse dia</button>
+      <div id="todaySuggestVoto"></div>
       <div style="display:flex;gap:8px;margin-top:8px;">
         <button id="todaySuggestSwapBtn" onclick="trocarLookDoDia()" style="flex:1;background:#fff;border:1px solid #E0E0DB;color:#1A1A1A;border-radius:8px;padding:9px;cursor:pointer;font-size:.83rem;font-family:inherit;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M20.3 12a8.3 8.3 0 1 1-2.7-6.1"/><path d="M20.3 3.6v4.7h-4.7"/></svg> Trocar</button>
         <div id="todaySuggestNav" class="today-nav" style="display:none;">
@@ -1255,7 +1260,7 @@ function lsSet(key, value) {
 // Se o servidor não responder (ex: site aberto direto do GitHub Pages, sem
 // backend, ou sem internet), tudo falha silenciosamente e o app continua
 // funcionando 100% localmente, como sempre funcionou.
-var SYNC_KEYS = ['looks_tina_catalog_v1', 'looks_tina_montados_v1', 'looks_tina_pecas_avulsas_v1', 'looks_tina_proxsemana_v1', 'looks_tina_pecas_arquivadas_v1', 'looks_tina_proxsemana_dias_v1', 'looks_tina_proxsemana_noite_v1', 'looks_tina_inspiracoes_v1', 'looks_tina_preferencias_v1'];
+var SYNC_KEYS = ['looks_tina_catalog_v1', 'looks_tina_montados_v1', 'looks_tina_pecas_avulsas_v1', 'looks_tina_proxsemana_v1', 'looks_tina_pecas_arquivadas_v1', 'looks_tina_proxsemana_dias_v1', 'looks_tina_proxsemana_noite_v1', 'looks_tina_inspiracoes_v1', 'looks_tina_preferencias_v1', 'looks_tina_combinacoes_v1'];
 // Um aparelho que abre o app sem nada salvo começa com o catálogo embutido (851
 // looks) e a lista de montados vazia. Se ele mandar isso pro servidor antes de
 // ler o que está lá, apaga o que existe — foi o que aconteceu em 17/08/2026,
@@ -4062,6 +4067,7 @@ function closeSuggestionBuilder() {
 }
 
 function renderSuggestionCanvas() {
+  setTimeout(renderVotoDaSugestao, 0); // depois do canvas, pra pegar as peças já trocadas
   var canvas = document.getElementById('suggestionCanvas');
   if (!canvas) return;
   var pieces = suggestionSlots.map(function(s) { return findPieceById(s.pieceId); }).filter(Boolean);
@@ -4277,6 +4283,24 @@ function renderBotaoSugestaoAnterior() {
     + (historicoSugestoes.length > 1 ? ' (' + historicoSugestoes.length + ')' : '');
 }
 
+// As peças que estão no construtor viram etiquetas comparáveis às do catálogo,
+// pra o voto dela valer nos mesmos critérios das outras sugestões.
+function tagsDaSugestaoAtual() {
+  var pecas = suggestionSlots.map(function(s){ return findPieceById(s.pieceId); }).filter(Boolean);
+  return pecas.map(function(p){
+    var cat = (CATEGORIA_EM_PT[p.category] || p.category).toLowerCase();
+    return cat + ': ' + (p.name || p.color || '').toLowerCase();
+  });
+}
+
+function renderVotoDaSugestao() {
+  var caixa = document.getElementById('suggestionVoto');
+  if (!caixa) return;
+  caixa.innerHTML = '';
+  if (!suggestionSlots.length) return;
+  montarBotoesDeVoto(caixa, tagsDaSugestaoAtual);
+}
+
 function regenerateSuggestion() {
   guardarSugestaoAtual();
   generateFullSuggestion();
@@ -4430,6 +4454,9 @@ var ultimoRegistroDeUso = safeParse(lsGet('looks_tina_ultimouso_v1'), null);
 // pra dizer algo), e sim por peça: recusar três looks com a mesma calça já
 // ensina alguma coisa sobre a calça. Guarda sim/não por etiqueta.
 var preferencias = safeParse(lsGet('looks_tina_preferencias_v1'), {}) || {};
+// Voto explícito na combinação (par de peças). Fica aqui em cima porque init()
+// roda antes do meio do arquivo.
+var combinacoes = safeParse(lsGet('looks_tina_combinacoes_v1'), {}) || {};
 
 function savePreferencias() {
   lsSet('looks_tina_preferencias_v1', JSON.stringify(preferencias));
@@ -4472,6 +4499,14 @@ function preferenciaScore(tags) {
   });
   if (!contadas) return 0;
   return Math.max(-2.5, Math.min(2.5, (soma / contadas) * 2.5));
+}
+
+function esquecerCombinacoes() {
+  if (!confirm('Esquecer os votos de gostei/não gostei nas combinações?')) return;
+  combinacoes = {};
+  saveCombinacoes();
+  if (document.getElementById('statsContent')) renderStats();
+  showSavedToast('Votos de combinação zerados.');
 }
 
 function esquecerPreferencias() {
@@ -9155,6 +9190,133 @@ function pickWithVariety(pool, scoreFn, minBand) {
   return faixa[Math.floor(Math.random() * faixa.length)].p;
 }
 
+// ── Gostei / não gostei ──
+// Até aqui o app só aprendia do que ela recusava, e por caminhos indiretos
+// (arquivar, tirar do dia). Um voto explícito vale mais que todos eles.
+//
+// A parte difícil é a culpa: num look de quatro peças, "não gostei" não diz se o
+// problema é a blusa, a calça ou o encontro das duas. Jogar a nota negativa em
+// todas as peças ensinaria errado — ela pode amar cada uma separada. Então:
+// gostei reforça as peças e a combinação; não gostei pergunta quem foi, e sem
+// resposta a nota fica só na combinação.
+
+function saveCombinacoes() {
+  lsSet('looks_tina_combinacoes_v1', JSON.stringify(combinacoes));
+}
+
+function paresDeEtiquetas(tags) {
+  var lista = etiquetasQueContam(tags).slice(0, 6); // 6 peças já dão 15 pares
+  var pares = [];
+  for (var i = 0; i < lista.length; i++) {
+    for (var j = i + 1; j < lista.length; j++) {
+      pares.push([lista[i], lista[j]].sort().join('  +  '));
+    }
+  }
+  return pares;
+}
+
+function registrarCombinacao(tags, sinal) {
+  paresDeEtiquetas(tags).forEach(function(par){
+    if (!combinacoes[par]) combinacoes[par] = { sim: 0, nao: 0 };
+    combinacoes[par][sinal > 0 ? 'sim' : 'nao']++;
+  });
+  saveCombinacoes();
+}
+
+// Vale no máximo ±2: é um tempero em cima da peça, não um veto.
+function combinacaoScore(tags) {
+  var pares = paresDeEtiquetas(tags);
+  if (!pares.length) return 0;
+  var soma = 0, contados = 0;
+  pares.forEach(function(par){
+    var r = combinacoes[par];
+    if (!r) return;
+    var total = r.sim + r.nao;
+    if (!total) return;
+    soma += (r.sim - r.nao) / total;
+    contados++;
+  });
+  if (!contados) return 0;
+  return Math.max(-2, Math.min(2, (soma / contados) * 2));
+}
+
+// `culpada`: a etiqueta que ela apontou como responsável, quando aponta.
+function avaliarLookSugerido(tags, sinal, culpada) {
+  if (sinal > 0) {
+    registrarPreferencia(tags, 1, 2);
+    registrarCombinacao(tags, 1);
+    showSavedToast('Anotado — vou sugerir mais nessa linha.');
+    return;
+  }
+  if (culpada) {
+    registrarPreferencia([culpada], -1, 2);
+    registrarCombinacao(tags, -1);
+    showSavedToast('Anotado: ' + culpada + ' sai de cena.');
+    return;
+  }
+  registrarCombinacao(tags, -1); // só a combinação; as peças continuam ilesas
+  showSavedToast('Anotado — as peças ficam, a combinação não se repete.');
+}
+
+// A perguntinha depois do "não gostei". Uma pergunta, um toque, e dá pra pular.
+function perguntarCulpada(tags, container, aoTerminar) {
+  var box = document.createElement('div');
+  box.className = 'voto-culpa';
+  var titulo = document.createElement('div');
+  titulo.style.cssText = 'font-size:.76rem;color:#666666;margin-bottom:6px;';
+  titulo.textContent = 'O que não funcionou?';
+  box.appendChild(titulo);
+
+  var linha = document.createElement('div');
+  linha.style.cssText = 'display:flex;flex-wrap:wrap;gap:5px;';
+  etiquetasQueContam(tags).forEach(function(t){
+    var b = document.createElement('button');
+    b.className = 'etq-chip';
+    b.textContent = t.split(':').slice(1).join(':').trim() || t;
+    b.title = t;
+    b.onclick = function(){ avaliarLookSugerido(tags, -1, t); box.remove(); if (aoTerminar) aoTerminar(); };
+    linha.appendChild(b);
+  });
+  var pular = document.createElement('button');
+  pular.className = 'etq-chip';
+  pular.style.cssText = 'border-style:dashed;color:#8C8C88;';
+  pular.textContent = 'foi o conjunto';
+  pular.onclick = function(){ avaliarLookSugerido(tags, -1, null); box.remove(); if (aoTerminar) aoTerminar(); };
+  linha.appendChild(pular);
+  box.appendChild(linha);
+  container.appendChild(box);
+}
+
+// Os dois botões, do jeito que cabem em qualquer tela de sugestão.
+function montarBotoesDeVoto(container, pegarTags, aoVotar) {
+  var linha = document.createElement('div');
+  linha.className = 'voto-linha';
+
+  var sim = document.createElement('button');
+  sim.className = 'voto-btn';
+  sim.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M7 10.5v9H4.4a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1H7z"/><path d="M7 10.5 11.4 3.6a2 2 0 0 1 3.5 1.9L13.6 9.5h4.7a2 2 0 0 1 2 2.4l-1.3 6a2 2 0 0 1-2 1.6H7"/></svg> Gostei';
+  sim.title = 'Sugerir mais looks nessa linha';
+  sim.onclick = function(){
+    avaliarLookSugerido(pegarTags(), 1, null);
+    linha.remove();
+    if (aoVotar) aoVotar();
+  };
+
+  var nao = document.createElement('button');
+  nao.className = 'voto-btn';
+  nao.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M17 13.5v-9h2.6a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H17z"/><path d="M17 13.5 12.6 20.4a2 2 0 0 1-3.5-1.9l1.3-4H5.7a2 2 0 0 1-2-2.4l1.3-6a2 2 0 0 1 2-1.6H17"/></svg> Não gostei';
+  nao.title = 'Dizer o que não funcionou';
+  nao.onclick = function(){
+    var tags = pegarTags();
+    linha.remove();
+    perguntarCulpada(tags, container, aoVotar);
+  };
+
+  linha.appendChild(sim); linha.appendChild(nao);
+  container.appendChild(linha);
+  return linha;
+}
+
 // Sugestão automática pra hoje
 // Aparece sozinha assim que o Catálogo carrega (sem precisar clicar em nada).
 // Some se você fechar, mas volta a aparecer na próxima vez que abrir o arquivo.
@@ -9335,6 +9497,7 @@ function notaParaODia(tags, profile, extra) {
        + seasonScore(tags, seasonForProfile(profile))
        + recencyBonus(extra || {}) * 2
        + preferenciaScore(tags)
+       + combinacaoScore(tags)
        + ((extra && extra.favorite) ? 1.5 : 0)
        + ((extra && extra.rating) || 0) * 0.5;
 }
@@ -9554,6 +9717,17 @@ function renderTodaySuggestion() {
     useBtn.style.display = '';
     useBtn.textContent = ehHoje ? 'Vou usar esse hoje' : ('Usar esse em ' + info.label);
     wornBtn.style.display = 'none';
+  }
+
+  var caixaVoto = document.getElementById('todaySuggestVoto');
+  if (caixaVoto) {
+    caixaVoto.innerHTML = '';
+    montarBotoesDeVoto(caixaVoto, function(){
+      var atual = data.find(function(x){ return x.id === todaySuggestionCurrentId; });
+      if (atual) return atual.tags || [];
+      var m = montagens.find(function(x){ return x.id === todaySuggestionCurrentId; });
+      return m ? tagsDoMontado(m) : [];
+    });
   }
 
   overlay.classList.add('open');
@@ -10415,6 +10589,7 @@ function proceedToStep2() {
            + recencyBonus(p) * 2 * staleFactor
            + ocasiaoBoost(p, f.day, alvoDoAssistente())
            + preferenciaScore(p.tags)
+           + combinacaoScore(p.tags)
            + bonusDeRodizio(p)
            - diversityPenalty(p.tags, usedTagFreq);
     }
@@ -10531,6 +10706,7 @@ function regenerateAssignedDay(day) {
          + recencyBonus(p) * 2 * staleFactor
          + ocasiaoBoost(p, day, alvoDoAssistente()) * 3
          + preferenciaScore(p.tags)
+         + combinacaoScore(p.tags)
          + bonusDeRodizio(p)
          - diversityPenalty(p.tags, usedTagFreq);
   }
@@ -11634,6 +11810,31 @@ function renderStats() {
     html += section('O QUE APRENDI DAS SUAS ESCOLHAS', corpo);
   }
 
+  // Combinações votadas no "gostei / não gostei". Ficam separadas das peças de
+  // propósito: dizem respeito ao encontro de duas peças, não a cada uma.
+  var pares = Object.keys(combinacoes).map(function(par){
+    var r = combinacoes[par], total = r.sim + r.nao;
+    return { par: par, saldo: (r.sim - r.nao) / total, total: total, sim: r.sim, nao: r.nao };
+  }).filter(function(x){ return x.total >= 1; });
+
+  if (pares.length) {
+    var boas = pares.filter(function(x){ return x.saldo > 0; }).sort(function(a,b){ return b.saldo - a.saldo || b.total - a.total; }).slice(0,5);
+    var ruins = pares.filter(function(x){ return x.saldo < 0; }).sort(function(a,b){ return a.saldo - b.saldo || b.total - a.total; }).slice(0,5);
+    function listaPares(itens, cor) {
+      return '<div style="display:flex;flex-direction:column;gap:5px;">' + itens.map(function(x){
+        return '<div style="display:flex;justify-content:space-between;gap:10px;font-size:.78rem;">'
+          + '<span>' + x.par + '</span>'
+          + '<span style="color:' + cor + ';white-space:nowrap;">' + x.sim + ' sim · ' + x.nao + ' não</span></div>';
+      }).join('') + '</div>';
+    }
+    var corpoPares = '';
+    if (boas.length) corpoPares += '<div style="font-size:.72rem;color:#8C8C88;margin-bottom:6px;">Combinações que você aprovou</div>' + listaPares(boas, '#5F8C63');
+    if (ruins.length) corpoPares += '<div style="font-size:.72rem;color:#8C8C88;margin:14px 0 6px;">Combinações que não emplacaram</div>' + listaPares(ruins, '#B4544F');
+    corpoPares += '<div style="font-size:.68rem;color:#B0B0AC;margin-top:12px;line-height:1.5;">Vem do "gostei / não gostei" nas sugestões. Quando você não aponta a peça culpada, só a dupla leva a nota — as peças continuam livres pra aparecer com outras.</div>';
+    corpoPares += '<button class="btn btn-ghost" onclick="esquecerCombinacoes()" style="margin-top:10px;color:#8C8C88;">Esquecer as combinações</button>';
+    html += section('COMBINAÇÕES QUE VOCÊ VOTOU', corpoPares);
+  }
+
   el.innerHTML = html;
 }
 
@@ -12018,6 +12219,7 @@ function applySuggestions() {
     </div>
     <p style="color:#666666;font-size:.8rem;margin:-6px 0 14px;">Combinação sugerida levando em conta cor, estação e ocasião de cada peça (estimados a partir do nome/categoria — não são dados oficiais do Alta). Clique em <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M20.3 12a8.3 8.3 0 1 1-2.7-6.1"/><path d="M20.3 3.6v4.7h-4.7"/></svg> pra trocar só aquela peça, <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><rect x="4.6" y="10.4" width="14.8" height="10" rx="2"/><path d="M8.2 10.4V7.2a3.8 3.8 0 0 1 7.3-1.2"/></svg> pra travar a peça e ela ficar fixa nas próximas, <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"/></svg> pra tirar a categoria do look, ou gere tudo de novo.</p>
     <div id="suggestionCanvas" style="margin-bottom:6px;"></div>
+    <div id="suggestionVoto"></div>
     <div id="suggestionLockHint" class="sugg-lock-hint"></div>
     <div id="suggestionLegend" class="sugg-legend"></div>
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
