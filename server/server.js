@@ -330,9 +330,83 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'erro interno' });
 });
 
+// ── Conversão das fotos que já estavam em disco ──
+// As primeiras fotos subiram antes de existir conversão: 26 JPEGs de ~250 KB
+// que o celular dela baixa toda vez que rola o catálogo. Converter aqui evita
+// que ela gaste dados baixando e reenviando as mesmas fotos.
+// O arquivo antigo não é apagado: se a troca de referência falhar no meio, o
+// caminho velho continua funcionando. Roda uma vez só, marcado no volume.
+const MARCA_CONVERSAO = path.join(DATA_DIR, '.fotos-convertidas');
+
+function converterFotosAntigas() {
+  if (!sharp || fs.existsSync(MARCA_CONVERSAO)) return;
+
+  let arquivos;
+  try { arquivos = fs.readdirSync(IMPORTADOS_DIR); }
+  catch (e) { return; }
+
+  const pendentes = arquivos.filter((n) => /\.(jpe?g|png)$/i.test(n));
+  if (!pendentes.length) {
+    fs.writeFileSync(MARCA_CONVERSAO, new Date().toISOString());
+    return;
+  }
+
+  const trocas = {};
+  let feitas = 0;
+
+  const conversoes = pendentes.map((nome) => {
+    const origem = path.join(IMPORTADOS_DIR, nome);
+    const destinoNome = nome.replace(/\.[^.]+$/, '') + '.webp';
+    const destino = path.join(IMPORTADOS_DIR, destinoNome);
+    if (fs.existsSync(destino)) { trocas[nome] = destinoNome; return Promise.resolve(); }
+    return sharp(origem)
+      .rotate()
+      .resize({ width: 600, height: 600, fit: 'inside', withoutEnlargement: true })
+      .webp({ quality: 82, effort: 4 })
+      .toBuffer()
+      .then((buf) => {
+        const original = fs.statSync(origem).size;
+        if (buf.length >= original) return; // não vale a troca
+        writeJsonAtomic(destino, buf);
+        trocas[nome] = destinoNome;
+        feitas++;
+      })
+      .catch((e) => console.error('[conversão] falhou em', nome, e && e.message));
+  });
+
+  Promise.all(conversoes).then(() => {
+    const nomes = Object.keys(trocas);
+    if (nomes.length) {
+      ALLOWED_KEYS.forEach((chave) => {
+        const arquivo = dataFilePath(chave);
+        if (!fs.existsSync(arquivo)) return;
+        try {
+          let conteudo = fs.readFileSync(arquivo, 'utf-8');
+          let mudou = false;
+          nomes.forEach((antigo) => {
+            const de = 'importados/' + antigo;
+            if (conteudo.indexOf(de) === -1) return;
+            conteudo = conteudo.split(de).join('importados/' + trocas[antigo]);
+            mudou = true;
+          });
+          if (!mudou) return;
+          fs.copyFileSync(arquivo, previousFilePath(chave)); // dá pra voltar atrás
+          writeJsonAtomic(arquivo, conteudo);
+          console.log('[conversão] referências atualizadas em', chave);
+        } catch (e) {
+          console.error('[conversão] não consegui atualizar', chave, e && e.message);
+        }
+      });
+    }
+    fs.writeFileSync(MARCA_CONVERSAO, new Date().toISOString());
+    console.log('[conversão] ' + feitas + ' foto(s) convertida(s) para WebP');
+  });
+}
+
 app.listen(PORT, () => {
   console.log('Look Tina backend rodando em http://localhost:' + PORT);
   console.log('Servindo site estático de: ' + REPO_ROOT);
   console.log('Dados salvos em: ' + DATA_DIR);
   if (API_KEY) console.log('Proteção de escrita (x-api-key) ATIVA.');
+  if (sharp) setTimeout(converterFotosAntigas, 2000); // depois do servidor já estar atendendo
 });
