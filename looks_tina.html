@@ -1261,6 +1261,29 @@ var envioSegurando = {};
 // - servidor com dados: o envio que estava na fila foi calculado sem saber
 //   disso e mandaria o catálogo embutido por cima — é descartado. Quem salva
 //   dali em diante é a própria leitura, depois de juntar as duas versões.
+// "Vazio" que chega do servidor não pode apagar o que este aparelho tem.
+// A semana que ela montou no computador foi zerada assim: um aparelho sem dados
+// rodou a virada de segunda-feira, não tinha nada pra promover, e mandou {} por
+// cima do plano dela. Quando o servidor vem vazio e aqui tem conteúdo, o
+// aparelho devolve o que tem em vez de aceitar o apagamento.
+// (Efeito colateral aceito: usar "Limpar semana" num aparelho e abrir o outro,
+// que ainda tem o plano antigo, faz o plano voltar. Perder semana montada é bem
+// pior do que ter que limpar duas vezes.)
+function servidorVeioVazio(valor) {
+  try {
+    var v = JSON.parse(valor);
+    if (v == null) return true;
+    if (Array.isArray(v)) return v.length === 0;
+    if (typeof v === 'object') return Object.keys(v).length === 0;
+    return false;
+  } catch (e) { return false; }
+}
+
+function temAlgoAqui(obj) {
+  if (!obj) return false;
+  return Array.isArray(obj) ? obj.length > 0 : Object.keys(obj).length > 0;
+}
+
 function liberarEnvio(key, temNoServidor) {
   if (chavesLidasDoServidor[key]) return;
   chavesLidasDoServidor[key] = true;
@@ -1293,6 +1316,7 @@ function pullRemoteUpdates() {
   syncGet('looks_tina_pecas_avulsas_v1').then(function(res) {
     liberarEnvio('looks_tina_pecas_avulsas_v1', !!(res && res.value != null));
     if (!res || res.value == null) return;
+    if (servidorVeioVazio(res.value) && temAlgoAqui(pecasAvulsas)) { syncPut('looks_tina_pecas_avulsas_v1', JSON.stringify(pecasAvulsas)); return; }
     var currentJson = JSON.stringify(pecasAvulsas);
     if (res.value !== currentJson) {
       try {
@@ -1305,6 +1329,7 @@ function pullRemoteUpdates() {
   syncGet('looks_tina_pecas_arquivadas_v1').then(function(res) {
     liberarEnvio('looks_tina_pecas_arquivadas_v1', !!(res && res.value != null));
     if (!res || res.value == null) return;
+    if (servidorVeioVazio(res.value) && temAlgoAqui(pecasArquivadas)) { syncPut('looks_tina_pecas_arquivadas_v1', JSON.stringify(pecasArquivadas)); return; }
     if (res.value !== JSON.stringify(pecasArquivadas)) {
       try {
         pecasArquivadas = JSON.parse(res.value) || [];
@@ -1316,6 +1341,7 @@ function pullRemoteUpdates() {
   syncGet('looks_tina_proxsemana_noite_v1').then(function(res) {
     liberarEnvio('looks_tina_proxsemana_noite_v1', !!(res && res.value != null));
     if (!res || res.value == null) return;
+    if (servidorVeioVazio(res.value) && temAlgoAqui(nextWeekNoite)) { saveNextWeekNoite(); return; }
     if (res.value !== JSON.stringify(nextWeekNoite)) {
       try {
         nextWeekNoite = JSON.parse(res.value) || {};
@@ -1327,6 +1353,7 @@ function pullRemoteUpdates() {
   syncGet('looks_tina_proxsemana_dias_v1').then(function(res) {
     liberarEnvio('looks_tina_proxsemana_dias_v1', !!(res && res.value != null));
     if (!res || res.value == null) return;
+    if (servidorVeioVazio(res.value) && temAlgoAqui(nextWeekDays)) { saveNextWeekDays(); return; }
     if (res.value !== JSON.stringify(nextWeekDays)) {
       try {
         nextWeekDays = JSON.parse(res.value) || {};
@@ -1338,6 +1365,7 @@ function pullRemoteUpdates() {
   syncGet('looks_tina_proxsemana_v1').then(function(res) {
     liberarEnvio('looks_tina_proxsemana_v1', !!(res && res.value != null));
     if (!res || res.value == null) return;
+    if (servidorVeioVazio(res.value) && temAlgoAqui(nextWeekPlan)) { saveNextWeekPlan(); return; }
     if (res.value !== JSON.stringify(nextWeekPlan)) {
       try {
         nextWeekPlan = JSON.parse(res.value) || {};
@@ -1349,6 +1377,7 @@ function pullRemoteUpdates() {
   syncGet('looks_tina_montados_v1').then(function(res) {
     liberarEnvio('looks_tina_montados_v1', !!(res && res.value != null));
     if (!res || res.value == null) return;
+    if (servidorVeioVazio(res.value) && temAlgoAqui(montagens)) { saveMontagens(); return; }
     var currentJson = JSON.stringify(montagens);
     if (res.value !== currentJson) {
       try {
@@ -1365,6 +1394,7 @@ function pullRemoteUpdates() {
   syncGet('looks_tina_inspiracoes_v1').then(function(res) {
     liberarEnvio('looks_tina_inspiracoes_v1', !!(res && res.value != null));
     if (!res || res.value == null) return;
+    if (servidorVeioVazio(res.value) && temAlgoAqui(inspiracoes)) { saveInspiracoes(); return; }
     if (res.value !== JSON.stringify(inspiracoes)) {
       try {
         inspiracoes = JSON.parse(res.value) || [];
@@ -1376,6 +1406,7 @@ function pullRemoteUpdates() {
   syncGet('looks_tina_preferencias_v1').then(function(res) {
     liberarEnvio('looks_tina_preferencias_v1', !!(res && res.value != null));
     if (!res || res.value == null) return;
+    if (servidorVeioVazio(res.value) && temAlgoAqui(preferencias)) { savePreferencias(); return; }
     if (res.value !== JSON.stringify(preferencias)) {
       try {
         preferencias = JSON.parse(res.value) || {};
@@ -5672,6 +5703,7 @@ function saveImportedLook(idx) {
     lastWorn: null,
     weekday: null,
     isImported: true,
+    origTamanho: item.origTamanho || null, // usado pra reconhecer foto repetida em outro upload
     addedAt: Date.now()
   };
   data.push(newLook);
@@ -5990,21 +6022,66 @@ function resizeImageDataUrl(dataUrl, maxDim, quality, callback) {
   img.src = dataUrl;
 }
 
+// Nome do arquivo virando nome do look: "IMG_6911.jpg" → "IMG 6911".
+function nomeDeArquivoParaLook(nomeDoArquivo) {
+  return nomeDoArquivo.replace(/\.(jpe?g|png|heic|webp)$/i,'').replace(/[_-]/g,' ').trim();
+}
+
+// Descobrir de olho o que já subiu, no meio de um rolo de câmera, é tarefa
+// impossível — e depois de perder upload ela precisa poder mandar tudo de novo
+// sem catar um por um. O app compara pelo nome do arquivo (e pelo tamanho, pros
+// que subiram daqui pra frente) e fica só com o que falta.
+function jaFoiImportado(nome, tamanho) {
+  var alvo = nome.toLowerCase();
+  var noCatalogo = data.some(function(p){
+    if (!p.isImported) return false;
+    if ((p.name || '').toLowerCase().trim() === alvo) return true;
+    return tamanho && p.origTamanho === tamanho;
+  });
+  if (noCatalogo) return true;
+  return importedLooks.some(function(it){ return (it.name || '').toLowerCase().trim() === alvo; });
+}
+
 function handleImportFiles(files) {
   var arr = Array.from(files).filter(function(f){ return f.type.startsWith('image/'); });
   if(arr.length === 0) return;
-  var pending = arr.length;
-  arr.forEach(function(file) {
+
+  var novos = [], repetidos = 0;
+  arr.forEach(function(file){
+    var nome = nomeDeArquivoParaLook(file.name);
+    if (jaFoiImportado(nome, file.size)) { repetidos++; return; }
+    novos.push({ file: file, nome: nome });
+  });
+
+  if (!novos.length) {
+    avisoDaImportacao(0, repetidos);
+    renderImportView();
+    return;
+  }
+
+  var pending = novos.length;
+  novos.forEach(function(item) {
     var reader = new FileReader();
     reader.onload = function(e) {
       resizeImageDataUrl(e.target.result, 1000, 0.82, function(resized){
-        importedLooks.push({dataUrl: resized, tagsRaw:'', name: file.name.replace(/\.(jpe?g|png|heic|webp)$/i,'').replace(/[_-]/g,' ')});
+        importedLooks.push({dataUrl: resized, tagsRaw:'', name: item.nome, origTamanho: item.file.size});
         pending--;
-        if(pending === 0) { saveImported(); renderImportView(); }
+        if(pending === 0) { saveImported(); renderImportView(); avisoDaImportacao(novos.length, repetidos); }
       });
     };
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(item.file);
   });
+}
+
+function avisoDaImportacao(adicionadas, repetidas) {
+  var el = document.getElementById('importAviso');
+  if (!el) return;
+  if (!adicionadas && !repetidas) { el.style.display = 'none'; return; }
+  var partes = [];
+  if (adicionadas) partes.push(adicionadas === 1 ? '1 foto nova adicionada' : adicionadas + ' fotos novas adicionadas');
+  if (repetidas) partes.push(repetidas === 1 ? '1 já estava no catálogo, ignorada' : repetidas + ' já estavam no catálogo, ignoradas');
+  el.textContent = partes.join(' · ') + '.';
+  el.style.display = 'block';
 }
 
 
@@ -10890,7 +10967,7 @@ function applySuggestions() {
 <!-- IMPORT VIEW -->
 <div id="importView" style="display:none;padding:24px;max-width:860px;margin:0 auto;">
   <h2 style="font-size:1.2rem;font-weight:700;margin-bottom:4px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><circle cx="12" cy="12" r="8.5"/><path d="M12 8.2v7.6M8.2 12h7.6"/></svg> Importar looks novos</h2>
-  <p style="color:#666666;font-size:.85rem;margin-bottom:18px;">Arraste fotos .jpg aqui para adicionar ao seu catálogo como looks temporários (salvo no navegador).</p>
+  <p style="color:#666666;font-size:.85rem;margin-bottom:18px;">Pode mandar o rolo inteiro: foto que já está no catálogo é reconhecida e ignorada, só entra o que falta.</p>
 
   <div id="importDropZone" style="border:2.5px dashed #E0E0DB;border-radius:16px;padding:40px;text-align:center;cursor:pointer;background:#FAFAF8;transition:background .2s;"
     ondragover="event.preventDefault();this.style.background='#ede8ff'"
@@ -10902,6 +10979,8 @@ function applySuggestions() {
     <div style="color:#A8A8A4;font-size:.82rem;">ou clique para selecionar</div>
     <input type="file" id="importFileInput" multiple accept="image/*" style="display:none" onchange="handleImportFiles(this.files)">
   </div>
+
+  <div id="importAviso" style="display:none;margin-top:14px;background:#FAFAF8;border:1px solid #E0E0DB;border-radius:10px;padding:10px 14px;font-size:.82rem;color:#1A1A1A;"></div>
 
   <div id="importPreviews" style="margin-top:20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;"></div>
 </div>
