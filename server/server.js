@@ -45,6 +45,15 @@ function dataFilePath(key) {
   return path.join(DATA_DIR, key + '.json');
 }
 
+// Cópia da versão anterior de cada chave.
+// Em 17/08/2026 um aparelho sem nada salvo mandou o catálogo embutido por cima
+// do dela e 26 looks importados sumiram — sem nada em disco pra voltar atrás.
+// O front-end foi corrigido pra não fazer isso, mas uma cópia da última versão
+// custa quase nada e transforma um acidente desses em um comando.
+function previousFilePath(key) {
+  return path.join(DATA_DIR, key + '.anterior.json');
+}
+
 // escrita atômica: grava num arquivo temporário e renomeia por cima do
 // arquivo final, pra nunca deixar um JSON pela metade no disco se o
 // processo cair no meio de uma escrita.
@@ -80,6 +89,19 @@ app.get('/api/data/:key', (req, res) => {
   }
 });
 
+// A versão imediatamente anterior de uma chave, pra desfazer uma sobrescrita.
+app.get('/api/data/:key/anterior', (req, res) => {
+  const key = req.params.key;
+  if (!ALLOWED_KEYS.has(key)) return res.status(404).json({ error: 'chave desconhecida' });
+  const filePath = previousFilePath(key);
+  if (!fs.existsSync(filePath)) return res.json({ value: null, updatedAt: null });
+  try {
+    res.json(JSON.parse(fs.readFileSync(filePath, 'utf-8')));
+  } catch (e) {
+    res.status(500).json({ error: 'falha ao ler a cópia anterior' });
+  }
+});
+
 app.put('/api/data/:key', (req, res) => {
   const key = req.params.key;
   if (!ALLOWED_KEYS.has(key)) return res.status(404).json({ error: 'chave desconhecida' });
@@ -95,7 +117,12 @@ app.put('/api/data/:key', (req, res) => {
   const updatedAt = new Date().toISOString();
   const toStore = JSON.stringify({ value: value, updatedAt: updatedAt });
   try {
-    writeJsonAtomic(dataFilePath(key), toStore);
+    const filePath = dataFilePath(key);
+    if (fs.existsSync(filePath)) {
+      try { fs.copyFileSync(filePath, previousFilePath(key)); }
+      catch (e) { console.error('[aviso] não consegui guardar a cópia anterior de', key, e && e.message); }
+    }
+    writeJsonAtomic(filePath, toStore);
     res.json({ ok: true, updatedAt: updatedAt });
   } catch (e) {
     res.status(500).json({ error: 'falha ao salvar' });

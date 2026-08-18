@@ -1247,8 +1247,31 @@ function lsSet(key, value) {
 // backend, ou sem internet), tudo falha silenciosamente e o app continua
 // funcionando 100% localmente, como sempre funcionou.
 var SYNC_KEYS = ['looks_tina_catalog_v1', 'looks_tina_montados_v1', 'looks_tina_pecas_avulsas_v1', 'looks_tina_proxsemana_v1', 'looks_tina_pecas_arquivadas_v1', 'looks_tina_proxsemana_dias_v1', 'looks_tina_proxsemana_noite_v1', 'looks_tina_inspiracoes_v1', 'looks_tina_preferencias_v1'];
+// Um aparelho que abre o app sem nada salvo começa com o catálogo embutido (851
+// looks) e a lista de montados vazia. Se ele mandar isso pro servidor antes de
+// ler o que está lá, apaga o que existe — foi o que aconteceu em 17/08/2026,
+// numa segunda-feira: a virada de semana salva no começo do init(), 400ms antes
+// da primeira leitura do servidor, e 26 looks importados sumiram.
+// Enquanto a chave não foi lida do servidor nesta sessão, o envio fica esperando.
+var chavesLidasDoServidor = {};
+var envioSegurando = {};
+
+// `temNoServidor` decide o destino do envio que ficou esperando:
+// - servidor vazio: o que este aparelho tem é tudo o que existe, então vai.
+// - servidor com dados: o envio que estava na fila foi calculado sem saber
+//   disso e mandaria o catálogo embutido por cima — é descartado. Quem salva
+//   dali em diante é a própria leitura, depois de juntar as duas versões.
+function liberarEnvio(key, temNoServidor) {
+  if (chavesLidasDoServidor[key]) return;
+  chavesLidasDoServidor[key] = true;
+  var pendente = envioSegurando[key];
+  delete envioSegurando[key];
+  if (pendente != null && !temNoServidor) syncPut(key, pendente);
+}
+
 function syncPut(key, jsonValue) {
   if (SYNC_KEYS.indexOf(key) === -1) return;
+  if (!chavesLidasDoServidor[key]) { envioSegurando[key] = jsonValue; return; }
   try {
     fetch('/api/data/' + encodeURIComponent(key), {
       method: 'PUT',
@@ -1266,8 +1289,9 @@ function syncGet(key) {
 // carregado localmente, atualiza o estado em memória + localStorage e
 // re-renderiza a tela correspondente. Roda sozinha, sem travar nada.
 function pullRemoteUpdates() {
-  if (typeof fetch !== 'function') return;
+  if (typeof fetch !== 'function') { SYNC_KEYS.forEach(function(k){ liberarEnvio(k, false); }); return; }
   syncGet('looks_tina_pecas_avulsas_v1').then(function(res) {
+    liberarEnvio('looks_tina_pecas_avulsas_v1', !!(res && res.value != null));
     if (!res || res.value == null) return;
     var currentJson = JSON.stringify(pecasAvulsas);
     if (res.value !== currentJson) {
@@ -1279,6 +1303,7 @@ function pullRemoteUpdates() {
     }
   });
   syncGet('looks_tina_pecas_arquivadas_v1').then(function(res) {
+    liberarEnvio('looks_tina_pecas_arquivadas_v1', !!(res && res.value != null));
     if (!res || res.value == null) return;
     if (res.value !== JSON.stringify(pecasArquivadas)) {
       try {
@@ -1289,6 +1314,7 @@ function pullRemoteUpdates() {
     }
   });
   syncGet('looks_tina_proxsemana_noite_v1').then(function(res) {
+    liberarEnvio('looks_tina_proxsemana_noite_v1', !!(res && res.value != null));
     if (!res || res.value == null) return;
     if (res.value !== JSON.stringify(nextWeekNoite)) {
       try {
@@ -1299,6 +1325,7 @@ function pullRemoteUpdates() {
     }
   });
   syncGet('looks_tina_proxsemana_dias_v1').then(function(res) {
+    liberarEnvio('looks_tina_proxsemana_dias_v1', !!(res && res.value != null));
     if (!res || res.value == null) return;
     if (res.value !== JSON.stringify(nextWeekDays)) {
       try {
@@ -1309,6 +1336,7 @@ function pullRemoteUpdates() {
     }
   });
   syncGet('looks_tina_proxsemana_v1').then(function(res) {
+    liberarEnvio('looks_tina_proxsemana_v1', !!(res && res.value != null));
     if (!res || res.value == null) return;
     if (res.value !== JSON.stringify(nextWeekPlan)) {
       try {
@@ -1319,6 +1347,7 @@ function pullRemoteUpdates() {
     }
   });
   syncGet('looks_tina_montados_v1').then(function(res) {
+    liberarEnvio('looks_tina_montados_v1', !!(res && res.value != null));
     if (!res || res.value == null) return;
     var currentJson = JSON.stringify(montagens);
     if (res.value !== currentJson) {
@@ -1331,16 +1360,50 @@ function pullRemoteUpdates() {
       } catch (e) {}
     }
   });
+  // Estavam na lista de envio mas ninguém lia de volta: mudança feita no celular
+  // não chegava no computador, e o envio ficaria travado pela espera acima.
+  syncGet('looks_tina_inspiracoes_v1').then(function(res) {
+    liberarEnvio('looks_tina_inspiracoes_v1', !!(res && res.value != null));
+    if (!res || res.value == null) return;
+    if (res.value !== JSON.stringify(inspiracoes)) {
+      try {
+        inspiracoes = JSON.parse(res.value) || [];
+        lsSet('looks_tina_inspiracoes_v1', res.value);
+        if (typeof renderInspiracoes === 'function' && document.getElementById('inspiracoesGrid')) renderInspiracoes();
+      } catch (e) {}
+    }
+  });
+  syncGet('looks_tina_preferencias_v1').then(function(res) {
+    liberarEnvio('looks_tina_preferencias_v1', !!(res && res.value != null));
+    if (!res || res.value == null) return;
+    if (res.value !== JSON.stringify(preferencias)) {
+      try {
+        preferencias = JSON.parse(res.value) || {};
+        lsSet('looks_tina_preferencias_v1', res.value);
+        if (typeof renderStats === 'function' && document.getElementById('statsContent')) renderStats();
+      } catch (e) {}
+    }
+  });
   syncGet('looks_tina_catalog_v1').then(function(res) {
+    liberarEnvio('looks_tina_catalog_v1', !!(res && res.value != null));
     if (!res || res.value == null) return;
     var currentJson = JSON.stringify(data);
     if (res.value !== currentJson) {
       try {
-        var merged = JSON.parse(res.value);
-        if (merged && merged.length) {
-          data = merged;
-          _lastSavedSnapshot = res.value;
-          lsSet('looks_tina_catalog_v1', res.value);
+        var remoto = JSON.parse(res.value);
+        if (remoto && remoto.length) {
+          // Substituir direto apagava o que só existia neste aparelho. Os looks
+          // importados por foto vivem só aqui até subirem, então a leitura do
+          // servidor os levava embora. Agora é união: o servidor manda nos looks
+          // que os dois conhecem, e o que só existe aqui é preservado e devolvido.
+          var idsRemotos = {};
+          remoto.forEach(function(p){ idsRemotos[p.id] = true; });
+          var soAqui = data.filter(function(p){ return p.isImported && !idsRemotos[p.id]; });
+          data = remoto.concat(soAqui);
+          var juntado = JSON.stringify(data);
+          _lastSavedSnapshot = soAqui.length ? null : res.value;
+          lsSet('looks_tina_catalog_v1', juntado);
+          if (soAqui.length) saveToStorage(); // devolve pro servidor o que faltava lá
           if (typeof renderGrid === 'function') renderGrid();
           if (typeof renderCal === 'function' && document.getElementById('calGrid')) renderCal();
         }
