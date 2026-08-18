@@ -3591,6 +3591,17 @@ function openMontadoDetail(id) {
       outro.title = 'Outra combinação com as cores dessa inspiração';
       outro.onclick = gerarOutroLookInspirado;
       acoes.appendChild(outro);
+
+      var guardados = (historicoInspirados[m.id] || []).length;
+      if (guardados) {
+        var voltar = document.createElement('button');
+        voltar.className = 'btn btn-ghost';
+        voltar.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M3.7 12a8.3 8.3 0 1 0 2.7-6.1"/><path d="M3.7 3.6v4.7h4.7"/></svg> Ver o anterior'
+          + (guardados > 1 ? ' (' + guardados + ')' : '');
+        voltar.title = 'Voltar pra combinação anterior deste look';
+        voltar.onclick = voltarLookInspiradoAnterior;
+        acoes.appendChild(voltar);
+      }
     }
     var excluir = document.createElement('button');
     excluir.className = 'btn btn-ghost';
@@ -5939,6 +5950,25 @@ function pecasInspiradasEm(insp, evitar) {
 
 // "Gerar outro look" no detalhe: troca as peças do look que está aberto, em vez
 // de criar mais um — senão cada tentativa deixaria um look descartado pra trás.
+// Mesma ideia do "Ver o anterior" da sugestão automática: gerar outro apagava a
+// combinação da tela sem volta. Guardado por look, e não some ao fechar o
+// detalhe — ela abre e fecha essa tela o tempo todo.
+var historicoInspirados = {};
+var HISTORICO_INSPIRADOS_MAX = 10;
+
+function voltarLookInspiradoAnterior() {
+  var m = montagens.find(function(x){ return x.id === montadoDetailId; });
+  if (!m) return;
+  var hist = historicoInspirados[m.id];
+  var anterior = hist && hist.pop();
+  if (!anterior) return;
+  m.pieceIds = anterior;
+  saveMontagens();
+  renderLooksMontados();
+  openMontadoDetail(m.id);
+  showSavedToast('Voltou pro look anterior.');
+}
+
 function gerarOutroLookInspirado() {
   var m = montagens.find(function(x){ return x.id === montadoDetailId; });
   if (!m || !m.inspiradoEm) return;
@@ -5946,6 +5976,9 @@ function gerarOutroLookInspirado() {
   if (!insp) { showSavedToast('A inspiração desse look foi apagada.'); return; }
   var novos = pecasInspiradasEm(insp, m.pieceIds || []);
   if (!novos || novos.length < 2) { showSavedToast('Não achei outras peças pra essa paleta.'); return; }
+  var hist = historicoInspirados[m.id] = historicoInspirados[m.id] || [];
+  hist.push((m.pieceIds || []).slice());
+  if (hist.length > HISTORICO_INSPIRADOS_MAX) hist.shift();
   m.pieceIds = novos;
   saveMontagens();
   renderLooksMontados();
