@@ -566,6 +566,9 @@ body.week-pick-mode .card-week-btn { display: block; }
 .insp-dot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(0,0,0,.12); display: inline-block; }
 .insp-palette-txt { font-size: .66rem; color: #A8A8A4; }
 .insp-btn { width: 100%; box-sizing: border-box; justify-content: center; white-space: normal; text-align: center; line-height: 1.25; }
+.etq-chip { background:#FAFAF8; border:1px solid #E0E0DB; border-radius:14px; padding:5px 11px; font-size:.78rem; font-family:inherit; color:#1A1A1A; cursor:pointer; }
+.etq-chip:hover { border-color:#C4C4BE; }
+.etq-chip-on { background:#1A1A1A; border-color:#1A1A1A; color:#fff; }
 .daypick-tabs { grid-column: 1/-1; display: flex; gap: 6px; padding: 0 0 8px; }
 .daypick-tab { flex: 1; background: #FAFAF8; border: 1px solid #E0E0DB; border-radius: 8px; color: #666666; font-size: .8rem; font-family: inherit; cursor: pointer; padding: 7px 10px; display: flex; align-items: center; justify-content: center; gap: 5px; }
 .daypick-tab:hover { border-color: #C4C4BE; color: #1A1A1A; }
@@ -823,6 +826,7 @@ body.compare-mode .card-compare-btn { display: flex; }
 
   <!-- Season / Occasion / Sort / Favorites bar -->
   <div id="filterBar" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 24px 4px;border-bottom:1px solid #F0F0EC;">
+    <button class="fbar-btn" id="btnEtiquetarRapido" onclick="abrirEtiquetarRapido()" style="display:none;"></button>
     <span style="font-size:.75rem;color:#A8A8A4;font-weight:500;letter-spacing:.03em;">FILTRAR</span>
     <div style="display:flex;gap:4px;">
       <button class="fbar-btn" id="btnInverno" onclick="setSeason('inverno')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M12 3v18M4.2 7.5l15.6 9M19.8 7.5l-15.6 9"/></svg> Inverno</button>
@@ -4575,6 +4579,119 @@ function setNuncaUsadosFilter() {
 }
 function setSort(v) { activeSort = v; renderGrid(); }
 
+// ── Etiquetar rápido ──
+// Os looks que ela sobe por foto entram sem etiqueta nenhuma, e look sem
+// etiqueta não existe pro app: nunca é sugerido, não entra em filtro, não conta
+// em nada. Digitar "blusa: ..., calça: ..." look por look ninguém faz. Aqui a
+// foto vem grande e as etiquetas que ela mais usa viram botões pra tocar.
+var etiquetarFila = [];
+var etiquetarIdx = 0;
+
+// As mais usadas de cada categoria, que é o que ela realmente repete: a mesma
+// calça jeans aparece em dezenas de looks.
+function etiquetasMaisUsadas(categoria, limite) {
+  var conta = {};
+  data.forEach(function(p){
+    (p.tags||[]).forEach(function(t){
+      var partes = t.split(':');
+      if (partes[0].trim().toLowerCase() !== categoria) return;
+      conta[t.trim()] = (conta[t.trim()] || 0) + 1;
+    });
+  });
+  return Object.keys(conta).sort(function(a,b){ return conta[b]-conta[a]; }).slice(0, limite || 12);
+}
+
+var ETIQUETAR_CATEGORIAS = ['blusa', 'calça', 'saia', 'vestido', 'casaco', 'sapato', 'sandália', 'bolsa'];
+
+function abrirEtiquetarRapido() {
+  etiquetarFila = data.filter(function(p){ return !p.archived && !(p.tags||[]).length; });
+  if (!etiquetarFila.length) { showSavedToast('Todos os looks já têm etiqueta.'); return; }
+  etiquetarIdx = 0;
+  document.getElementById('etiquetarOverlay').style.display = 'flex';
+  renderEtiquetarRapido();
+}
+
+function fecharEtiquetarRapido() {
+  document.getElementById('etiquetarOverlay').style.display = 'none';
+  saveToStorage();
+  renderGrid();
+  buildChips();
+}
+
+function pularEtiquetar(passo) {
+  etiquetarIdx += passo;
+  if (etiquetarIdx < 0) etiquetarIdx = 0;
+  if (etiquetarIdx >= etiquetarFila.length) { fecharEtiquetarRapido(); showSavedToast('Acabou a fila.'); return; }
+  renderEtiquetarRapido();
+}
+
+function alternarEtiqueta(tag) {
+  var look = etiquetarFila[etiquetarIdx];
+  if (!look) return;
+  look.tags = look.tags || [];
+  var i = look.tags.indexOf(tag);
+  if (i === -1) look.tags.push(tag); else look.tags.splice(i, 1);
+  saveToStorage(); // salva a cada toque: fechar no meio não perde o que já foi feito
+  renderEtiquetarRapido();
+}
+
+function adicionarEtiquetaDigitada() {
+  var campo = document.getElementById('etiquetarCampo');
+  var txt = (campo.value || '').trim();
+  if (!txt) return;
+  if (txt.indexOf(':') === -1) { showSavedToast('Escreva no formato "calça: jeans escuro".'); return; }
+  alternarEtiqueta(txt);
+  campo.value = '';
+}
+
+function renderEtiquetarRapido() {
+  var look = etiquetarFila[etiquetarIdx];
+  if (!look) return;
+
+  document.getElementById('etiquetarContador').textContent =
+    (etiquetarIdx + 1) + ' de ' + etiquetarFila.length + ' sem etiqueta';
+  var img = document.getElementById('etiquetarFoto');
+  img.src = lookThumb(look);
+  applyRotation(img, look);
+  img.onclick = function(){ openZoom(lookThumb(look), look.tags || [], getRotation(look), look.id); };
+
+  var atuais = document.getElementById('etiquetarAtuais');
+  atuais.innerHTML = '';
+  (look.tags || []).forEach(function(t){
+    var chip = document.createElement('button');
+    chip.className = 'etq-chip etq-chip-on';
+    chip.innerHTML = t + ' <span style="opacity:.6">×</span>';
+    chip.onclick = function(){ alternarEtiqueta(t); };
+    atuais.appendChild(chip);
+  });
+  if (!(look.tags || []).length) {
+    atuais.innerHTML = '<span style="font-size:.76rem;color:#B0B0AC;">Nenhuma etiqueta ainda — toque nas de baixo.</span>';
+  }
+
+  var caixa = document.getElementById('etiquetarSugestoes');
+  caixa.innerHTML = '';
+  ETIQUETAR_CATEGORIAS.forEach(function(cat){
+    var opcoes = etiquetasMaisUsadas(cat, 8);
+    if (!opcoes.length) return;
+    var titulo = document.createElement('div');
+    titulo.style.cssText = 'font-size:.68rem;text-transform:uppercase;letter-spacing:.04em;color:#A8A8A4;margin:12px 0 5px;';
+    titulo.textContent = cat;
+    caixa.appendChild(titulo);
+    var linha = document.createElement('div');
+    linha.style.cssText = 'display:flex;flex-wrap:wrap;gap:5px;';
+    opcoes.forEach(function(t){
+      var b = document.createElement('button');
+      var ligada = (look.tags || []).indexOf(t) !== -1;
+      b.className = 'etq-chip' + (ligada ? ' etq-chip-on' : '');
+      b.textContent = t.split(':').slice(1).join(':').trim();
+      b.title = t;
+      b.onclick = function(){ alternarEtiqueta(t); };
+      linha.appendChild(b);
+    });
+    caixa.appendChild(linha);
+  });
+}
+
 function buildChips() {
   renderColorSwatches();
   var cats = {};
@@ -4657,7 +4774,17 @@ function setChip(c) {
 }
 
 // Grid 
+function renderBotaoEtiquetarRapido() {
+  var b = document.getElementById('btnEtiquetarRapido');
+  if (!b) return;
+  var n = data.filter(function(p){ return !p.archived && !(p.tags||[]).length; }).length;
+  b.style.display = n ? '' : 'none';
+  b.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M3.6 12.4V4.8a1.2 1.2 0 0 1 1.2-1.2h7.6l8 8-8.8 8.8-8-8z"/><circle cx="8" cy="8" r="1.2"/></svg> Etiquetar ' + n + ' sem etiqueta';
+  b.style.borderColor = '#C4985A'; b.style.color = '#9A6A1F';
+}
+
 function renderGrid() {
+  renderBotaoEtiquetarRapido();
   saveToStorage();
   var q = document.getElementById('search').value.trim().toLowerCase();
   var words = q.split(/\s+/).filter(Boolean);
@@ -11555,6 +11682,27 @@ function applySuggestions() {
       <div id="pieceZoomName" style="font-size:1rem;color:#1a1a1a;margin-top:2px;"></div>
       <div id="pieceZoomMeta" style="font-size:.8rem;color:#A8A8A4;margin-top:6px;"></div>
       <button id="pieceZoomCombina" class="btn btn-ghost" style="width:100%;justify-content:center;margin-top:12px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><circle cx="9" cy="9" r="5.2"/><circle cx="15" cy="15" r="5.2"/></svg> Com o que combina?</button>
+    </div>
+  </div>
+</div>
+
+<div id="etiquetarOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:10004;align-items:center;justify-content:center;padding:16px;" onclick="if(event.target===this)fecharEtiquetarRapido()">
+  <div style="background:#fff;border-radius:16px;max-width:560px;width:100%;max-height:90vh;overflow-y:auto;padding:20px;position:relative;">
+    <span style="position:absolute;top:14px;right:16px;cursor:pointer;line-height:1;" onclick="fecharEtiquetarRapido()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"/></svg></span>
+    <div style="font-size:1.05rem;font-weight:700;padding-right:24px;">Etiquetar rápido</div>
+    <div id="etiquetarContador" style="font-size:.76rem;color:#A8A8A4;margin-top:2px;"></div>
+    <img id="etiquetarFoto" src="" alt="" style="width:100%;max-height:44vh;object-fit:contain;background:#FAFAF8;border-radius:12px;margin:12px 0 10px;cursor:zoom-in;">
+    <div id="etiquetarAtuais" style="display:flex;flex-wrap:wrap;gap:5px;min-height:26px;"></div>
+    <div style="display:flex;gap:6px;margin-top:10px;">
+      <input type="text" id="etiquetarCampo" placeholder="Outra etiqueta (ex: blusa: linho branca)" autocomplete="off"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();adicionarEtiquetaDigitada();}"
+        style="flex:1;min-width:0;box-sizing:border-box;padding:8px 11px;border:1px solid #E0E0DB;border-radius:8px;font-family:inherit;font-size:.82rem;">
+      <button class="btn btn-ghost" onclick="adicionarEtiquetaDigitada()">Adicionar</button>
+    </div>
+    <div id="etiquetarSugestoes"></div>
+    <div style="display:flex;justify-content:space-between;gap:10px;margin-top:18px;position:sticky;bottom:0;background:#fff;padding-top:10px;">
+      <button class="btn btn-ghost" onclick="pularEtiquetar(-1)">‹ Anterior</button>
+      <button class="btn btn-week" onclick="pularEtiquetar(1)">Próximo look ›</button>
     </div>
   </div>
 </div>
