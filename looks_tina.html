@@ -2843,6 +2843,9 @@ function openAddPecaOverlay() {
   document.getElementById('novaPecaBrand').value = '';
   document.getElementById('novaPecaName').value = '';
   document.getElementById('novaPecaColor').value = '';
+  var avisoAuto = document.getElementById('novaPecaAutoAviso');
+  if (avisoAuto) { avisoAuto.style.display = 'none'; avisoAuto.textContent = ''; }
+  nomeSugeridoPorNos = null;
   var catSelect = document.getElementById('novaPecaCategory');
   if (catSelect && !catSelect.options.length) {
     PECA_CATEGORIES.forEach(function(c) {
@@ -2969,6 +2972,78 @@ function compactarRecorte(dataUrl, callback) {
   img.src = dataUrl;
 }
 
+// ── Ler a cor da peça recortada ──
+// Depois do recorte só sobram os pixels da roupa, então a cor dominante ali é a
+// cor da peça. É a mesma leitura das inspirações, sem a parte de adivinhar o que
+// é fundo — aqui o fundo já foi embora.
+function corDominanteDaPeca(dataUrl, callback) {
+  var img = new Image();
+  img.onload = function(){
+    try {
+      var L = 64;
+      var c = document.createElement('canvas'); c.width = L; c.height = L;
+      var ctx = c.getContext('2d');
+      ctx.drawImage(img, 0, 0, L, L);
+      var px = ctx.getImageData(0, 0, L, L).data;
+      var conta = {};
+      for (var i = 0; i < px.length; i += 4) {
+        if (px[i+3] < 200) continue;                       // transparente: fora da peça
+        var nome = nomeDaCor([px[i], px[i+1], px[i+2]]);
+        conta[nome] = (conta[nome] || 0) + 1;
+      }
+      var nomes = Object.keys(conta);
+      if (!nomes.length) return callback(null);
+      nomes.sort(function(a,b){ return conta[b] - conta[a]; });
+      callback(nomes[0]);
+    } catch (e) { callback(null); }
+  };
+  img.onerror = function(){ callback(null); };
+  img.src = dataUrl;
+}
+
+var CATEGORIA_EM_PT = {
+  'Tops': 'Blusa', 'Bottoms': 'Calça', 'Outerwear': 'Casaco', 'Shoes': 'Sapato',
+  'Bags': 'Bolsa', 'Jewelry': 'Joia', 'Accessories': 'Acessório'
+};
+
+// Preenche cor e nome sozinho, como campo já respondido — ela corrige se quiser.
+// Só mexe no que está vazio: o que ela escreveu manda.
+// O nome sugerido segue a categoria enquanto for sugestão nossa. Assim que ela
+// escreve o dela, paramos de mexer.
+var nomeSugeridoPorNos = null;
+
+function ajustarNomeSugerido() {
+  var campoNome = document.getElementById('novaPecaName');
+  var campoCor = document.getElementById('novaPecaColor');
+  var catSelect = document.getElementById('novaPecaCategory');
+  if (!campoNome || !catSelect) return;
+  var dela = campoNome.value.trim();
+  if (dela && dela !== nomeSugeridoPorNos) return;
+  var cor = (campoCor && campoCor.value.trim()) || '';
+  if (!cor) return;
+  nomeSugeridoPorNos = (CATEGORIA_EM_PT[catSelect.value] || catSelect.value) + ' ' + cor;
+  campoNome.value = nomeSugeridoPorNos;
+}
+
+function sugerirDadosDaPeca(dataUrl) {
+  corDominanteDaPeca(dataUrl, function(cor){
+    if (!cor) return;
+    var campoCor = document.getElementById('novaPecaColor');
+    var campoNome = document.getElementById('novaPecaName');
+    var catSelect = document.getElementById('novaPecaCategory');
+    if (campoCor && !campoCor.value.trim()) campoCor.value = cor;
+    if (campoNome && !campoNome.value.trim() && catSelect) {
+      nomeSugeridoPorNos = (CATEGORIA_EM_PT[catSelect.value] || catSelect.value) + ' ' + cor;
+      campoNome.value = nomeSugeridoPorNos;
+    }
+    var aviso = document.getElementById('novaPecaAutoAviso');
+    if (aviso) {
+      aviso.style.display = '';
+      aviso.textContent = 'Li a cor da foto: ' + cor + '. Ajuste o nome e a categoria se precisar.';
+    }
+  });
+}
+
 function recortarFundoNovaPeca(canvas) {
   statusFundo('Preparando o recorte…');
   carregarRemovedorDeFundo().then(function(mod) {
@@ -3002,6 +3077,7 @@ function recortarFundoNovaPeca(canvas) {
     novaPecaImgRecortada = dataUrl;
     statusFundo('Fundo removido. Desmarque acima se preferir a foto original.');
     if (document.getElementById('novaPecaSemFundo').checked) alternarFundoNovaPeca();
+    sugerirDadosDaPeca(dataUrl);
   }).catch(function(err) {
     // Se o recorte falhar (rede, memória, aparelho antigo), segue com a foto original.
     console.error('recorte de fundo falhou:', err);
@@ -11872,9 +11948,10 @@ function applySuggestions() {
     </div>
     <input type="text" id="novaPecaBrand" placeholder="Marca (opcional)" autocomplete="off"
       style="width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid #E0E0DB;border-radius:8px;margin-bottom:10px;font-family:inherit;font-size:.85rem;">
+    <div id="novaPecaAutoAviso" style="display:none;font-size:.72rem;color:#8C8C88;margin:-4px 0 10px;"></div>
     <input type="text" id="novaPecaName" placeholder="Nome da peça (ex: Blusa listrada azul)" autocomplete="off"
       style="width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid #E0E0DB;border-radius:8px;margin-bottom:10px;font-family:inherit;font-size:.85rem;">
-    <select id="novaPecaCategory" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid #E0E0DB;border-radius:8px;margin-bottom:10px;font-family:inherit;font-size:.85rem;background:#fff;"></select>
+    <select id="novaPecaCategory" onchange="ajustarNomeSugerido()" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid #E0E0DB;border-radius:8px;margin-bottom:10px;font-family:inherit;font-size:.85rem;background:#fff;"></select>
     <input type="text" id="novaPecaColor" placeholder="Cor principal (ex: azul, preto, verde oliva)" autocomplete="off"
       style="width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid #E0E0DB;border-radius:8px;margin-bottom:16px;font-family:inherit;font-size:.85rem;">
     <div style="display:flex;justify-content:flex-end;gap:10px;">
