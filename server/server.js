@@ -21,6 +21,19 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 
+// Conversão de imagem. O Safari do iPhone não sabe gerar WebP pelo navegador e
+// cai pra PNG: as 6 peças avulsas dela pesavam de 394 KB a 1 MB, enquanto as do
+// Alta, em WebP, têm 26 a 40 KB. A conversão passa a ser feita aqui.
+// Entra como dependência opcional e o require fica protegido: se o binário não
+// existir pra esta arquitetura, o servidor sobe igual e só deixa de converter —
+// nunca deixa o site fora do ar por causa de otimização de foto.
+let sharp = null;
+try {
+  sharp = require('sharp');
+} catch (e) {
+  console.warn('[aviso] sharp indisponível — as fotos serão guardadas como chegam:', e && e.message);
+}
+
 const PORT = process.env.PORT || 4001;
 const API_KEY = process.env.API_KEY || null;
 
@@ -72,7 +85,7 @@ app.use(express.json({ limit: '30mb' })); // fotos das peças avulsas vêm em ba
 app.use('/server', (req, res) => res.status(404).end());
 
 app.get('/api/health', (req, res) => {
-  res.json({ ok: true, time: new Date().toISOString() });
+  res.json({ ok: true, time: new Date().toISOString(), converteFoto: !!sharp });
 });
 
 app.get('/api/data/:key', (req, res) => {
@@ -103,6 +116,9 @@ if (!fs.existsSync(IMPORTADOS_DIR)) fs.mkdirSync(IMPORTADOS_DIR, { recursive: tr
 
 const TIPOS_DE_FOTO = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp' };
 
+// Diagnóstico: dá pra saber de fora se a conversão está ligada neste servidor.
+// Sem isso, "por que a foto continua pesada?" vira adivinhação.
+
 app.post('/api/foto', (req, res) => {
   if (API_KEY) {
     const provided = req.get('x-api-key');
@@ -125,13 +141,37 @@ app.post('/api/foto', (req, res) => {
 
   // nome sorteado aqui, nunca vindo do cliente: nome de arquivo escolhido de
   // fora é o caminho clássico pra escrever onde não devia.
-  const nome = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10) + extensao;
-  try {
-    writeJsonAtomic(path.join(IMPORTADOS_DIR, nome), bytes);
+  const base = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+
+  function guardar(conteudo, ext) {
+    const nome = base + ext;
+    writeJsonAtomic(path.join(IMPORTADOS_DIR, nome), conteudo);
     res.json({ ok: true, caminho: 'importados/' + nome });
-  } catch (e) {
-    res.status(500).json({ error: 'falha ao guardar a foto' });
   }
+
+  if (!sharp) {
+    try { return guardar(bytes, extensao); }
+    catch (e) { return res.status(500).json({ error: 'falha ao guardar a foto' }); }
+  }
+
+  // 600px no lado maior é o tamanho das peças do Alta; a transparência do
+  // recorte é preservada. `withoutEnlargement` não estica foto pequena.
+  sharp(bytes)
+    .rotate()                          // respeita a orientação EXIF do iPhone
+    .resize({ width: 600, height: 600, fit: 'inside', withoutEnlargement: true })
+    .webp({ quality: 82, effort: 4 })
+    .toBuffer()
+    .then((convertida) => {
+      // Se a conversão sair maior que o original (raro, mas acontece em imagem
+      // já bem comprimida), fica o original.
+      if (convertida.length < bytes.length) return guardar(convertida, '.webp');
+      return guardar(bytes, extensao);
+    })
+    .catch((e) => {
+      console.error('[aviso] conversão falhou, guardando como veio:', e && e.message);
+      try { guardar(bytes, extensao); }
+      catch (e2) { res.status(500).json({ error: 'falha ao guardar a foto' }); }
+    });
 });
 
 // A versão imediatamente anterior de uma chave, pra desfazer uma sobrescrita.
