@@ -8594,14 +8594,53 @@ function semRepetirDestaque(pool, usadas, isentas) {
 var sugestoesRecentes = safeParse(lsGet('looks_tina_sugeridos_v1'), []) || [];
 var SUGESTOES_RECENTES_MAX = 60;
 
+// Evitar o que apareceu há pouco não é a mesma coisa que dar vez a quem nunca
+// apareceu. Só com a lista dos 60 últimos, 693 dos 873 looks dela nunca eram
+// sugeridos em 30 semanas: tinham nota boa e perdiam sempre pros mesmos.
+// Aqui fica quantas vezes cada look já foi sugerido, pra sobrar prioridade pro
+// que ainda não teve vez.
+var vezesSugerido = safeParse(lsGet('looks_tina_vezessugerido_v1'), {}) || {};
+
+function contarSugestao(id) {
+  vezesSugerido[id] = (vezesSugerido[id] || 0) + 1;
+}
+
+// Vale no máximo 3, na mesma faixa do "está parada há tempo" — empurra, não
+// atropela: o clima continua decidindo se o look serve pro dia.
+function bonusDeRodizio(p) {
+  var v = vezesSugerido[p.id] || 0;
+  if (!v) return 6;
+  if (v === 1) return 3;
+  if (v === 2) return 1.5;
+  if (v === 3) return 0.5;
+  return 0;
+}
+
+// Clima como porteiro, não como juiz.
+// Enquanto a nota de clima ordenava a fila, os mesmos 200 looks ganhavam sempre
+// e 650 nunca eram sugeridos, mesmo servindo pro dia. Aqui os que não servem
+// ficam de fora, e entre os que servem quem manda é o rodízio — que é o que ela
+// quer de um armário de 870 looks. Se sobrar pouca coisa (dia extremo, catálogo
+// filtrado por peça), volta a valer a fila antiga: melhor um look mediano do
+// que nenhum.
+function apenasOsQueServemPraODia(pool, profile) {
+  var estacao = seasonForProfile(profile);
+  var servem = pool.filter(function(p){
+    return weatherScore(p.tags || [], profile) >= 0 && seasonScore(p.tags || [], estacao) >= 0;
+  });
+  return servem.length >= 20 ? servem : pool;
+}
+
 function guardarSugestoes(ids) {
   ids.forEach(function(id){
     var i = sugestoesRecentes.indexOf(id);
     if (i !== -1) sugestoesRecentes.splice(i, 1);
     sugestoesRecentes.unshift(id);
+    contarSugestao(id);
   });
   if (sugestoesRecentes.length > SUGESTOES_RECENTES_MAX) sugestoesRecentes.length = SUGESTOES_RECENTES_MAX;
   lsSet('looks_tina_sugeridos_v1', JSON.stringify(sugestoesRecentes));
+  lsSet('looks_tina_vezessugerido_v1', JSON.stringify(vezesSugerido));
 }
 
 function idsVistosRecentemente() {
@@ -9871,6 +9910,7 @@ function proceedToStep2() {
            + recencyBonus(p) * 2 * staleFactor
            + ocasiaoBoost(p, f.day, alvoDoAssistente())
            + preferenciaScore(p.tags)
+           + bonusDeRodizio(p)
            - diversityPenalty(p.tags, usedTagFreq);
     }
 
@@ -9892,7 +9932,9 @@ function proceedToStep2() {
     }
 
     var best = pickWithVariety(
-      evitarVistosRecentes(semRepetirDestaque(pool, destaquesUsados, piecesArr), vistos), score, 10);
+      evitarVistosRecentes(
+        semRepetirDestaque(apenasOsQueServemPraODia(pool, f.profile), destaquesUsados, piecesArr),
+        vistos), score, 10);
     if(best) {
       usedIds.add(best.id);
       pecasDeDestaque(best.tags).forEach(function(t){ destaquesUsados.push(t); });
@@ -9984,6 +10026,7 @@ function regenerateAssignedDay(day) {
          + recencyBonus(p) * 2 * staleFactor
          + ocasiaoBoost(p, day, alvoDoAssistente()) * 3
          + preferenciaScore(p.tags)
+         + bonusDeRodizio(p)
          - diversityPenalty(p.tags, usedTagFreq);
   }
 
@@ -9996,7 +10039,9 @@ function regenerateAssignedDay(day) {
     pool = data.filter(function(p){ return !p.archived && !usedIds.has(p.id) && (p.tags||[]).length>0; });
   }
   var best = pickWithVariety(
-    evitarVistosRecentes(semRepetirDestaque(pool, destaquesUsados, piecesArr), idsVistosRecentemente()), score, 10);
+    evitarVistosRecentes(
+      semRepetirDestaque(apenasOsQueServemPraODia(pool, f.profile), destaquesUsados, piecesArr),
+      idsVistosRecentemente()), score, 10);
   if (!best) return;
   guardarSugestoes([best.id]);
 
