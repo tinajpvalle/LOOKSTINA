@@ -5989,7 +5989,10 @@ function nomeDaCor(rgb) {
   if (h >= 198 && h <= 232 && sat <= 0.38 && l >= 0.42 && l <= 0.72) return 'jeans';
 
   if (h < 16 || h >= 345) {                        // vermelhos
-    if (l <= 0.32) return 'vinho';
+    // Marrom escuro tem matiz vermelho-alaranjado e pouca saturação; vinho é
+    // vermelho de verdade, escuro e saturado. Sem separar os dois, a calça
+    // marrom da inspiração dela era lida como vinho.
+    if (l <= 0.32) return (h >= 8 && h < 16 && sat <= 0.45) ? 'marrom' : 'vinho';
     if (sat <= 0.45 && l >= 0.62) return 'rosa';
     return 'vermelho';
   }
