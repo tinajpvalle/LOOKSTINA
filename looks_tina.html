@@ -1009,6 +1009,7 @@ body.compare-mode .card-compare-btn { display: flex; }
     </div>
 
   </div>
+  <div id="avisoUsoRegistrado" style="display:none;"></div>
   <div class="week-grid" id="weekGrid"></div>
 
   <!-- Próxima semana: aparece embaixo da atual, não num alternador -->
@@ -4327,6 +4328,10 @@ var weekDayOcasiao = safeParse(lsGet('looks_tina_dayocasiao_v1'), {}) || {}; // 
 var weekTemplates = safeParse(lsGet('looks_tina_weektemplates_v1'), []) || [];
 var weekHistory = safeParse(lsGet('looks_tina_weekhistory_v1'), []) || [];
 var WEEK_HISTORY_MAX = 30; // ~7 meses de semanas guardadas, evita crescer sem limite
+// Registro de uso da última virada de semana, pra ela poder desfazer.
+// Fica aqui em cima porque init() roda antes do meio do arquivo, e um `var` mais
+// abaixo só existiria depois — o mesmo tropeço que já derrubou a previsão.
+var ultimoRegistroDeUso = safeParse(lsGet('looks_tina_ultimouso_v1'), null);
 
 // ── Aprender do que ela recusa ────────────────────────────────────────────
 // A conta não é por look (851 looks, cada um aparece raramente — levaria anos
@@ -4944,7 +4949,28 @@ function renderGrid() {
 }
 
 // Week View 
+// Só enquanto for notícia: uma semana depois, some sozinho.
+function renderAvisoUsoRegistrado() {
+  var el = document.getElementById('avisoUsoRegistrado');
+  if (!el) return;
+  var reg = ultimoRegistroDeUso;
+  var recente = reg && reg.feitoEm &&
+    (Date.now() - new Date(reg.feitoEm).getTime()) < 7 * 24 * 60 * 60 * 1000;
+  if (!recente) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  var n = reg.itens.length;
+  el.style.display = '';
+  el.style.cssText = 'display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#FAFAF8;border:1px solid #E0E0DB;border-radius:10px;padding:8px 12px;margin-bottom:14px;font-size:.8rem;color:#666666;';
+  el.innerHTML = '<span>Registrei o uso da semana passada — ' + n + (n === 1 ? ' look.' : ' looks.') + '</span>';
+  var btn = document.createElement('button');
+  btn.className = 'btn btn-ghost';
+  btn.style.cssText = 'padding:4px 10px;font-size:.75rem;';
+  btn.textContent = 'Não usei — desfazer';
+  btn.onclick = function(){ desfazerRegistroDeUso(); renderAvisoUsoRegistrado(); };
+  el.appendChild(btn);
+}
+
 function renderWeek() {
+  renderAvisoUsoRegistrado();
   var wg = document.getElementById('weekGrid');
   wg.innerHTML = '';
   DAYS.forEach(function(day) {
@@ -9417,12 +9443,80 @@ function showHistoryToast(msg) {
 // última segunda-feira registrada — se mudou, uma semana nova começou desde a
 // última visita, então arquiva a semana anterior no histórico e limpa a grade
 // pra montar a semana nova do zero.
+// ── A semana que passou vira histórico de uso ──
+// "Peças esquecidas", o peso de "está parada há tempo" nas sugestões e o
+// aprendizado do que ela recusa dependem de uso registrado — e o catálogo dela
+// inteiro estava com zero, porque marcar look por look todo dia ninguém faz.
+// Ela já monta a semana; na virada, o que estava em cada dia conta como usado
+// naquele dia. Fica registrado o que ela pode desfazer, não o que ela precisa
+// confirmar.
+
+function registrarUsoDaSemanaQuePassou(segundaIso) {
+  var registrados = [];
+  var segunda = new Date(segundaIso + 'T00:00:00');
+
+  DAYS.forEach(function(day, i){
+    var dia = new Date(segunda); dia.setDate(segunda.getDate() + i);
+    var dataDoDia = isoDate(dia);
+    if (dataDoDia > isoDate(new Date())) return; // dia que ainda não chegou não foi usado
+
+    // look do catálogo, de dia e de noite
+    [['weekday', 'dia'], ['weekdayNoite', 'noite']].forEach(function(par){
+      var look = data.find(function(p){ return p[par[0]] === day; });
+      if (!look) return;
+      look.lastWorn = dataDoDia;
+      look.wornCount = (look.wornCount || 0) + 1;
+      registrarPreferencia(look.tags, 1, 1);
+      registrados.push({ tipo: 'look', id: look.id, dia: day, turno: par[1], data: dataDoDia });
+    });
+
+    // looks montados também: eles concorrem nas sugestões pelos mesmos critérios
+    [['weekday', 'dia'], ['weekdayNoite', 'noite']].forEach(function(par){
+      var chave = (WEEKDAYS.find(function(w){ return w.label === day; }) || {}).key;
+      var m = montagens.find(function(x){ return chave && x[par[0]] === chave; });
+      if (!m) return;
+      m.lastWorn = dataDoDia;
+      m.wornCount = (m.wornCount || 0) + 1;
+      registrados.push({ tipo: 'montado', id: m.id, dia: day, turno: par[1], data: dataDoDia });
+    });
+  });
+
+  if (!registrados.length) return null;
+  ultimoRegistroDeUso = { semana: segundaIso, itens: registrados, feitoEm: new Date().toISOString() };
+  lsSet('looks_tina_ultimouso_v1', JSON.stringify(ultimoRegistroDeUso));
+  return ultimoRegistroDeUso;
+}
+
+// Desfaz o registro inteiro da última virada — usado quando a semana não saiu
+// como planejado (viajou, ficou doente, mudou tudo).
+function desfazerRegistroDeUso() {
+  if (!ultimoRegistroDeUso) return;
+  ultimoRegistroDeUso.itens.forEach(function(it){
+    var alvo = (it.tipo === 'montado')
+      ? montagens.find(function(m){ return m.id === it.id; })
+      : data.find(function(p){ return p.id === it.id; });
+    if (!alvo) return;
+    alvo.wornCount = Math.max(0, (alvo.wornCount || 1) - 1);
+    if (alvo.lastWorn === it.data) alvo.lastWorn = null;
+    if (it.tipo !== 'montado') registrarPreferencia(alvo.tags, -1, 1); // devolve o voto que o registro deu
+  });
+  var quantos = ultimoRegistroDeUso.itens.length;
+  ultimoRegistroDeUso = null;
+  lsSet('looks_tina_ultimouso_v1', 'null');
+  saveToStorage(); saveMontagens();
+  if (typeof renderCal === 'function' && document.getElementById('calGrid')) renderCal();
+  if (typeof renderGrid === 'function') renderGrid();
+  showSavedToast(quantos + (quantos === 1 ? ' uso desfeito.' : ' usos desfeitos.'));
+}
+
 function checkWeekRollover() {
   var storedMonday = lsGet('looks_tina_weekcurrentmonday_v1');
   var currentMonday = isoDate(mondayOfCurrentWeek());
   if (storedMonday && storedMonday !== currentMonday) {
     var snap = buildWeekSnapshot();
     var archived = archiveWeekToHistory(storedMonday, snap);
+    // antes de limpar: é aqui que ainda dá pra saber o que estava em cada dia
+    var usoRegistrado = registrarUsoDaSemanaQuePassou(storedMonday);
     DAYS.forEach(function(day){
       var look = data.find(function(p){ return p.weekday === day; });
       if (look) look.weekday = null;
@@ -9476,7 +9570,9 @@ function checkWeekRollover() {
       var oldMonday = new Date(storedMonday + 'T00:00:00');
       var oldSunday = new Date(oldMonday); oldSunday.setDate(oldMonday.getDate() + 6);
       setTimeout(function(){
-        showHistoryToast('Semana de ' + brDate(oldMonday) + '–' + brDate(oldSunday) + ' salva no histórico');
+        var msg = 'Semana de ' + brDate(oldMonday) + '–' + brDate(oldSunday) + ' salva no histórico';
+        if (usoRegistrado) msg += ' · ' + usoRegistrado.itens.length + ' usos registrados';
+        showHistoryToast(msg);
       }, 700);
     }
   }
