@@ -4635,13 +4635,81 @@ function alternarEtiqueta(tag) {
   renderEtiquetarRapido();
 }
 
+// As categorias que ela já usa, do próprio catálogo — não uma lista fixa que eu
+// inventaria e que ficaria velha no primeiro cinto novo.
+function categoriasConhecidas() {
+  var vistas = {};
+  data.forEach(function(p){
+    (p.tags||[]).forEach(function(t){
+      var c = t.split(':')[0].trim().toLowerCase();
+      if (c && t.indexOf(':') !== -1) vistas[c] = true;
+    });
+  });
+  return vistas;
+}
+
+function semAcento(txt) {
+  return txt.normalize ? txt.normalize('NFD').replace(/[\u0300-\u036f]/g, '') : txt;
+}
+
+// "calça azul coreia" vira "calça: azul coreia". Exigir os dois-pontos fazia o
+// campo recusar exatamente o que ela queria escrever — e escrever peça nova é
+// justamente o caso de quem está etiquetando look sem etiqueta.
+function interpretarEtiqueta(txt) {
+  var limpo = (txt || '').trim().replace(/\s+/g, ' ');
+  if (!limpo) return null;
+  if (limpo.indexOf(':') !== -1) {
+    var partes = limpo.split(':');
+    var cat = partes[0].trim().toLowerCase();
+    var resto = partes.slice(1).join(':').trim();
+    return (cat && resto) ? (cat + ': ' + resto) : null;
+  }
+  var palavras = limpo.split(' ');
+  if (palavras.length < 2) return null; // uma palavra só não dá pra saber o que é
+  var primeira = palavras[0].toLowerCase();
+  var conhecidas = categoriasConhecidas();
+  // acha a categoria dela mesmo com acento digitado diferente ("calca" → "calça")
+  var categoria = null;
+  Object.keys(conhecidas).forEach(function(c){
+    if (!categoria && semAcento(c) === semAcento(primeira)) categoria = c;
+  });
+  return (categoria || primeira) + ': ' + palavras.slice(1).join(' ');
+}
+
+function previaDaEtiqueta() {
+  var campo = document.getElementById('etiquetarCampo');
+  var dica = document.getElementById('etiquetarPrevia');
+  if (!campo || !dica) return;
+  var txt = (campo.value || '').trim();
+  if (!txt) { dica.style.display = 'none'; return; }
+  var etq = interpretarEtiqueta(txt);
+  dica.style.display = '';
+  if (!etq) {
+    dica.style.color = '#A8A8A4';
+    dica.textContent = 'Escreva a peça e a descrição: "calça azul coreia".';
+    return;
+  }
+  var nova = !categoriasConhecidas()[etq.split(':')[0]];
+  dica.style.color = '#8C8C88';
+  dica.textContent = 'Vai criar: ' + etq + (nova ? '  (categoria nova)' : '');
+}
+
 function adicionarEtiquetaDigitada() {
   var campo = document.getElementById('etiquetarCampo');
-  var txt = (campo.value || '').trim();
-  if (!txt) return;
-  if (txt.indexOf(':') === -1) { showSavedToast('Escreva no formato "calça: jeans escuro".'); return; }
-  alternarEtiqueta(txt);
+  // aceita várias de uma vez, separadas por vírgula, como na tela de importar
+  var partes = (campo.value || '').split(',');
+  var criadas = 0;
+  partes.forEach(function(pedaco){
+    var etq = interpretarEtiqueta(pedaco);
+    if (!etq) return;
+    var look = etiquetarFila[etiquetarIdx];
+    if (look && (look.tags || []).indexOf(etq) !== -1) return; // já está no look
+    alternarEtiqueta(etq);
+    criadas++;
+  });
+  if (!criadas) { showSavedToast('Escreva a peça e a descrição: "calça azul coreia".'); return; }
   campo.value = '';
+  previaDaEtiqueta();
 }
 
 function renderEtiquetarRapido() {
@@ -11775,11 +11843,13 @@ function applySuggestions() {
     <img id="etiquetarFoto" src="" alt="" style="width:100%;max-height:44vh;object-fit:contain;background:#FAFAF8;border-radius:12px;margin:12px 0 10px;cursor:zoom-in;">
     <div id="etiquetarAtuais" style="display:flex;flex-wrap:wrap;gap:5px;min-height:26px;"></div>
     <div style="display:flex;gap:6px;margin-top:10px;">
-      <input type="text" id="etiquetarCampo" placeholder="Outra etiqueta (ex: blusa: linho branca)" autocomplete="off"
+      <input type="text" id="etiquetarCampo" placeholder="Peça nova (ex: calça azul coreia)" autocomplete="off"
+        oninput="previaDaEtiqueta()"
         onkeydown="if(event.key==='Enter'){event.preventDefault();adicionarEtiquetaDigitada();}"
         style="flex:1;min-width:0;box-sizing:border-box;padding:8px 11px;border:1px solid #E0E0DB;border-radius:8px;font-family:inherit;font-size:.82rem;">
       <button class="btn btn-ghost" onclick="adicionarEtiquetaDigitada()">Adicionar</button>
     </div>
+    <div id="etiquetarPrevia" style="display:none;font-size:.72rem;margin-top:5px;"></div>
     <div id="etiquetarSugestoes"></div>
     <div style="display:flex;justify-content:space-between;gap:10px;margin-top:18px;position:sticky;bottom:0;background:#fff;padding-top:10px;">
       <button class="btn btn-ghost" onclick="pularEtiquetar(-1)">‹ Anterior</button>
