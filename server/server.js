@@ -55,11 +55,11 @@ function previousFilePath(key) {
 }
 
 // escrita atômica: grava num arquivo temporário e renomeia por cima do
-// arquivo final, pra nunca deixar um JSON pela metade no disco se o
-// processo cair no meio de uma escrita.
+// arquivo final, pra nunca deixar um arquivo pela metade no disco se o
+// processo cair no meio de uma escrita. Serve pra JSON e pra foto (Buffer).
 function writeJsonAtomic(filePath, content) {
   const tmpPath = filePath + '.tmp-' + process.pid + '-' + Date.now();
-  fs.writeFileSync(tmpPath, content, 'utf-8');
+  fs.writeFileSync(tmpPath, content, typeof content === 'string' ? 'utf-8' : undefined);
   fs.renameSync(tmpPath, filePath);
 }
 
@@ -86,6 +86,51 @@ app.get('/api/data/:key', (req, res) => {
     res.json(parsed);
   } catch (e) {
     res.status(500).json({ error: 'falha ao ler dado salvo' });
+  }
+});
+
+// ── Fotos dos looks importados ──
+// Elas iam em base64 dentro do próprio catálogo. Cada foto pesa uns 250 KB, e o
+// catálogo passou de 0,2 MB para 4,7 MB — perto do teto de armazenamento que o
+// Safari do iPhone dá pra um site (~5 MB), onde a gravação passa a falhar
+// calada. Aqui a foto vira arquivo em disco, como as de pecas/ e thumbs/, e o
+// catálogo guarda só o caminho.
+// Dentro de DATA_DIR de propósito: só ./server/data é volume no docker-compose.
+// Uma pasta em /app viveria dentro da imagem e sumiria no deploy seguinte,
+// levando as fotos junto.
+const IMPORTADOS_DIR = path.join(DATA_DIR, 'importados');
+if (!fs.existsSync(IMPORTADOS_DIR)) fs.mkdirSync(IMPORTADOS_DIR, { recursive: true });
+
+const TIPOS_DE_FOTO = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp' };
+
+app.post('/api/foto', (req, res) => {
+  if (API_KEY) {
+    const provided = req.get('x-api-key');
+    if (provided !== API_KEY) return res.status(401).json({ error: 'não autorizado' });
+  }
+
+  const dataUrl = req.body && req.body.dataUrl;
+  if (typeof dataUrl !== 'string') return res.status(400).json({ error: 'corpo precisa ter { dataUrl }' });
+
+  const m = /^data:([a-z/+-]+);base64,([\s\S]+)$/i.exec(dataUrl.trim());
+  if (!m) return res.status(400).json({ error: 'dataUrl inválida' });
+
+  const extensao = TIPOS_DE_FOTO[m[1].toLowerCase()];
+  if (!extensao) return res.status(415).json({ error: 'tipo de imagem não aceito' });
+
+  let bytes;
+  try { bytes = Buffer.from(m[2], 'base64'); }
+  catch (e) { return res.status(400).json({ error: 'base64 inválido' }); }
+  if (!bytes.length) return res.status(400).json({ error: 'imagem vazia' });
+
+  // nome sorteado aqui, nunca vindo do cliente: nome de arquivo escolhido de
+  // fora é o caminho clássico pra escrever onde não devia.
+  const nome = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10) + extensao;
+  try {
+    writeJsonAtomic(path.join(IMPORTADOS_DIR, nome), bytes);
+    res.json({ ok: true, caminho: 'importados/' + nome });
+  } catch (e) {
+    res.status(500).json({ error: 'falha ao guardar a foto' });
   }
 });
 
@@ -128,6 +173,16 @@ app.put('/api/data/:key', (req, res) => {
     res.status(500).json({ error: 'falha ao salvar' });
   }
 });
+
+// As fotos moram em server/data/importados (volume), fora da raiz do site, então
+// precisam de rota própria. O express.static resolve o caminho a partir da pasta
+// e barra ".." sozinho.
+app.use('/importados', express.static(IMPORTADOS_DIR, {
+  maxAge: '30d',      // o nome do arquivo é único; o conteúdo nunca muda
+  fallthrough: true,
+  index: false,
+  dotfiles: 'ignore'
+}));
 
 // ── Guarda de path traversal ──
 // O express.static serve a raiz do repositório inteira, e o guard app.use('/server')

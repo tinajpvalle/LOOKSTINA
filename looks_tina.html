@@ -1386,6 +1386,7 @@ function pullRemoteUpdates() {
   });
   syncGet('looks_tina_catalog_v1').then(function(res) {
     liberarEnvio('looks_tina_catalog_v1', !!(res && res.value != null));
+    setTimeout(migrarFotosEmbutidas, 1500); // depois da leitura, pra não migrar o que o servidor vai substituir
     if (!res || res.value == null) return;
     var currentJson = JSON.stringify(data);
     if (res.value !== currentJson) {
@@ -5596,6 +5597,62 @@ function renderImportView() {
   });
 }
 
+// ── Fotos dos looks importados ──
+// A foto ia em base64 dentro do catálogo. Com ~250 KB cada, o catálogo dela
+// passou de 0,2 MB para 4,7 MB e encostou no teto de armazenamento do Safari
+// (~5 MB por site), onde a gravação falha em silêncio — foi por aí que ela
+// perdeu upload. Agora a foto vai pro servidor como arquivo e fica só o
+// caminho. Sem servidor (arquivo local, GitHub Pages), continua em base64,
+// que é o único jeito de funcionar sozinho.
+function ehFotoEmbutida(src) {
+  return typeof src === 'string' && src.indexOf('data:') === 0;
+}
+
+function enviarFotoProServidor(dataUrl) {
+  if (typeof fetch !== 'function' || !ehFotoEmbutida(dataUrl)) return Promise.resolve(null);
+  return fetch('/api/foto', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dataUrl: dataUrl })
+  }).then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(res){
+      if (!res || !res.caminho) return null;
+      // só troca depois de confirmar que o arquivo está sendo servido: caminho
+      // quebrado deixaria o look sem foto, que é pior do que ocupar espaço.
+      return fetch(res.caminho, { method: 'HEAD' })
+        .then(function(r){ return r.ok ? res.caminho : null; })
+        .catch(function(){ return null; });
+    })
+    .catch(function(){ return null; });
+}
+
+// Sobe as fotos que ainda estão embutidas, uma de cada vez pra não pesar.
+// Roda depois da leitura do servidor, quando o app já está de pé.
+var migracaoDeFotosRodando = false;
+function migrarFotosEmbutidas() {
+  if (migracaoDeFotosRodando || typeof fetch !== 'function') return;
+  var pendentes = data.filter(function(p){ return p.isImported && ehFotoEmbutida(p.src); });
+  if (!pendentes.length) return;
+  migracaoDeFotosRodando = true;
+
+  (function proxima(i) {
+    if (i >= pendentes.length) {
+      migracaoDeFotosRodando = false;
+      saveToStorage();
+      if (typeof renderGrid === 'function') renderGrid();
+      return;
+    }
+    var look = pendentes[i];
+    enviarFotoProServidor(look.src).then(function(caminho){
+      if (caminho) {
+        look.src = caminho;
+        saveToStorage(); // salva a cada foto: se a aba fechar no meio, o feito está feito
+      }
+      setTimeout(function(){ proxima(i + 1); }, 150);
+    });
+  })(0);
+}
+
 function saveImportedLook(idx) {
   var item = importedLooks[idx];
   if(!item) return;
@@ -5608,7 +5665,7 @@ function saveImportedLook(idx) {
   }
   var newLook = {
     id: newId,
-    src: item.dataUrl,
+    src: item.dataUrl, // vira o caminho no servidor logo abaixo, se ele responder
     tags: tags,
     name: item.name || '',
     wornCount: 0,
@@ -5621,6 +5678,12 @@ function saveImportedLook(idx) {
   importedLooks.splice(idx, 1);
   saveImported();
   saveToStorage();
+  enviarFotoProServidor(newLook.src).then(function(caminho){
+    if (!caminho) return;
+    newLook.src = caminho;
+    saveToStorage();
+    if (typeof renderGrid === 'function') renderGrid();
+  });
   renderImportView();
   renderGrid();
   showSavedToast('Look adicionado ao catálogo!');
