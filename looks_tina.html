@@ -1324,6 +1324,7 @@ function pullRemoteUpdates() {
   if (typeof fetch !== 'function') { SYNC_KEYS.forEach(function(k){ liberarEnvio(k, false); }); return; }
   syncGet('looks_tina_pecas_avulsas_v1').then(function(res) {
     liberarEnvio('looks_tina_pecas_avulsas_v1', !!(res && res.value != null));
+    setTimeout(migrarFotosDePecas, 2500); // depois da leitura, pra não subir foto que o servidor vai substituir
     if (!res || res.value == null) return;
     if (servidorVeioVazio(res.value) && temAlgoAqui(pecasAvulsas)) { syncPut('looks_tina_pecas_avulsas_v1', JSON.stringify(pecasAvulsas)); return; }
     var currentJson = JSON.stringify(pecasAvulsas);
@@ -2608,7 +2609,11 @@ function savePecasAvulsas() {
   try {
     localStorage.setItem(PECAS_AVULSAS_KEY, json);
   } catch (e) {
-    alert('Não foi possível salvar a peça avulsa (armazenamento do navegador cheio). Tente remover alguma peça avulsa antiga ou usar uma foto menor.');
+    // Não é perda: o syncPut logo abaixo manda pro servidor, e a leitura do
+    // servidor traz de volta na próxima abertura. O alerta antigo mandava
+    // apagar peça antiga, que seria justamente perder o que estava salvo.
+    _memStorage[PECAS_AVULSAS_KEY] = json;
+    showSavedToast('Peça salva no servidor (o armazenamento deste aparelho está cheio).');
   }
   syncPut(PECAS_AVULSAS_KEY, json);
 }
@@ -3033,6 +3038,13 @@ function saveNovaPecaAvulsa() {
     addedAt: Date.now()
   });
   savePecasAvulsas();
+  var novaPeca = pecasAvulsas[pecasAvulsas.length - 1];
+  enviarFotoProServidor(novaPeca.img).then(function(caminho){
+    if (!caminho) return; // sem servidor: fica embutida, como sempre foi
+    novaPeca.img = caminho;
+    savePecasAvulsas();
+    renderPecas();
+  });
   closeAddPecaOverlay();
   renderPecas();
 }
@@ -6000,6 +6012,31 @@ function enviarFotoProServidor(dataUrl) {
         .catch(function(){ return null; });
     })
     .catch(function(){ return null; });
+}
+
+// As peças avulsas guardam a foto do mesmo jeito que os looks importados
+// guardavam: 6 peças dela ocupavam 4,16 MB e sozinhas já estouravam o limite do
+// Safari — era o "armazenamento cheio" que aparecia ao adicionar peça nova.
+var migracaoDePecasRodando = false;
+function migrarFotosDePecas() {
+  if (migracaoDePecasRodando || typeof fetch !== 'function') return;
+  var pendentes = pecasAvulsas.filter(function(p){ return ehFotoEmbutida(p.img); });
+  if (!pendentes.length) return;
+  migracaoDePecasRodando = true;
+
+  (function proxima(i) {
+    if (i >= pendentes.length) {
+      migracaoDePecasRodando = false;
+      savePecasAvulsas();
+      if (typeof renderPecas === 'function') renderPecas();
+      return;
+    }
+    var peca = pendentes[i];
+    enviarFotoProServidor(peca.img).then(function(caminho){
+      if (caminho) { peca.img = caminho; savePecasAvulsas(); }
+      setTimeout(function(){ proxima(i + 1); }, 150);
+    });
+  })(0);
 }
 
 // Sobe as fotos que ainda estão embutidas, uma de cada vez pra não pesar.
