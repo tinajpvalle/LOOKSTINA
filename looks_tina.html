@@ -4505,6 +4505,7 @@ var forecastPromises = {};         // offset -> busca em andamento/pronta
 var wizardWeekOffset = 0;          // 0 = esta semana, 1 = próxima
 
 function init() {
+  normalizarEtiquetasSemCategoria();
   checkWeekRollover();
   buildChips();
   renderGrid();
@@ -4685,13 +4686,14 @@ function interpretarEtiqueta(txt) {
 // baixo mostram só as categorias de roupa, então marca não aparecia em lugar
 // nenhum.
 function buscarEtiquetasExistentes(txt) {
-  var q = semAcento((txt || '').trim().toLowerCase());
-  if (q.length < 2) return [];
+  if (textoParaBusca(txt).length < 2) return [];
+  var palavras = palavrasDaBusca(txt);
+  if (!palavras.length) return [];
   var conta = {};
   data.forEach(function(p){
     (p.tags||[]).forEach(function(t){
       var limpa = t.trim();
-      if (semAcento(limpa.toLowerCase()).indexOf(q) !== -1) conta[limpa] = (conta[limpa] || 0) + 1;
+      if (etiquetaCombina(limpa, palavras)) conta[limpa] = (conta[limpa] || 0) + 1;
     });
   });
   return Object.keys(conta)
@@ -7626,19 +7628,40 @@ function _getAllExistingTags() {
   return Object.keys(seen).sort();
 }
 
+// A busca comparava o texto digitado inteiro contra a etiqueta inteira. Como as
+// etiquetas têm dois-pontos ("casaco: branco capuz Paula Raia") e ela digita do
+// jeito que se fala ("casaco branco capuz paula raia"), nunca casava — e ela
+// concluía, com razão, que a peça não estava cadastrada.
+// Aqui o texto vira palavras soltas, sem acento nem pontuação, e a etiqueta
+// precisa conter todas elas, em qualquer ordem.
+function textoParaBusca(txt) {
+  return semAcento(String(txt || '').toLowerCase()).replace(/[:,\-]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function palavrasDaBusca(q) {
+  return textoParaBusca(q).split(' ').filter(Boolean);
+}
+
+function etiquetaCombina(tag, palavras) {
+  var alvo = textoParaBusca(tag);
+  return palavras.every(function(w){ return alvo.indexOf(w) !== -1; });
+}
+
 function showTagSuggestions(q) {
   var box = document.getElementById('tagSuggestBox');
   if(!q || q.length < 2) { hideTagSuggestions(); return; }
   var p = data.find(function(x){ return x.id===currentViewId; });
   var existing = (p && p.tags) ? p.tags.map(function(t){ return t.trim(); }) : [];
   var all = _getAllExistingTags();
-  var ql = q.toLowerCase();
+  var palavras = palavrasDaBusca(q);
+  if (!palavras.length) { hideTagSuggestions(); return; }
+  var inicio = textoParaBusca(q);
   var matches = all.filter(function(t){
-    return t.toLowerCase().indexOf(ql) !== -1 && existing.indexOf(t) === -1;
+    return etiquetaCombina(t, palavras) && existing.indexOf(t) === -1;
   }).sort(function(a, b){
-    var al = a.toLowerCase(), bl = b.toLowerCase();
-    var aStart = al.indexOf(ql) === 0 || al.indexOf(': ') > -1 && al.split(': ').slice(1).join(': ').indexOf(ql) === 0;
-    var bStart = bl.indexOf(ql) === 0 || bl.indexOf(': ') > -1 && bl.split(': ').slice(1).join(': ').indexOf(ql) === 0;
+    // quem começa com o que ela digitou vem primeiro
+    var aStart = textoParaBusca(a).indexOf(inicio) === 0;
+    var bStart = textoParaBusca(b).indexOf(inicio) === 0;
     if(aStart && !bStart) return -1;
     if(!aStart && bStart) return 1;
     return a.localeCompare(b);
@@ -7669,7 +7692,8 @@ function hideTagSuggestions() {
 
 function addTagToCurrentView() {
   var inp = document.getElementById('viewTagInput');
-  var val = inp.value.trim();
+  // "casaco branco capuz" vira "casaco: branco capuz", como no etiquetar rápido
+  var val = interpretarEtiqueta(inp.value) || inp.value.trim();
   if(!val) return;
   var p = data.find(function(x){ return x.id===currentViewId; });
   if(!p) return;
@@ -9884,6 +9908,36 @@ function desfazerRegistroDeUso() {
   if (typeof renderCal === 'function' && document.getElementById('calGrid')) renderCal();
   if (typeof renderGrid === 'function') renderGrid();
   showSavedToast(quantos + (quantos === 1 ? ' uso desfeito.' : ' usos desfeitos.'));
+}
+
+// Etiqueta que entrou sem categoria ("casaco branco capuz paula raia") porque o
+// campo antigo gravava o texto cru. Sem os dois-pontos ela fica fora dos chips,
+// dos filtros e da conta de peças — existe só como texto. Aqui vira
+// "casaco: branco capuz paula raia" quando a primeira palavra é uma categoria
+// que ela já usa, e some se o look já tiver a versão certa.
+function normalizarEtiquetasSemCategoria() {
+  var conhecidas = categoriasConhecidas();
+  var arrumadas = 0;
+  data.forEach(function(look){
+    if (!look.tags || !look.tags.length) return;
+    var novas = [];
+    look.tags.forEach(function(t){
+      var limpa = (t || '').trim();
+      if (!limpa) return;
+      if (limpa.indexOf(':') === -1) {
+        var primeira = semAcento(limpa.split(' ')[0].toLowerCase());
+        var categoria = Object.keys(conhecidas).find(function(c){ return semAcento(c) === primeira; });
+        if (categoria && limpa.split(' ').length > 1) {
+          limpa = categoria + ': ' + limpa.split(' ').slice(1).join(' ');
+          arrumadas++;
+        }
+      }
+      if (novas.indexOf(limpa) === -1) novas.push(limpa);
+    });
+    look.tags = novas;
+  });
+  if (arrumadas) saveToStorage();
+  return arrumadas;
 }
 
 function checkWeekRollover() {
