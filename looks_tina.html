@@ -3938,12 +3938,14 @@ function generateFullSuggestion() {
 function openSuggestionBuilder(seedPieceIds) {
   var ids = seedPieceIds == null ? [] : (Array.isArray(seedPieceIds) ? seedPieceIds : [seedPieceIds]);
   suggestionLockedIds = ids.filter(function(id) { return !!findPieceById(id); });
+  historicoSugestoes = [];
   generateFullSuggestion();
   var nameInput = document.getElementById('suggestionNameInput');
   if (nameInput) nameInput.value = '';
   document.getElementById('suggestionOverlay').style.display = 'flex';
   renderSuggestionCanvas();
   renderSuggestionAddBar();
+  renderBotaoSugestaoAnterior();
 }
 
 function closeSuggestionBuilder() {
@@ -4002,19 +4004,23 @@ function rerollSlot(idx) {
   if (!slot) return;
   var refs = currentSuggestionPieces(idx);
   var p = pickPieceForCategory(slot.category, refs, slot.pieceId);
-  if (p) slot.pieceId = p.id;
+  if (!p) return;
+  guardarSugestaoAtual(); // trocar uma peça também dá pra desfazer
+  slot.pieceId = p.id;
   renderSuggestionCanvas();
+  renderBotaoSugestaoAnterior();
 }
 
 function removeSuggestionSlot(idx) {
   var removed = suggestionSlots[idx];
-  if (removed) {
-    var li = suggestionLockedIds.indexOf(removed.pieceId);
-    if (li !== -1) suggestionLockedIds.splice(li, 1); // tirou a peça do look: destrava junto
-  }
+  if (!removed) return;
+  guardarSugestaoAtual(); // antes de mexer em qualquer coisa, pra "Ver o anterior" trazer tudo de volta
+  var li = suggestionLockedIds.indexOf(removed.pieceId);
+  if (li !== -1) suggestionLockedIds.splice(li, 1); // tirou a peça do look: destrava junto
   suggestionSlots.splice(idx, 1);
   renderSuggestionCanvas();
   renderSuggestionAddBar();
+  renderBotaoSugestaoAnterior();
 }
 
 function renderSuggestionAddBar() {
@@ -4130,10 +4136,45 @@ function escolherPecaNaSugestao(pieceId) {
   showSavedToast(p.name + ' entrou no look e ficou travada.');
 }
 
+// Gerar de novo joga fora a combinação que estava na tela, e às vezes a
+// anterior era a boa — sem isso, só sorteando de novo até cair parecido.
+var historicoSugestoes = [];
+var HISTORICO_SUGESTOES_MAX = 10;
+
+function guardarSugestaoAtual() {
+  if (!suggestionSlots.length) return;
+  historicoSugestoes.push({
+    slots: suggestionSlots.map(function(s){ return { category: s.category, pieceId: s.pieceId }; }),
+    travadas: suggestionLockedIds.slice()
+  });
+  if (historicoSugestoes.length > HISTORICO_SUGESTOES_MAX) historicoSugestoes.shift();
+}
+
+function voltarSugestaoAnterior() {
+  var anterior = historicoSugestoes.pop();
+  if (!anterior) return;
+  suggestionSlots = anterior.slots;
+  suggestionLockedIds = anterior.travadas;
+  renderSuggestionCanvas();
+  renderSuggestionAddBar();
+  renderBotaoSugestaoAnterior();
+  showSavedToast('Voltou pra sugestão anterior.');
+}
+
+function renderBotaoSugestaoAnterior() {
+  var b = document.getElementById('suggestionUndoBtn');
+  if (!b) return;
+  b.style.display = historicoSugestoes.length ? '' : 'none';
+  b.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M3.7 12a8.3 8.3 0 1 0 2.7-6.1"/><path d="M3.7 3.6v4.7h4.7"/></svg> Ver o anterior'
+    + (historicoSugestoes.length > 1 ? ' (' + historicoSugestoes.length + ')' : '');
+}
+
 function regenerateSuggestion() {
+  guardarSugestaoAtual();
   generateFullSuggestion();
   renderSuggestionCanvas();
   renderSuggestionAddBar();
+  renderBotaoSugestaoAnterior();
 }
 
 function saveSuggestionLook() {
@@ -11122,6 +11163,7 @@ function applySuggestions() {
     <div id="suggestionLegend" class="sugg-legend"></div>
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
       <div id="suggestionAddCatBar" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+      <button class="btn btn-ghost" id="suggestionUndoBtn" onclick="voltarSugestaoAnterior()" style="display:none;" title="Voltar pra combinação anterior"></button>
       <button class="btn btn-ghost" onclick="regenerateSuggestion()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><rect x="3.6" y="3.6" width="16.8" height="16.8" rx="3"/><circle cx="8.6" cy="8.6" r="1.1"/><circle cx="15.4" cy="15.4" r="1.1"/><circle cx="12" cy="12" r="1.1"/></svg> Gerar nova sugestão</button>
     </div>
     <input type="text" id="suggestionNameInput" placeholder="Nome do look (opcional)" autocomplete="off"
