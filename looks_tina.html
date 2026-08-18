@@ -3991,12 +3991,32 @@ function weightedRandomPiece(candidates, scoreFn) {
 }
 
 // escolhe uma peça de uma categoria, ponderando por compatibilidade com as peças já escolhidas no look
+// Etiqueta equivalente de uma peça, pras regras dela valerem aqui também: o
+// montador trabalha com peça, e as regras foram escritas pensando em look.
+function etiquetaDaPeca(p) {
+  if (!p) return '';
+  var cat = (CATEGORIA_EM_PT[p.category] || p.category || '').toLowerCase();
+  return cat + ': ' + [p.name, p.color].filter(Boolean).join(' ').toLowerCase();
+}
+
+// Ela reclamou de ver de novo uma combinação que tinha proibido, e estava certa:
+// as regras filtravam o catálogo, mas não o montador — que é onde ela estava.
+function pecaProibidaComAsOutras(candidata, jaEscolhidas) {
+  if (!regrasEscritas.length) return false;
+  var tags = (jaEscolhidas || []).map(etiquetaDaPeca).concat([etiquetaDaPeca(candidata)]);
+  return regrasEscritas.some(function(r){
+    return r.tipo !== 'exige' && regraBateNoLook(r, tags);
+  });
+}
+
 function pickPieceForCategory(cat, referencePieces, excludeId) {
   var list = piecesByCategory(cat);
   if (excludeId) {
     var filtered = list.filter(function(p) { return p.id !== excludeId; });
     if (filtered.length > 0) list = filtered;
   }
+  var semProibidas = list.filter(function(p){ return !pecaProibidaComAsOutras(p, referencePieces); });
+  if (semProibidas.length) list = semProibidas; // se zerar, melhor sugerir do que travar
   if (list.length === 0) return null;
   if (!referencePieces || referencePieces.length === 0) {
     return list[Math.floor(Math.random() * list.length)];
@@ -4045,6 +4065,39 @@ function generateFullSuggestion() {
       var p = pickPieceForCategory(cat, chosen);
       if (p) { suggestionSlots.push({ category: cat, pieceId: p.id }); chosen.push(p); }
     }
+  });
+
+  cumprirExigencias(lockedCats);
+}
+
+// "sempre precisa ter uma camiseta no look": depois de montar, se faltar o que
+// ela exigiu, a peça entra no lugar de outra da mesma categoria — sem mexer no
+// que está travado.
+function cumprirExigencias(lockedCats) {
+  regrasEscritas.filter(function(r){ return r.tipo === 'exige'; }).forEach(function(regra){
+    var tags = suggestionSlots.map(function(sl){ return etiquetaDaPeca(findPieceById(sl.pieceId)); });
+    if (!regraBateNoLook(regra, tags)) return; // já cumpre
+
+    regra.grupos.forEach(function(grupo){
+      var atuais = suggestionSlots.map(function(sl){ return textoParaBusca(etiquetaDaPeca(findPieceById(sl.pieceId))); });
+      if (grupoEstaNoLook(grupo, atuais)) return;
+
+      var candidata = null;
+      allPecas().some(function(p){
+        if (pecaArquivada(p.id)) return false;
+        if (!grupoEstaNoLook(grupo, [textoParaBusca(etiquetaDaPeca(p))])) return false;
+        candidata = p; return true;
+      });
+      if (!candidata) return; // ela exigiu algo que não tem no armário
+
+      var idx = suggestionSlots.findIndex(function(sl){ return sl.category === candidata.category; });
+      if (idx !== -1) {
+        if (lockedCats && lockedCats[candidata.category]) return; // travada por ela: manda ela
+        suggestionSlots[idx] = { category: candidata.category, pieceId: candidata.id };
+      } else {
+        suggestionSlots.push({ category: candidata.category, pieceId: candidata.id });
+      }
+    });
   });
 }
 
@@ -4465,7 +4518,9 @@ var combinacoes = safeParse(lsGet('looks_tina_combinacoes_v1'), {}) || {};
 var regrasEscritas = safeParse(lsGet('looks_tina_regras_v1'), []) || [];
 
 function savePreferencias() {
-  lsSet('looks_tina_preferencias_v1', JSON.stringify(preferencias));
+  var json = JSON.stringify(preferencias);
+  lsSet('looks_tina_preferencias_v1', json);
+  syncPut('looks_tina_preferencias_v1', json); // sem isto o aprendizado morria no aparelho
 }
 
 // Só as peças de verdade: "marca: ..." e "ocasião: ..." não dizem se ela gostou
@@ -9202,7 +9257,9 @@ function pickWithVariety(pool, scoreFn, minBand) {
 // que estava na tela. Guardamos a frase dela e as peças que ela cita.
 
 function saveRegrasEscritas() {
-  lsSet('looks_tina_regras_v1', JSON.stringify(regrasEscritas));
+  var json = JSON.stringify(regrasEscritas);
+  lsSet('looks_tina_regras_v1', json);
+  syncPut('looks_tina_regras_v1', json); // sem isto o aprendizado morria no aparelho
 }
 
 // Palavras que só ligam a frase e não descrevem roupa.
@@ -9226,22 +9283,60 @@ function palavrasDoVocabulario() {
   return vistas;
 }
 
-// Cada trecho separado por "com", "e" ou vírgula vira um grupo — é assim que ela
-// escreve: "X com Y".
+// As peças dela têm nome em inglês (do Alta) e as etiquetas do catálogo estão em
+// português. Sem ligar as duas línguas, "sempre precisa ter camiseta" nunca
+// acharia a "White Cotton T-shirt" — e a regra valeria só metade do armário.
+var SINONIMOS_DE_PECA = {
+  'camiseta': ['t shirt','tshirt','tee','camiseta'], // o hífen vira espaço na normalização
+  'camisa': ['shirt','camisa','button'],
+  'blusa': ['top','blouse','blusa','knit'],
+  'calca': ['pants','trousers','calca','jeans'],
+  'saia': ['skirt','saia'],
+  'vestido': ['dress','vestido'],
+  'casaco': ['coat','jacket','casaco','blazer'],
+  'moletom': ['sweatshirt','hoodie','moletom','sweat'],
+  'sueter': ['sweater','sueter','knit'],
+  'sapato': ['shoe','sapato','loafer','flat'],
+  'tenis': ['sneaker','tenis','trainer'],
+  'bota': ['boot','bota'],
+  'sandalia': ['sandal','sandalia','slide'],
+  'bolsa': ['bag','bolsa','purse','pouch','tote'],
+  'shorts': ['shorts','short','bermuda'],
+  'jaqueta': ['jacket','jaqueta']
+};
+
+function variacoesDaPalavra(w) {
+  return SINONIMOS_DE_PECA[w] ? SINONIMOS_DE_PECA[w].slice() : [w];
+}
+
+// Dois tipos de frase, porque ela escreve dos dois jeitos:
+//   "calça moletom com camisa não fica bom"  → proíbe a dupla
+//   "sempre precisa ter uma camiseta no look" → exige a peça
+// A exigência precisa de um grupo só; a proibição, de dois.
 function interpretarRegra(texto) {
   var limpo = textoParaBusca(texto);
   if (!limpo) return null;
   var vocabulario = palavrasDoVocabulario();
+  var nega = /(^|\s)(nao|nunca|jamais|odeio|detesto)(\s|$)/.test(limpo);
+  var exige = /(sempre|precisa|preciso|tem que|tenho que|obrigat|todo look|toda vez|so use|so uso)/.test(limpo);
+  var tipo = (exige && !nega) ? 'exige' : 'proibe';
+
   var grupos = limpo.split(/\s+(?:com|e|mais)\s+|,/)
     .map(function(pedaco){
       return pedaco.split(' ').filter(function(w){
-        return w.length > 2 && PALAVRAS_VAZIAS.indexOf(w) === -1 && vocabulario[w];
+        if (w.length <= 2 || PALAVRAS_VAZIAS.indexOf(w) !== -1) return false;
+        return vocabulario[w] || !!SINONIMOS_DE_PECA[w];
       });
     })
     .filter(function(g){ return g.length; });
-  if (grupos.length < 2) return null; // regra precisa de duas peças pra ser regra
-  return { texto: texto.trim(), grupos: grupos, criadaEm: new Date().toISOString() };
+
+  if (!grupos.length) return null;
+  if (tipo === 'proibe' && grupos.length < 2) return null; // proibir uma peça só seria arquivar
+  return { texto: texto.trim(), tipo: tipo, grupos: grupos, criadaEm: new Date().toISOString() };
 }
+
+// Regra guardada antes de existir o tipo era sempre proibição.
+regrasEscritas.forEach(function(r){ if (!r.tipo) r.tipo = 'proibe'; });
 
 function guardarRegraEscrita(texto) {
   var regra = interpretarRegra(texto);
@@ -9258,22 +9353,44 @@ function apagarRegraEscrita(i) {
   showSavedToast('Regra apagada.');
 }
 
-// A regra bate quando cada grupo dela acha uma etiqueta que contém todas as suas
-// palavras: "calça moletom" casa com "calça: moletom cinza".
-function regraBateNoLook(regra, tags) {
-  var etiquetas = (tags || []).map(textoParaBusca);
-  return regra.grupos.every(function(grupo){
-    return etiquetas.some(function(et){
-      return grupo.every(function(w){ return et.indexOf(w) !== -1; });
+// Um grupo "acha" o look quando alguma etiqueta contém todas as suas palavras —
+// cada palavra valendo também pelos sinônimos: "calça moletom" casa com
+// "calça: moletom cinza", e "camiseta" casa com "White Cotton T-shirt".
+function grupoEstaNoLook(grupo, etiquetas) {
+  return etiquetas.some(function(et){
+    return grupo.every(function(w){
+      return variacoesDaPalavra(w).some(function(v){ return et.indexOf(v) !== -1; });
     });
   });
 }
 
-// Regra escrita é declaração dela, não estatística: pesa mais que os votos,
-// mas ainda não passa por cima do clima.
+// Devolve true quando o look CONTRARIA a regra.
+function regraBateNoLook(regra, tags) {
+  var etiquetas = (tags || []).map(textoParaBusca);
+  if (regra.tipo === 'exige') {
+    return regra.grupos.some(function(g){ return !grupoEstaNoLook(g, etiquetas); });
+  }
+  return regra.grupos.every(function(g){ return grupoEstaNoLook(g, etiquetas); });
+}
+
+// Regra escrita é declaração dela, não estatística. Como desconto de nota ela
+// perdia: valia -2 enquanto "nunca foi sugerido" vale +6, e o look proibido
+// aparecia assim mesmo — foi o que ela viu acontecer. Vira eliminação.
+function looksProibidoPorRegra(tags) {
+  return regrasEscritas.some(function(r){ return regraBateNoLook(r, tags); });
+}
+
+function semOsProibidos(pool) {
+  if (!regrasEscritas.length) return pool;
+  var limpo = pool.filter(function(p){ return !looksProibidoPorRegra(p.tags || []); });
+  // Se sobrar nada (regra ampla demais, catálogo filtrado), melhor um look que
+  // ela não curte do que dia vazio — e o desconto abaixo ainda o empurra pro fim.
+  return limpo.length ? limpo : pool;
+}
+
 function regrasScore(tags) {
   var batidas = regrasEscritas.filter(function(r){ return regraBateNoLook(r, tags); }).length;
-  return batidas ? Math.max(-4, -2 * batidas) : 0;
+  return batidas ? Math.max(-12, -6 * batidas) : 0;
 }
 
 // ── Gostei / não gostei ──
@@ -9287,7 +9404,9 @@ function regrasScore(tags) {
 // resposta a nota fica só na combinação.
 
 function saveCombinacoes() {
-  lsSet('looks_tina_combinacoes_v1', JSON.stringify(combinacoes));
+  var json = JSON.stringify(combinacoes);
+  lsSet('looks_tina_combinacoes_v1', json);
+  syncPut('looks_tina_combinacoes_v1', json); // sem isto o aprendizado morria no aparelho
 }
 
 function paresDeEtiquetas(tags) {
@@ -9392,7 +9511,9 @@ function perguntarCulpada(tags, container, aoTerminar) {
     if (aoTerminar) aoTerminar();
     if (regra) {
       var lidas = regra.grupos.map(function(g){ return g.join(' '); }).join(' + ');
-      showSavedToast('Entendi: ' + lidas + ' — não repito mais.');
+      showSavedToast(regra.tipo === 'exige'
+        ? 'Entendi: todo look precisa ter ' + lidas + '.'
+        : 'Entendi: ' + lidas + ' — não repito mais.');
     } else {
       showSavedToast('Anotei, mas não achei duas peças na frase — tente "calça moletom com camisa".');
     }
@@ -9687,6 +9808,10 @@ function todayCardPool(info) {
            !(ehHoje && p.lastWorn === hojeISO);
   });
   if (!base.length) base = data.filter(function(p){ return !p.archived && (p.tags||[]).length; });
+  // O card do dia monta a própria faixa de candidatos com uma conta só de clima
+  // e uso — o desconto das regras não chegava aqui, e era por esta porta que o
+  // look proibido aparecia.
+  base = semOsProibidos(base);
   var scored = shuffledCopy(base).map(function(p){
     return { p: p, s: weatherScore(p.tags, profile) * 3 + seasonScore(p.tags, seasonForProfile(profile))
                      + recencyBonus(p) * 2 + (p.favorite ? 1.5 : 0) + (p.rating||0) * 0.5 };
@@ -10734,7 +10859,7 @@ function proceedToStep2() {
 
     var best = pickWithVariety(
       evitarVistosRecentes(
-        semRepetirDestaque(apenasOsQueServemPraODia(pool, f.profile), destaquesUsados, piecesArr),
+        semRepetirDestaque(semOsProibidos(apenasOsQueServemPraODia(pool, f.profile)), destaquesUsados, piecesArr),
         vistos), score, 10);
     if(best) {
       usedIds.add(best.id);
@@ -10843,7 +10968,7 @@ function regenerateAssignedDay(day) {
   }
   var best = pickWithVariety(
     evitarVistosRecentes(
-      semRepetirDestaque(apenasOsQueServemPraODia(pool, f.profile), destaquesUsados, piecesArr),
+      semRepetirDestaque(semOsProibidos(apenasOsQueServemPraODia(pool, f.profile)), destaquesUsados, piecesArr),
       idsVistosRecentemente()), score, 10);
   if (!best) return;
   guardarSugestoes([best.id]);
@@ -11960,8 +12085,9 @@ function renderStats() {
   if (regrasEscritas.length) {
     var corpoRegras = '<div style="display:flex;flex-direction:column;gap:6px;">' + regrasEscritas.map(function(r, i){
       var lidas = r.grupos.map(function(g){ return g.join(' '); }).join(' + ');
+      var comoLi = (r.tipo === 'exige' ? 'todo look precisa ter: ' : 'nunca junto: ') + lidas;
       return '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:.8rem;">'
-        + '<span>"' + r.texto + '"<br><span style="font-size:.7rem;color:#A8A8A4;">entendi como: ' + lidas + '</span></span>'
+        + '<span>"' + r.texto + '"<br><span style="font-size:.7rem;color:#A8A8A4;">' + comoLi + '</span></span>'
         + '<button class="btn btn-ghost" style="padding:2px 8px;font-size:.72rem;color:#8C8C88;" onclick="apagarRegraEscrita(' + i + ')">apagar</button>'
         + '</div>';
     }).join('') + '</div>';
