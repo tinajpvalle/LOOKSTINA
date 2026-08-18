@@ -5919,33 +5919,145 @@ function salvarNotaInspiracao(id, txt) {
 // `evitar`: ids do look que está na tela — pra "gerar outro" trazer outra coisa
 // e não a mesma combinação. Peça repetida só entra se não sobrar alternativa
 // naquela categoria.
-function pecasInspiradasEm(insp, evitar) {
-  var alvo = insp.palette || [];
-  if (!alvo.length) return null;
-  var evita = evitar || [];
+// Antes cada categoria era pontuada sozinha contra a paleta inteira, e a cor
+// mais dominante ganhava em todas. Como a dominante costuma ser a mais escura
+// (a contagem de pixels favorece preto/vinho do fundo e das sombras), o look
+// saía inteiro nessa cor e o que dá caráter à foto — a listra amarela, o
+// laranja — nunca aparecia. Uma paleta ['vinho','preto','laranja','amarelo']
+// virava um look vinho com preto.
+//
+// Agora é como se monta roupa de verdade: uma peça de destaque na cor que
+// caracteriza a inspiração, e o resto escolhido pra combinar com ela.
 
-  function nota(p) {
-    var c = nomeDaCor(corParaRgb(p.color));
-    var i = alvo.indexOf(c);
-    return i === -1 ? 0 : (alvo.length - i);   // quanto mais dominante, mais peso
-  }
-  function melhorDaCategoria(cat) {
+function proximidadeDeCor(rgbA, rgbB) {
+  if (!rgbA || !rgbB) return 0;
+  var d = Math.sqrt(
+    Math.pow(rgbA[0]-rgbB[0], 2) + Math.pow(rgbA[1]-rgbB[1], 2) + Math.pow(rgbA[2]-rgbB[2], 2)
+  );
+  return Math.max(0, 1 - d / 441); // 441 = distância máxima possível no RGB
+}
+
+// A cor que caracteriza a inspiração não é a que ocupa mais pixels, é a que
+// salta aos olhos: a mais saturada que não seja neutra. A ordem da paleta entra
+// só como desempate.
+function corDeDestaqueDaPaleta(paleta) {
+  var perfis = (paleta || []).map(perfilDaCor).filter(Boolean);
+  if (!perfis.length) return null;
+  var melhor = null;
+  perfis.forEach(function(perfil, i){
+    if (perfil.neutra) return;
+    var peso = perfil.s - i * 0.08;
+    if (!melhor || peso > melhor.peso) melhor = { perfil: perfil, peso: peso };
+  });
+  return melhor ? melhor.perfil : perfis[0]; // paleta só de neutros: vale a dominante
+}
+
+function proximidadeDaPaleta(perfilPeca, perfisDaPaleta) {
+  if (!perfilPeca) return 0;
+  var melhor = 0;
+  perfisDaPaleta.forEach(function(alvo, i){
+    var prox = proximidadeDeCor(perfilPeca.rgb, alvo.rgb) * (1 - i * 0.1);
+    if (prox > melhor) melhor = prox;
+  });
+  return melhor;
+}
+
+function pecasInspiradasEm(insp, evitar) {
+  var paleta = insp.palette || [];
+  if (!paleta.length) return null;
+  var evita = evitar || [];
+  var perfisDaPaleta = paleta.map(perfilDaCor).filter(Boolean);
+  var destaque = corDeDestaqueDaPaleta(paleta);
+  // Inspiração de preto/creme/branco não pede peça colorida. Sem essa checagem
+  // o destaque neutro fazia "combina com tudo" valer pra qualquer cor forte, e
+  // uma foto toda neutra virava look verde com bolsa vinho.
+  var paletaSoNeutra = perfisDaPaleta.every(function(x){ return x.neutra; });
+
+  function candidatas(cat) {
     var lista = allPecas().filter(function(p){ return p.category === cat; });
     var frescas = lista.filter(function(p){ return evita.indexOf(p.id) === -1; });
-    if (frescas.length) lista = frescas;
-    if (!lista.length) return null;
-    var pontuadas = shuffledCopy(lista).map(function(p){ return {p:p, s:nota(p)}; })
-      .sort(function(a,b){ return b.s - a.s; });
-    var topo = pontuadas.filter(function(x){ return x.s === pontuadas[0].s; });
-    return topo[Math.floor(Math.random()*topo.length)].p;
+    return frescas.length ? frescas : lista;
   }
 
+  // Sorteia entre as que empatam no topo, senão "gerar outro look" devolveria
+  // sempre a mesma combinação.
+  function melhorPor(lista, nota) {
+    if (!lista.length) return null;
+    var pontuadas = shuffledCopy(lista).map(function(p){ return { p: p, s: nota(p) }; })
+      .sort(function(a, b){ return b.s - a.s; });
+    var topo = pontuadas.filter(function(x){ return x.s >= pontuadas[0].s - 0.05; });
+    return topo[Math.floor(Math.random() * topo.length)].p;
+  }
+
+  // 1) A peça de destaque. Procura primeiro em cima, que é onde a cor forte
+  //    costuma estar; se nada chegar perto, tenta embaixo; se ainda assim não
+  //    houver nada parecido, o look vira todo neutro em vez de forçar uma cor
+  //    que ela não tem.
+  var pecaDestaque = null, catDestaque = null;
+  if (destaque && !paletaSoNeutra) {
+    ['Tops', 'Bottoms'].some(function(cat){
+      var achada = melhorPor(candidatas(cat), function(p){
+        return proximidadeDeCor((perfilDaCor(p.color) || {}).rgb, destaque.rgb);
+      });
+      if (achada && proximidadeDeCor((perfilDaCor(achada.color) || {}).rgb, destaque.rgb) >= 0.78) {
+        pecaDestaque = achada; catDestaque = cat; return true;
+      }
+      return false;
+    });
+  }
+
+  var perfilDestaque = pecaDestaque ? perfilDaCor(pecaDestaque.color) : null;
   var ids = [];
-  ['Tops','Bottoms','Shoes','Bags'].forEach(function(cat){
-    var p = melhorDaCategoria(cat);
-    if (p) ids.push(p.id);
+  if (pecaDestaque) ids.push(pecaDestaque.id);
+
+  // 2) O resto acompanha: combinar com a peça de destaque pesa o dobro de estar
+  //    na paleta. É o que evita duas cores fortes brigando no mesmo look.
+  // Cores fortes já usadas no look. Sem isso saía "vermelho, vermelho,
+  // vermelho, vinho": a cor da paleta ganhava em todas as categorias de novo,
+  // só que agora pelo caminho da proximidade.
+  var fortesNoLook = [];
+  if (perfilDestaque && !perfilDestaque.neutra) fortesNoLook.push(perfilDestaque);
+
+  ['Tops', 'Bottoms', 'Shoes', 'Bags'].forEach(function(cat){
+    if (cat === catDestaque) return;
+    var escolhida = melhorPor(candidatas(cat), function(p){
+      var perfil = perfilDaCor(p.color);
+      var naPaleta = proximidadeDaPaleta(perfil, perfisDaPaleta);
+      if (paletaSoNeutra) return naPaleta * 3 + (perfil && perfil.neutra ? 1 : 0);
+      var repetindoForte = perfil && !perfil.neutra && fortesNoLook.some(function(f){
+        return proximidadeDeCor(f.rgb, perfil.rgb) >= 0.85;
+      });
+      if (repetindoForte) naPaleta -= 1.2;
+      var combina = perfilDestaque ? (notaDeCombinacao(perfilDestaque, perfil).n / 4) : 0;
+      // A segunda cor da inspiração perdia sempre pro neutro, porque "combina"
+      // pesava o dobro. Cor que está claramente na foto ganha um empurrão: se
+      // as duas convivem lá, convivem no look.
+      return combina * 2 + naPaleta * 2 + (naPaleta >= 0.85 ? 1 : 0);
+    });
+    if (escolhida) {
+      ids.push(escolhida.id);
+      var perfilEscolhida = perfilDaCor(escolhida.color);
+      if (perfilEscolhida && !perfilEscolhida.neutra) fortesNoLook.push(perfilEscolhida);
+    }
   });
   return ids;
+}
+
+// O nome descrevia a paleta da foto ("vinho + preto") mesmo quando o look
+// montado tinha outras cores. Agora descreve o que o look é: a cor que puxa a
+// atenção primeiro, e a que acompanha.
+function nomeDoLookInspirado(ids) {
+  var perfis = ids.map(findPieceById).filter(Boolean)
+    .map(function(p){ return perfilDaCor(p.color); }).filter(Boolean);
+  if (!perfis.length) return 'Inspirado';
+  var fortes = perfis.filter(function(x){ return !x.neutra; })
+    .sort(function(a, b){ return b.s - a.s; });
+  var neutras = perfis.filter(function(x){ return x.neutra; });
+  var nomes = [];
+  if (fortes.length) nomes.push(fortes[0].nome);
+  if (neutras.length && nomes.indexOf(neutras[0].nome) === -1) nomes.push(neutras[0].nome);
+  if (nomes.length < 2 && fortes[1] && nomes.indexOf(fortes[1].nome) === -1) nomes.push(fortes[1].nome);
+  return 'Inspirado · ' + nomes.join(' + ');
 }
 
 // "Gerar outro look" no detalhe: troca as peças do look que está aberto, em vez
@@ -5962,7 +6074,8 @@ function voltarLookInspiradoAnterior() {
   var hist = historicoInspirados[m.id];
   var anterior = hist && hist.pop();
   if (!anterior) return;
-  m.pieceIds = anterior;
+  m.pieceIds = anterior.pecas || anterior; // formato antigo: só a lista de peças
+  if (anterior.nome) m.name = anterior.nome;
   saveMontagens();
   renderLooksMontados();
   openMontadoDetail(m.id);
@@ -5977,9 +6090,10 @@ function gerarOutroLookInspirado() {
   var novos = pecasInspiradasEm(insp, m.pieceIds || []);
   if (!novos || novos.length < 2) { showSavedToast('Não achei outras peças pra essa paleta.'); return; }
   var hist = historicoInspirados[m.id] = historicoInspirados[m.id] || [];
-  hist.push((m.pieceIds || []).slice());
+  hist.push({ pecas: (m.pieceIds || []).slice(), nome: m.name });
   if (hist.length > HISTORICO_INSPIRADOS_MAX) hist.shift();
   m.pieceIds = novos;
+  m.name = nomeDoLookInspirado(novos);
   saveMontagens();
   renderLooksMontados();
   openMontadoDetail(m.id);
@@ -5997,7 +6111,7 @@ function montarLookInspirado(id) {
 
   montagens.push({
     id: 'm_' + Date.now() + '_' + Math.floor(Math.random()*100000),
-    name: 'Inspirado · ' + alvo.slice(0,2).join(' + '),
+    name: nomeDoLookInspirado(ids),
     pieceIds: ids, createdAt: new Date().toISOString(),
     source: 'auto', inspiradoEm: id, weekday: null, weekdayNext: null
   });
