@@ -581,6 +581,8 @@ body.week-pick-mode .card-week-btn { display: block; }
 .day-look-montado { cursor: pointer; }
 .day-look-montado .flatlay-canvas { max-width: none; aspect-ratio: 1; border-radius: 0; }
 .day-look-montado-label { font-size: .68rem; color: #666666; text-align: center; padding: 4px 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.day-clima-aviso { font-size: .64rem; color: #9A6A1F; background: #FDF6E9; border: 1px solid #F0E2C4; border-radius: 6px; margin: 4px 6px 0; padding: 3px 6px; cursor: pointer; text-align: center; line-height: 1.35; }
+.day-clima-aviso:hover { background: #F8EDD8; }
 .day-montado-chip { font-size: .66rem; color: #666666; background: #FAFAF8; border: 1px solid #EAEAE7; border-radius: 6px; margin: 4px 6px 0; padding: 2px 6px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; }
 .day-empty { height: 160px; display: flex; align-items: center; justify-content: center; color: #B0B0AC; font-size: .78rem; flex-direction: column; gap: 8px; cursor: pointer; }
 .day-empty:hover { background: #f9f8f6; }
@@ -755,6 +757,8 @@ body.compare-mode .card-compare-btn { display: flex; }
 .pecas-sel-txt { color: var(--txt-1); }
 .day-look-montado-label { color: var(--txt-2); }
 .day-montado-chip { background: var(--surface); border-color: var(--line); color: var(--txt-2); }
+.day-clima-aviso { background: #2E2413; border-color: #4A3A1C; color: #E0B970; }
+.day-clima-aviso:hover { background: #3A2D17; }
 
 /* Modais: raio menor, sem sombra */
 .modal, .edit-modal, .rename-modal, #dayPickerBox { border-radius: var(--r-lg); }
@@ -4972,6 +4976,7 @@ function renderWeek() {
       dl.appendChild(img); dl.appendChild(rm); dl.appendChild(resugg);
       botaoTrocarTurno(dl, day, 'atual', 'dia');
       col.appendChild(dl);
+      avisoDeClimaNaColuna(col, day, 'atual', look.tags);
       // Dia com look do catálogo E look montado: o montado entra como etiqueta
       // embaixo, pra não sumir da vista (mesma ideia usada no Calendário).
       if (montado) {
@@ -5007,6 +5012,7 @@ function renderWeek() {
       botaoTrocarTurno(dm, day, 'atual', 'dia');
       dm.onclick = (function(mid){ return function(){ switchTab('montados'); openMontadoDetail(mid); }; })(montado.id);
       col.appendChild(dm);
+      avisoDeClimaNaColuna(col, day, 'atual', tagsDoMontado(montado));
     } else if (weekCasaDays[day]) {
       // Day marked as "em casa"
       var de = document.createElement('div'); de.className = 'day-empty';
@@ -5315,6 +5321,7 @@ function renderNextWeekGrid() {
       dl.appendChild(img); dl.appendChild(rm); dl.appendChild(rs);
       botaoTrocarTurno(dl, day, 'proxima', 'dia');
       col.appendChild(dl);
+      avisoDeClimaNaColuna(col, day, 'proxima', look.tags);
     } else if (montado) {
       var dm = document.createElement('div'); dm.className = 'day-look day-look-montado';
       ligarArrastarLook(dm, day, 'proxima');
@@ -5337,6 +5344,7 @@ function renderNextWeekGrid() {
       botaoTrocarTurno(dm, day, 'proxima', 'dia');
       dm.onclick = (function(mid){ return function(){ switchTab('montados'); openMontadoDetail(mid); }; })(montado.id);
       col.appendChild(dm);
+      avisoDeClimaNaColuna(col, day, 'proxima', tagsDoMontado(montado));
     } else {
       var de = document.createElement('div'); de.className = 'day-empty';
       de.innerHTML = '<span style="font-size:1.4rem"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7.2a2.1 2.1 0 1 1 2.1-2.1c0 1.1-1 1.5-2.1 2.1v2"/><path d="M12 9.2 3.6 15.3A1.5 1.5 0 0 0 4.5 18h15a1.5 1.5 0 0 0 .9-2.7L12 9.2z"/></svg></span><span class="add-look-hint">Adicionar look</span>'
@@ -8346,6 +8354,63 @@ function weatherScore(tags, profile) {
     if(hasSandal)s+=3; if(hasSaia)s+=2; if(hasOuter)s-=5; if(hasLonga)s-=3; if(hasClosed)s-=2; if(hasCalca)s-=1;
   }
   return s;
+}
+
+// ── Aviso de clima que mudou ──
+// A semana é montada com a previsão de quando ela montou. Se a quinta virar
+// 14° com chuva, o look de sandália e saia continua lá parado e ninguém avisa —
+// ela descobre na hora de vestir. Como a previsão é buscada toda vez que o app
+// abre, dá pra comparar com o que está planejado sem guardar estado nenhum.
+var AVISO_CLIMA_LIMITE = -2; // abaixo disso o look está claramente errado pro dia
+
+function avisoDeClimaDoDia(tags, fc) {
+  if (!fc || !tags || !tags.length) return null;
+  var nota = weatherScore(tags, fc.profile);
+  if (nota > AVISO_CLIMA_LIMITE) return null;
+
+  var ts = tags.join(' ').toLowerCase();
+  var frio = ['frio_chuva','frio_seco','agradavel'].indexOf(fc.profile) !== -1;
+
+  // Diz a peça que está no look, com a palavra dela: chamar moletom de casaco
+  // faz o aviso parecer que está falando de outro look.
+  function achar(lista, padrao) {
+    for (var i = 0; i < lista.length; i++) if (new RegExp(lista[i][0]).test(ts)) return lista[i][1];
+    return padrao;
+  }
+
+  var motivo;
+  if (frio) {
+    motivo = achar([
+      ['sandália|sandalia|rasteira', 'sandália'],
+      ['short|bermuda', 'short'],
+      ['vestido', 'vestido'],
+      ['saia', 'saia']
+    ], 'look leve');
+    if (fc.profile === 'frio_chuva') motivo += ' e chuva';
+  } else {
+    motivo = achar([
+      ['moletom', 'moletom'],
+      ['suéter|sueter|tricô|trico', 'suéter'],
+      ['cardigan', 'cardigan'],
+      ['casaco|jaqueta|blazer|colete|kimono', 'casaco'],
+      ['bota', 'bota'],
+      ['manga longa', 'manga longa']
+    ], 'look pesado');
+  }
+  return motivo + ' pra ' + (fc.temp || '') + (fc.cond ? ' · ' + fc.cond.toLowerCase() : '');
+}
+
+// A tarja fica na coluna do dia, junto do look, com o botão de trocar do lado.
+function avisoDeClimaNaColuna(col, day, alvo, tags) {
+  var fc = infoParaDia(day, alvo).fc;
+  var texto = avisoDeClimaDoDia(tags, fc);
+  if (!texto) return;
+  var tarja = document.createElement('div');
+  tarja.className = 'day-clima-aviso';
+  tarja.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M12 3.6 21.4 20H2.6L12 3.6z"/><path d="M12 10v4.2M12 17.2v.1"/></svg> <span>' + texto + '</span>';
+  tarja.title = 'A previsão mudou desde que você montou a semana — clique pra sugerir outro look';
+  tarja.onclick = (function(d, a){ return function(e){ e.stopPropagation(); sugerirLookParaDia(d, a); }; })(day, alvo);
+  col.appendChild(tarja);
 }
 
 function pieceMatchScore(look, piecesArr) {
