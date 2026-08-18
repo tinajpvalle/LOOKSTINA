@@ -5968,13 +5968,59 @@ var CORES_REF = [
   ['azul marinho',[40,50,85]], ['jeans',[110,140,180]], ['roxo',[110,75,140]]
 ];
 
+// Nomear pela referência mais próxima em RGB dava errado de um jeito
+// específico: "cinza" (130,130,130) fica no meio do cubo de cores, então
+// qualquer cor suave caía nele. O colete verde da inspiração dela virou cinza —
+// ele estava a 2.425 de distância do cinza e a 8.750 do verde.
+// Aqui o matiz decide a família, e claridade/saturação escolhem o tom dentro
+// dela. Neutro só quando é neutro de verdade.
+// Devolve sempre um nome do vocabulário do CORES_REF: o resto do app compara
+// por esses nomes.
 function nomeDaCor(rgb) {
-  var melhor = null, menor = Infinity;
-  CORES_REF.forEach(function(c){
-    var d = Math.pow(rgb[0]-c[1][0],2) + Math.pow(rgb[1]-c[1][1],2) + Math.pow(rgb[2]-c[1][2],2);
-    if (d < menor) { menor = d; melhor = c[0]; }
-  });
-  return melhor;
+  var hsl = rgbParaHsl(rgb);
+  var h = hsl[0], sat = hsl[1], l = hsl[2];
+
+  if (l <= 0.13) return 'preto';
+  if (l >= 0.93 && sat < 0.25) return 'branco';
+  if (sat < 0.13) return l >= 0.82 ? 'branco' : (l <= 0.24 ? 'preto' : 'cinza');
+
+  // jeans é azul de lavagem média — sem esta faixa ele viraria "azul" e perderia
+  // o status de neutro que tem no armário dela
+  if (h >= 198 && h <= 232 && sat <= 0.38 && l >= 0.42 && l <= 0.72) return 'jeans';
+
+  if (h < 16 || h >= 345) {                        // vermelhos
+    if (l <= 0.32) return 'vinho';
+    if (sat <= 0.45 && l >= 0.62) return 'rosa';
+    return 'vermelho';
+  }
+  if (h < 45) {                                    // laranjas, marrons, beges
+    if (l <= 0.32) return 'marrom';
+    if (l >= 0.80 && sat <= 0.62) return 'creme';
+    if (sat <= 0.35) return l >= 0.62 ? 'bege' : 'marrom';
+    if (l <= 0.52) return 'caramelo';
+    // dourado e mostarda ficam na fronteira com o amarelo (matiz ~40) e caíam
+    // em "bege", que é a cor de quem não tem cor nenhuma
+    if (h >= 38 && sat >= 0.40) return 'amarelo';
+    return sat >= 0.62 ? 'laranja' : 'bege';
+  }
+  if (h < 62) {                                    // amarelos
+    if (l <= 0.30) return 'verde militar';
+    if (l >= 0.82 && sat <= 0.45) return 'creme';
+    return sat <= 0.30 ? 'bege' : 'amarelo';
+  }
+  // O verde-amarelado (matiz 62–85) é oliva, ainda que claro; o verde de
+  // verdade começa depois. Separar por matiz acerta os dois sem depender de
+  // limiar de claridade, que é onde o oliva e o verde-pistache se confundiam.
+  if (h < 85) return (l >= 0.80 && sat <= 0.30) ? 'bege' : 'verde militar';
+  if (h < 160) {                                   // verdes
+    return (l <= 0.30 && sat <= 0.40) ? 'verde militar' : 'verde';
+  }
+  if (h < 200) return 'verde';                     // verde-água puxa pro verde
+  if (h < 255) {                                   // azuis
+    return l <= 0.36 ? 'azul marinho' : 'azul';
+  }
+  if (h < 295) return 'roxo';
+  return l <= 0.32 ? 'vinho' : 'rosa';             // magentas e rosas
 }
 
 // Lê os pixels e devolve as cores dominantes. Ignora as bordas (costumam ser
