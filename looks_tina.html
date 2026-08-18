@@ -1264,7 +1264,7 @@ function lsSet(key, value) {
 // Se o servidor não responder (ex: site aberto direto do GitHub Pages, sem
 // backend, ou sem internet), tudo falha silenciosamente e o app continua
 // funcionando 100% localmente, como sempre funcionou.
-var SYNC_KEYS = ['looks_tina_catalog_v1', 'looks_tina_montados_v1', 'looks_tina_pecas_avulsas_v1', 'looks_tina_proxsemana_v1', 'looks_tina_pecas_arquivadas_v1', 'looks_tina_proxsemana_dias_v1', 'looks_tina_proxsemana_noite_v1', 'looks_tina_inspiracoes_v1', 'looks_tina_preferencias_v1', 'looks_tina_combinacoes_v1'];
+var SYNC_KEYS = ['looks_tina_catalog_v1', 'looks_tina_montados_v1', 'looks_tina_pecas_avulsas_v1', 'looks_tina_proxsemana_v1', 'looks_tina_pecas_arquivadas_v1', 'looks_tina_proxsemana_dias_v1', 'looks_tina_proxsemana_noite_v1', 'looks_tina_inspiracoes_v1', 'looks_tina_preferencias_v1', 'looks_tina_combinacoes_v1', 'looks_tina_regras_v1'];
 // Um aparelho que abre o app sem nada salvo começa com o catálogo embutido (851
 // looks) e a lista de montados vazia. Se ele mandar isso pro servidor antes de
 // ler o que está lá, apaga o que existe — foi o que aconteceu em 17/08/2026,
@@ -4461,6 +4461,8 @@ var preferencias = safeParse(lsGet('looks_tina_preferencias_v1'), {}) || {};
 // Voto explícito na combinação (par de peças). Fica aqui em cima porque init()
 // roda antes do meio do arquivo.
 var combinacoes = safeParse(lsGet('looks_tina_combinacoes_v1'), {}) || {};
+// Regras escritas por ela ("calça moletom com camisa não fica bom").
+var regrasEscritas = safeParse(lsGet('looks_tina_regras_v1'), []) || [];
 
 function savePreferencias() {
   lsSet('looks_tina_preferencias_v1', JSON.stringify(preferencias));
@@ -9194,6 +9196,86 @@ function pickWithVariety(pool, scoreFn, minBand) {
   return faixa[Math.floor(Math.random() * faixa.length)].p;
 }
 
+// ── Regras escritas por ela ──
+// "calça moletom com camisa não fica bom" é uma informação que nenhum voto de
+// gostei/não gostei carrega: vale pra qualquer look com essa dupla, não só pro
+// que estava na tela. Guardamos a frase dela e as peças que ela cita.
+
+function saveRegrasEscritas() {
+  lsSet('looks_tina_regras_v1', JSON.stringify(regrasEscritas));
+}
+
+// Palavras que só ligam a frase e não descrevem roupa.
+var PALAVRAS_VAZIAS = ['com','e','ou','de','da','do','em','no','na','a','o','as','os','um','uma',
+  'nao','fica','ficam','bom','boa','ruim','combina','combinam','gosto','gostei','acho','muito',
+  'pra','para','esse','essa','isso','look','peca','usar','junto','juntos','junta','fica'];
+
+// Só entram palavras que existem no vocabulário dela: assim "calça moletom" vira
+// regra e "não fica bom" é descartado, sem precisar entender português.
+function palavrasDoVocabulario() {
+  var vistas = {};
+  data.forEach(function(p){
+    (p.tags||[]).forEach(function(t){
+      textoParaBusca(t).split(' ').forEach(function(w){ if (w.length > 2) vistas[w] = true; });
+    });
+  });
+  allPecas().forEach(function(p){
+    textoParaBusca((p.name || '') + ' ' + (p.category || '') + ' ' + (p.color || ''))
+      .split(' ').forEach(function(w){ if (w.length > 2) vistas[w] = true; });
+  });
+  return vistas;
+}
+
+// Cada trecho separado por "com", "e" ou vírgula vira um grupo — é assim que ela
+// escreve: "X com Y".
+function interpretarRegra(texto) {
+  var limpo = textoParaBusca(texto);
+  if (!limpo) return null;
+  var vocabulario = palavrasDoVocabulario();
+  var grupos = limpo.split(/\s+(?:com|e|mais)\s+|,/)
+    .map(function(pedaco){
+      return pedaco.split(' ').filter(function(w){
+        return w.length > 2 && PALAVRAS_VAZIAS.indexOf(w) === -1 && vocabulario[w];
+      });
+    })
+    .filter(function(g){ return g.length; });
+  if (grupos.length < 2) return null; // regra precisa de duas peças pra ser regra
+  return { texto: texto.trim(), grupos: grupos, criadaEm: new Date().toISOString() };
+}
+
+function guardarRegraEscrita(texto) {
+  var regra = interpretarRegra(texto);
+  if (!regra) return null;
+  regrasEscritas.push(regra);
+  saveRegrasEscritas();
+  return regra;
+}
+
+function apagarRegraEscrita(i) {
+  regrasEscritas.splice(i, 1);
+  saveRegrasEscritas();
+  if (document.getElementById('statsContent')) renderStats();
+  showSavedToast('Regra apagada.');
+}
+
+// A regra bate quando cada grupo dela acha uma etiqueta que contém todas as suas
+// palavras: "calça moletom" casa com "calça: moletom cinza".
+function regraBateNoLook(regra, tags) {
+  var etiquetas = (tags || []).map(textoParaBusca);
+  return regra.grupos.every(function(grupo){
+    return etiquetas.some(function(et){
+      return grupo.every(function(w){ return et.indexOf(w) !== -1; });
+    });
+  });
+}
+
+// Regra escrita é declaração dela, não estatística: pesa mais que os votos,
+// mas ainda não passa por cima do clima.
+function regrasScore(tags) {
+  var batidas = regrasEscritas.filter(function(r){ return regraBateNoLook(r, tags); }).length;
+  return batidas ? Math.max(-4, -2 * batidas) : 0;
+}
+
 // ── Gostei / não gostei ──
 // Até aqui o app só aprendia do que ela recusava, e por caminhos indiretos
 // (arquivar, tirar do dia). Um voto explícito vale mais que todos eles.
@@ -9288,7 +9370,40 @@ function perguntarCulpada(tags, container, aoTerminar) {
   pular.onclick = function(){ avaliarLookSugerido(tags, -1, null); box.remove(); if (aoTerminar) aoTerminar(); };
   linha.appendChild(pular);
   box.appendChild(linha);
+
+  // Escrever com as próprias palavras vale mais que apontar uma peça: "calça
+  // moletom com camisa não fica bom" é uma regra pra sempre, não uma nota neste
+  // look. As palavras que ela usa são procuradas no vocabulário dela mesma.
+  var linhaTexto = document.createElement('div');
+  linhaTexto.style.cssText = 'display:flex;gap:6px;margin-top:8px;';
+  var campo = document.createElement('input');
+  campo.type = 'text';
+  campo.placeholder = 'ou escreva: calça moletom com camisa não fica bom';
+  campo.style.cssText = 'flex:1;min-width:0;box-sizing:border-box;padding:7px 10px;border:1px solid #E0E0DB;border-radius:8px;font-family:inherit;font-size:.78rem;';
+  var enviar = document.createElement('button');
+  enviar.className = 'etq-chip';
+  enviar.textContent = 'Entendi';
+  function mandar() {
+    var txt = campo.value.trim();
+    if (!txt) return;
+    var regra = guardarRegraEscrita(txt);
+    registrarCombinacao(tags, -1);
+    box.remove();
+    if (aoTerminar) aoTerminar();
+    if (regra) {
+      var lidas = regra.grupos.map(function(g){ return g.join(' '); }).join(' + ');
+      showSavedToast('Entendi: ' + lidas + ' — não repito mais.');
+    } else {
+      showSavedToast('Anotei, mas não achei duas peças na frase — tente "calça moletom com camisa".');
+    }
+  }
+  enviar.onclick = mandar;
+  campo.onkeydown = function(e){ if (e.key === 'Enter') { e.preventDefault(); mandar(); } };
+  linhaTexto.appendChild(campo); linhaTexto.appendChild(enviar);
+  box.appendChild(linhaTexto);
+
   container.appendChild(box);
+  setTimeout(function(){ campo.focus(); }, 50);
 }
 
 // Os dois botões, do jeito que cabem em qualquer tela de sugestão.
@@ -9502,6 +9617,7 @@ function notaParaODia(tags, profile, extra) {
        + recencyBonus(extra || {}) * 2
        + preferenciaScore(tags)
        + combinacaoScore(tags)
+       + regrasScore(tags)
        + ((extra && extra.favorite) ? 1.5 : 0)
        + ((extra && extra.rating) || 0) * 0.5;
 }
@@ -10594,6 +10710,7 @@ function proceedToStep2() {
            + ocasiaoBoost(p, f.day, alvoDoAssistente())
            + preferenciaScore(p.tags)
            + combinacaoScore(p.tags)
+           + regrasScore(p.tags)
            + bonusDeRodizio(p)
            - diversityPenalty(p.tags, usedTagFreq);
     }
@@ -10711,6 +10828,7 @@ function regenerateAssignedDay(day) {
          + ocasiaoBoost(p, day, alvoDoAssistente()) * 3
          + preferenciaScore(p.tags)
          + combinacaoScore(p.tags)
+         + regrasScore(p.tags)
          + bonusDeRodizio(p)
          - diversityPenalty(p.tags, usedTagFreq);
   }
@@ -11837,6 +11955,18 @@ function renderStats() {
     corpoPares += '<div style="font-size:.68rem;color:#B0B0AC;margin-top:12px;line-height:1.5;">Vem do "gostei / não gostei" nas sugestões. Quando você não aponta a peça culpada, só a dupla leva a nota — as peças continuam livres pra aparecer com outras.</div>';
     corpoPares += '<button class="btn btn-ghost" onclick="esquecerCombinacoes()" style="margin-top:10px;color:#8C8C88;">Esquecer as combinações</button>';
     html += section('COMBINAÇÕES QUE VOCÊ VOTOU', corpoPares);
+  }
+
+  if (regrasEscritas.length) {
+    var corpoRegras = '<div style="display:flex;flex-direction:column;gap:6px;">' + regrasEscritas.map(function(r, i){
+      var lidas = r.grupos.map(function(g){ return g.join(' '); }).join(' + ');
+      return '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:.8rem;">'
+        + '<span>"' + r.texto + '"<br><span style="font-size:.7rem;color:#A8A8A4;">entendi como: ' + lidas + '</span></span>'
+        + '<button class="btn btn-ghost" style="padding:2px 8px;font-size:.72rem;color:#8C8C88;" onclick="apagarRegraEscrita(' + i + ')">apagar</button>'
+        + '</div>';
+    }).join('') + '</div>';
+    corpoRegras += '<div style="font-size:.68rem;color:#B0B0AC;margin-top:12px;line-height:1.5;">Escritas por você no "não gostei". Valem pra qualquer look com essas peças juntas, e pesam mais que os votos — mas o clima continua decidindo.</div>';
+    html += section('SUAS REGRAS', corpoRegras);
   }
 
   el.innerHTML = html;
