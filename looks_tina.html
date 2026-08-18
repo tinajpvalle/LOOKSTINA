@@ -4619,6 +4619,10 @@ function fecharEtiquetarRapido() {
 }
 
 function pularEtiquetar(passo) {
+  var campo = document.getElementById('etiquetarCampo');
+  if (campo) campo.value = ''; // o que ela digitou era pro look anterior
+  var dica = document.getElementById('etiquetarPrevia');
+  if (dica) dica.style.display = 'none';
   etiquetarIdx += passo;
   if (etiquetarIdx < 0) etiquetarIdx = 0;
   if (etiquetarIdx >= etiquetarFila.length) { fecharEtiquetarRapido(); showSavedToast('Acabou a fila.'); return; }
@@ -4676,17 +4680,72 @@ function interpretarEtiqueta(txt) {
   return (categoria || primeira) + ': ' + palavras.slice(1).join(' ');
 }
 
+// Procura no que ela já tem. Sem isso, escrever "marni" só oferecia criar uma
+// etiqueta nova — e "marca: Marni" já existia em dezenas de looks. Os botões de
+// baixo mostram só as categorias de roupa, então marca não aparecia em lugar
+// nenhum.
+function buscarEtiquetasExistentes(txt) {
+  var q = semAcento((txt || '').trim().toLowerCase());
+  if (q.length < 2) return [];
+  var conta = {};
+  data.forEach(function(p){
+    (p.tags||[]).forEach(function(t){
+      var limpa = t.trim();
+      if (semAcento(limpa.toLowerCase()).indexOf(q) !== -1) conta[limpa] = (conta[limpa] || 0) + 1;
+    });
+  });
+  return Object.keys(conta)
+    .sort(function(a,b){ return conta[b] - conta[a]; })
+    .slice(0, 10)
+    .map(function(t){ return { tag: t, vezes: conta[t] }; });
+}
+
+function renderAchadosDaBusca(txt) {
+  var caixa = document.getElementById('etiquetarAchados');
+  if (!caixa) return 0;
+  var achados = buscarEtiquetasExistentes(txt);
+  caixa.innerHTML = '';
+  if (!achados.length) { caixa.style.display = 'none'; return 0; }
+  caixa.style.display = '';
+  var titulo = document.createElement('div');
+  titulo.style.cssText = 'font-size:.68rem;text-transform:uppercase;letter-spacing:.04em;color:#A8A8A4;margin:10px 0 5px;';
+  titulo.textContent = 'já existem no seu catálogo';
+  caixa.appendChild(titulo);
+  var linha = document.createElement('div');
+  linha.style.cssText = 'display:flex;flex-wrap:wrap;gap:5px;';
+  var look = etiquetarFila[etiquetarIdx];
+  achados.forEach(function(a){
+    var b = document.createElement('button');
+    var ligada = look && (look.tags||[]).indexOf(a.tag) !== -1;
+    b.className = 'etq-chip' + (ligada ? ' etq-chip-on' : '');
+    b.innerHTML = a.tag + ' <span style="opacity:.55">' + a.vezes + '</span>';
+    b.title = 'Está em ' + a.vezes + (a.vezes === 1 ? ' look' : ' looks');
+    b.onclick = function(){
+      alternarEtiqueta(a.tag);
+      var campo = document.getElementById('etiquetarCampo');
+      if (campo) { campo.value = ''; }
+      previaDaEtiqueta();
+    };
+    linha.appendChild(b);
+  });
+  caixa.appendChild(linha);
+  return achados.length;
+}
+
 function previaDaEtiqueta() {
   var campo = document.getElementById('etiquetarCampo');
   var dica = document.getElementById('etiquetarPrevia');
   if (!campo || !dica) return;
   var txt = (campo.value || '').trim();
-  if (!txt) { dica.style.display = 'none'; return; }
+  if (!txt) { dica.style.display = 'none'; renderAchadosDaBusca(''); return; }
+  var quantosAchados = renderAchadosDaBusca(txt);
   var etq = interpretarEtiqueta(txt);
   dica.style.display = '';
   if (!etq) {
     dica.style.color = '#A8A8A4';
-    dica.textContent = 'Escreva a peça e a descrição: "calça azul coreia".';
+    dica.textContent = quantosAchados
+      ? 'Toque numa das que já existem, ou escreva peça e descrição pra criar outra.'
+      : 'Escreva a peça e a descrição: "calça azul coreia".';
     return;
   }
   var nova = !categoriasConhecidas()[etq.split(':')[0]];
@@ -4735,6 +4794,9 @@ function renderEtiquetarRapido() {
   if (!(look.tags || []).length) {
     atuais.innerHTML = '<span style="font-size:.76rem;color:#B0B0AC;">Nenhuma etiqueta ainda — toque nas de baixo.</span>';
   }
+
+  var campoBusca = document.getElementById('etiquetarCampo');
+  renderAchadosDaBusca(campoBusca ? campoBusca.value : '');
 
   var caixa = document.getElementById('etiquetarSugestoes');
   caixa.innerHTML = '';
@@ -11850,6 +11912,7 @@ function applySuggestions() {
       <button class="btn btn-ghost" onclick="adicionarEtiquetaDigitada()">Adicionar</button>
     </div>
     <div id="etiquetarPrevia" style="display:none;font-size:.72rem;margin-top:5px;"></div>
+    <div id="etiquetarAchados" style="display:none;"></div>
     <div id="etiquetarSugestoes"></div>
     <div style="display:flex;justify-content:space-between;gap:10px;margin-top:18px;position:sticky;bottom:0;background:#fff;padding-top:10px;">
       <button class="btn btn-ghost" onclick="pularEtiquetar(-1)">‹ Anterior</button>
