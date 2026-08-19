@@ -565,6 +565,8 @@ body.week-pick-mode .card-week-btn { display: block; }
 .insp-palette { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-bottom: 6px; }
 .insp-dot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(0,0,0,.12); display: inline-block; }
 .insp-palette-txt { font-size: .66rem; color: #A8A8A4; }
+.insp-receita { width: 100%; box-sizing: border-box; border: 1px solid #E0E0DB; border-radius: 8px; padding: 7px 9px; font-family: inherit; font-size: .76rem; line-height: 1.4; resize: vertical; margin-bottom: 8px; background: #fff; color: #1A1A1A; }
+.insp-receita::placeholder { color: #B0B0AC; }
 .insp-btn { width: 100%; box-sizing: border-box; justify-content: center; white-space: normal; text-align: center; line-height: 1.25; }
 .voto-linha { display:flex; gap:8px; margin-top:10px; }
 .voto-btn { flex:1; background:#FAFAF8; border:1px solid #E0E0DB; border-radius:8px; padding:8px; font-size:.8rem; font-family:inherit; color:#1A1A1A; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:5px; }
@@ -6639,7 +6641,132 @@ function proximidadeDaPaleta(perfilPeca, perfisDaPaleta) {
   return melhor;
 }
 
+// ── Receita da inspiração ──
+// A paleta sozinha não faz o look parecer com a referência: "vinho + preto" não
+// diz que a foto é camisa oversized por dentro de calça wide com rasteira. A
+// receita guarda as peças da foto em palavras — escritas por quem olhou a
+// imagem — e o montador escolhe por tipo de peça, não só por cor.
+// Formato: "camisa oversized branca, calça wide jeans, sandália rasteira caramelo"
+
+var CATEGORIA_DA_PALAVRA = {
+  'camisa': 'Tops', 'camiseta': 'Tops', 'blusa': 'Tops', 'top': 'Tops', 'regata': 'Tops',
+  'sueter': 'Tops', 'trico': 'Tops', 'moletom': 'Tops', 'polo': 'Tops', 'body': 'Tops',
+  'calca': 'Bottoms', 'saia': 'Bottoms', 'short': 'Bottoms', 'shorts': 'Bottoms',
+  'bermuda': 'Bottoms', 'legging': 'Bottoms', 'macacao': 'Bottoms',
+  // Vestido não é categoria no armário dela (as 276 peças do Alta não têm
+  // nenhum): a receita com vestido vira parte de baixo, que é o que sobra
+  // parecido — e ela pode trocar depois no montador.
+  'vestido': 'Bottoms',
+  'casaco': 'Outerwear', 'jaqueta': 'Outerwear', 'blazer': 'Outerwear', 'colete': 'Outerwear',
+  'cardigan': 'Outerwear', 'kimono': 'Outerwear', 'trench': 'Outerwear',
+  'sapato': 'Shoes', 'sandalia': 'Shoes', 'tenis': 'Shoes', 'bota': 'Shoes',
+  'rasteira': 'Shoes', 'mocassim': 'Shoes', 'loafer': 'Shoes', 'salto': 'Shoes', 'mule': 'Shoes',
+  'bolsa': 'Bags', 'clutch': 'Bags', 'tote': 'Bags', 'pochete': 'Bags',
+  'cinto': 'Accessories', 'lenco': 'Accessories', 'oculos': 'Accessories',
+  'colar': 'Jewelry', 'brinco': 'Jewelry', 'pulseira': 'Jewelry'
+};
+
+// Cada pedaço separado por vírgula é uma peça da foto.
+// Devolve o nome da cor quando a palavra é cor — aceitando o feminino, que é
+// como ela escreve ("camisa branca", "calça preta").
+function corDaPalavra(w) {
+  if (rgbDaCorConhecida(w)) return w;
+  var variacoes = SINONIMOS_DE_PECA[w];
+  if (!variacoes) return null;
+  for (var i = 0; i < variacoes.length; i++) {
+    if (rgbDaCorConhecida(variacoes[i])) return variacoes[i];
+  }
+  return null;
+}
+
+function lerReceita(texto) {
+  return String(texto || '').split(',').map(function(pedaco){
+    var palavras = textoParaBusca(pedaco).split(' ').filter(Boolean);
+    if (!palavras.length) return null;
+    var categoria = null;
+    palavras.forEach(function(w){ if (!categoria && CATEGORIA_DA_PALAVRA[w]) categoria = CATEGORIA_DA_PALAVRA[w]; });
+    if (!categoria) return null; // pedaço sem peça reconhecível não vira slot
+    // "branca" e "preta" não estavam na lista de cores (só "branco"/"preto"), e a
+    // receita é escrita como se fala, concordando com a peça.
+    var cor = null;
+    palavras.forEach(function(w){ if (!cor) cor = corDaPalavra(w); });
+    return { categoria: categoria, termos: palavras, cor: cor, texto: pedaco.trim() };
+  }).filter(Boolean);
+}
+
+// Quanto uma peça dela atende ao pedaço da receita.
+function notaDaPecaNaReceita(peca, slot, perfisDaPaleta) {
+  var alvo = textoParaBusca(etiquetaDaPeca(peca));
+  var acertos = 0, possiveis = 0;
+  slot.termos.forEach(function(w){
+    if (CATEGORIA_DA_PALAVRA[w] && variacoesDaPalavra(w).every(function(v){ return !contemTermo(alvo, v); })) {
+      // a palavra da categoria conta menos: a categoria já foi garantida no filtro
+      possiveis += 0.5;
+      return;
+    }
+    possiveis += 1;
+    if (variacoesDaPalavra(w).some(function(v){ return contemTermo(alvo, v); })) acertos += 1;
+  });
+  var nota = possiveis ? (acertos / possiveis) * 3 : 0;
+
+  var perfil = perfilDaCor(peca.color);
+  if (slot.cor) {
+    nota += proximidadeDeCor((perfilDaCor(slot.cor) || {}).rgb, (perfil || {}).rgb) * 2;
+  } else if (perfisDaPaleta && perfisDaPaleta.length) {
+    nota += proximidadeDaPaleta(perfil, perfisDaPaleta) * 1.2;
+  }
+  return nota * fatorDeRodizioDaPeca(peca);
+}
+
+function pecasPelaReceita(insp, evitar) {
+  var slots = lerReceita(insp.receita);
+  if (!slots.length) return null;
+  var evita = evitar || [];
+  var perfisDaPaleta = (insp.palette || []).map(perfilDaCor).filter(Boolean);
+  var ids = [];
+
+  slots.forEach(function(slot){
+    var candidatas = allPecas().filter(function(p){
+      if (pecaArquivada(p.id)) return false;
+      if (p.category !== slot.categoria) return false;
+      return ids.indexOf(p.id) === -1;
+    });
+    // A palavra da peça filtra, não só pontua: pedindo "sandália rasteira" ela
+    // não quer receber tênis, ainda que tênis também seja Shoes. Só afrouxa se
+    // sobrar pouca coisa — aí a nota resolve.
+    var tipos = slot.termos.filter(function(w){ return CATEGORIA_DA_PALAVRA[w]; });
+    if (tipos.length) {
+      var doTipo = candidatas.filter(function(p){
+        var alvo = textoParaBusca(etiquetaDaPeca(p));
+        return tipos.some(function(w){ return variacoesDaPalavra(w).some(function(v){ return contemTermo(alvo, v); }); });
+      });
+      if (doTipo.length >= 3) candidatas = doTipo;
+    }
+
+    var frescas = candidatas.filter(function(p){ return evita.indexOf(p.id) === -1; });
+    if (frescas.length) candidatas = frescas;
+    if (!candidatas.length) return;
+
+    var escolhida = weightedRandomPiece(candidatas, function(p){
+      return notaDaPecaNaReceita(p, slot, perfisDaPaleta);
+    });
+    if (escolhida) ids.push(escolhida.id);
+  });
+  return ids.length ? ids : null;
+}
+
+function salvarReceitaDaInspiracao(id, texto) {
+  var insp = inspiracoes.find(function(x){ return x.id === id; });
+  if (!insp) return;
+  insp.receita = texto;
+  saveInspiracoes();
+}
+
 function pecasInspiradasEm(insp, evitar) {
+  // Receita escrita ganha da paleta: ela descreve a foto, a paleta só resume.
+  var pelaReceita = pecasPelaReceita(insp, evitar);
+  if (pelaReceita) return pelaReceita;
+
   var paleta = insp.palette || [];
   if (!paleta.length) return null;
   var evita = evitar || [];
@@ -6854,6 +6981,29 @@ function renderInspiracoes() {
     nota.value = it.nota || '';
     nota.addEventListener('blur', (function(iid){ return function(){ salvarNotaInspiracao(iid, nota.value.trim()); }; })(it.id));
     body.appendChild(nota);
+    // A receita: o que a foto tem, em palavras. Fica visível e editável — quem
+    // escreve normalmente sou eu, olhando o print, mas ela corrige quando quiser.
+    var receita = document.createElement('textarea');
+    receita.className = 'insp-receita';
+    receita.rows = 2;
+    receita.placeholder = 'Receita: camisa oversized branca, calça wide jeans, sandália rasteira caramelo';
+    receita.value = it.receita || '';
+    receita.onchange = (function(iid, campo){ return function(){
+      salvarReceitaDaInspiracao(iid, campo.value);
+      renderInspiracoes();
+    }; })(it.id, receita);
+    body.appendChild(receita);
+
+    var lidas = lerReceita(it.receita);
+    if (lidas.length) {
+      var resumo = document.createElement('div');
+      resumo.style.cssText = 'font-size:.68rem;color:#A8A8A4;margin:-4px 0 8px;';
+      resumo.textContent = 'monta por: ' + lidas.map(function(sl){
+        return (NOME_CATEGORIA[sl.categoria] || sl.categoria).toLowerCase();
+      }).join(' · ');
+      body.appendChild(resumo);
+    }
+
     // As paletas guardadas foram lidas com o nomeador de cores da época. Quem já
     // tem inspiração salva precisa de um jeito de reler sem apagar e subir de novo.
     var bRe = document.createElement('button');
