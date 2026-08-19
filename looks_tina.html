@@ -4082,13 +4082,22 @@ function cumprirExigencias(lockedCats) {
       var atuais = suggestionSlots.map(function(sl){ return textoParaBusca(etiquetaDaPeca(findPieceById(sl.pieceId))); });
       if (grupoEstaNoLook(grupo, atuais)) return;
 
-      var candidata = null;
-      allPecas().some(function(p){
+      // Pegar a primeira da lista fazia a mesma camiseta aparecer em todo look —
+      // ela tem várias e "gerar nova sugestão" não mudava nada. Entre as que
+      // cumprem a regra, escolhe pela combinação com o resto, com sorteio.
+      var candidatas = allPecas().filter(function(p){
         if (pecaArquivada(p.id)) return false;
-        if (!grupoEstaNoLook(grupo, [textoParaBusca(etiquetaDaPeca(p))])) return false;
-        candidata = p; return true;
+        return grupoEstaNoLook(grupo, [textoParaBusca(etiquetaDaPeca(p))]);
       });
-      if (!candidata) return; // ela exigiu algo que não tem no armário
+      if (!candidatas.length) return; // ela exigiu algo que não tem no armário
+
+      var noLook = suggestionSlots.map(function(sl){ return findPieceById(sl.pieceId); }).filter(Boolean);
+      var candidata = weightedRandomPiece(candidatas, function(p){
+        if (!noLook.length) return 1;
+        var total = 0;
+        noLook.forEach(function(rp){ total += compatibilityScore(p, rp); });
+        return total / noLook.length;
+      }) || candidatas[Math.floor(Math.random() * candidatas.length)];
 
       var idx = suggestionSlots.findIndex(function(sl){ return sl.category === candidata.category; });
       if (idx !== -1) {
