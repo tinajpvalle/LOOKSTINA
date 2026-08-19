@@ -9492,10 +9492,25 @@ function apagarRegraEscrita(i) {
 // Um grupo "acha" o look quando alguma etiqueta contém todas as suas palavras —
 // cada palavra valendo também pelos sinônimos: "calça moletom" casa com
 // "calça: moletom cinza", e "camiseta" casa com "White Cotton T-shirt".
+// Procurar o termo em qualquer posição da palavra deixava "sweatshirt" contar
+// como camiseta — "tshirt" está lá dentro, no meio. Um moletom cinza cumpria a
+// regra "todo look precisa de camiseta", e ela via look após look sem camiseta.
+// Agora o termo tem que começar palavra: "t shirt" acha "white cotton t shirt",
+// e não acha "sweatshirt". Começo de palavra (e não palavra inteira) porque
+// vários termos são radicais: "listrad" precisa achar "listrada".
+function contemTermo(texto, termo) {
+  var pos = texto.indexOf(termo);
+  while (pos !== -1) {
+    if (pos === 0 || texto.charAt(pos - 1) === ' ') return true;
+    pos = texto.indexOf(termo, pos + 1);
+  }
+  return false;
+}
+
 function grupoEstaNoLook(grupo, etiquetas) {
   return etiquetas.some(function(et){
     return grupo.every(function(w){
-      return variacoesDaPalavra(w).some(function(v){ return et.indexOf(v) !== -1; });
+      return variacoesDaPalavra(w).some(function(v){ return contemTermo(et, v); });
     });
   });
 }
