@@ -4021,6 +4021,53 @@ function weightedRandomPiece(candidates, scoreFn) {
   return pool[pool.length - 1].p;
 }
 
+// ── Rodízio das peças no montador ──
+// A nota é de compatibilidade, e peça coringa (camiseta branca, jeans) combina
+// com tudo: ela ganhava sempre, e "gerar nova sugestão" devolvia o mesmo look
+// com outra bolsa. Aqui entra a memória de quantas vezes cada peça já saiu.
+var vezesNoMontador = safeParse(lsGet('looks_tina_rodiziopecas_v1'), {}) || {};
+
+function contarPecaNoMontador(id) {
+  vezesNoMontador[id] = (vezesNoMontador[id] || 0) + 1;
+}
+
+function salvarRodizioDePecas() {
+  lsSet('looks_tina_rodiziopecas_v1', JSON.stringify(vezesNoMontador));
+  lsSet('looks_tina_ultimaspecas_v1', JSON.stringify(ultimasNoMontador));
+}
+
+// Só o peso não bastava: a peça coringa continuava voltando em 3 de 15
+// tentativas, e é isso que ela sente como "sempre as mesmas". Quem saiu nas
+// últimas montagens fica de fora enquanto houver alternativa de sobra.
+var ultimasNoMontador = safeParse(lsGet('looks_tina_ultimaspecas_v1'), []) || [];
+var ULTIMAS_NO_MONTADOR = 40;
+var JANELA_DE_DESCANSO = 8; // quantas montagens a peça descansa
+
+function anotarPecaMostrada(id) {
+  var i = ultimasNoMontador.indexOf(id);
+  if (i !== -1) ultimasNoMontador.splice(i, 1);
+  ultimasNoMontador.unshift(id);
+  if (ultimasNoMontador.length > ULTIMAS_NO_MONTADOR) ultimasNoMontador.length = ULTIMAS_NO_MONTADOR;
+}
+
+function tirandoAsQueAcabaramDeSair(lista, minimo) {
+  var descansando = ultimasNoMontador.slice(0, JANELA_DE_DESCANSO);
+  var frescas = lista.filter(function(p){ return descansando.indexOf(p.id) === -1; });
+  return frescas.length >= (minimo || 4) ? frescas : lista;
+}
+
+// Multiplica a nota de compatibilidade: quem nunca saiu quase dobra de peso,
+// quem já saiu muito quase some — sem nunca zerar, porque a peça continua
+// combinando.
+function fatorDeRodizioDaPeca(p) {
+  var v = vezesNoMontador[p.id] || 0;
+  if (!v) return 1.9;
+  if (v === 1) return 1.25;
+  if (v === 2) return 0.85;
+  if (v <= 4) return 0.55;
+  return 0.3;
+}
+
 // escolhe uma peça de uma categoria, ponderando por compatibilidade com as peças já escolhidas no look
 // Etiqueta equivalente de uma peça, pras regras dela valerem aqui também: o
 // montador trabalha com peça, e as regras foram escritas pensando em look.
@@ -4048,14 +4095,15 @@ function pickPieceForCategory(cat, referencePieces, excludeId) {
   }
   var semProibidas = list.filter(function(p){ return !pecaProibidaComAsOutras(p, referencePieces); });
   if (semProibidas.length) list = semProibidas; // se zerar, melhor sugerir do que travar
+  list = tirandoAsQueAcabaramDeSair(list);
   if (list.length === 0) return null;
   if (!referencePieces || referencePieces.length === 0) {
-    return list[Math.floor(Math.random() * list.length)];
+    return weightedRandomPiece(list, function(p){ return fatorDeRodizioDaPeca(p); });
   }
   return weightedRandomPiece(list, function(p) {
     var total = 0;
     referencePieces.forEach(function(rp) { total += compatibilityScore(p, rp); });
-    return total / referencePieces.length;
+    return (total / referencePieces.length) * fatorDeRodizioDaPeca(p);
   });
 }
 
@@ -4099,6 +4147,16 @@ function generateFullSuggestion() {
   });
 
   cumprirExigencias(lockedCats);
+
+  // Só conta o que ela de fato viu na tela; peça travada não entra, senão a
+  // escolha dela mesma empurraria a peça pro fim da fila.
+  suggestionSlots.forEach(function(sl){
+    if (suggestionLockedIds.indexOf(sl.pieceId) === -1) {
+      contarPecaNoMontador(sl.pieceId);
+      anotarPecaMostrada(sl.pieceId);
+    }
+  });
+  salvarRodizioDePecas();
 }
 
 // "sempre precisa ter uma camiseta no look": depois de montar, se faltar o que
@@ -4121,13 +4179,14 @@ function cumprirExigencias(lockedCats) {
         return grupoEstaNoLook(grupo, [textoParaBusca(etiquetaDaPeca(p))]);
       });
       if (!candidatas.length) return; // ela exigiu algo que não tem no armário
+      candidatas = tirandoAsQueAcabaramDeSair(candidatas, 3);
 
       var noLook = suggestionSlots.map(function(sl){ return findPieceById(sl.pieceId); }).filter(Boolean);
       var candidata = weightedRandomPiece(candidatas, function(p){
-        if (!noLook.length) return 1;
+        if (!noLook.length) return fatorDeRodizioDaPeca(p);
         var total = 0;
         noLook.forEach(function(rp){ total += compatibilityScore(p, rp); });
-        return total / noLook.length;
+        return (total / noLook.length) * fatorDeRodizioDaPeca(p);
       }) || candidatas[Math.floor(Math.random() * candidatas.length)];
 
       var idx = suggestionSlots.findIndex(function(sl){ return sl.category === candidata.category; });
@@ -4218,6 +4277,9 @@ function rerollSlot(idx) {
   if (!p) return;
   guardarSugestaoAtual(); // trocar uma peça também dá pra desfazer
   slot.pieceId = p.id;
+  contarPecaNoMontador(p.id);
+  anotarPecaMostrada(p.id);
+  salvarRodizioDePecas();
   renderSuggestionCanvas();
   renderBotaoSugestaoAnterior();
 }
