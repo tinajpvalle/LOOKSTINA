@@ -12058,32 +12058,83 @@ function gruposDeEtiquetasIguais() {
     .sort(function(a,b){ return b.total - a.total; });
 }
 
-// Unifica um grupo na etiqueta escolhida por ela.
-function unificarEtiquetas(chave, escolhida) {
-  var grupo = gruposDeEtiquetasIguais().find(function(g){ return g.chave === chave; });
-  if (!grupo) return 0;
-  var outras = grupo.variantes.map(function(v){ return v.tag; }).filter(function(t){ return t !== escolhida; });
-  if (!outras.length) return 0;
+// Reescrever etiqueta em centenas de looks precisa de volta atrás. Guarda o que
+// cada look tinha antes da última arrumação.
+var ultimaUnificacao = safeParse(lsGet('looks_tina_ultimaunificacao_v1'), null);
 
-  var looksMexidos = 0;
+// `mapa`: { etiquetaAntiga: etiquetaQueFica }
+function aplicarUnificacao(mapa) {
+  var antigas = Object.keys(mapa);
+  if (!antigas.length) return 0;
+
+  var mudancas = [];
   data.forEach(function(l){
     if (!l.tags || !l.tags.length) return;
+    var antes = l.tags.slice();
     var mexeu = false;
     var novas = [];
     l.tags.forEach(function(t){
       var tag = t.trim();
-      if (outras.indexOf(tag) !== -1) { tag = escolhida; mexeu = true; }
-      if (novas.indexOf(tag) === -1) novas.push(tag); // não duplica se as duas estavam no mesmo look
+      if (mapa[tag]) { tag = mapa[tag]; mexeu = true; }
+      if (novas.indexOf(tag) === -1) novas.push(tag); // não duplica se o look já tinha as duas
     });
-    if (mexeu) { l.tags = novas; looksMexidos++; }
+    if (mexeu) { l.tags = novas; mudancas.push({ id: l.id, antes: antes }); }
   });
+
+  if (!mudancas.length) return 0;
+  ultimaUnificacao = { quando: new Date().toISOString(), mudancas: mudancas };
+  lsSet('looks_tina_ultimaunificacao_v1', JSON.stringify(ultimaUnificacao));
 
   saveToStorage();
   buildChips();
   renderGrid();
   renderConsultoria();
-  showSavedToast(looksMexidos + (looksMexidos === 1 ? ' look atualizado.' : ' looks atualizados.'));
-  return looksMexidos;
+  return mudancas.length;
+}
+
+// Unifica um grupo na etiqueta escolhida por ela.
+function unificarEtiquetas(chave, escolhida) {
+  var grupo = gruposDeEtiquetasIguais().find(function(g){ return g.chave === chave; });
+  if (!grupo) return 0;
+  var mapa = {};
+  grupo.variantes.forEach(function(v){ if (v.tag !== escolhida) mapa[v.tag] = escolhida; });
+  var n = aplicarUnificacao(mapa);
+  showSavedToast(n + (n === 1 ? ' look atualizado.' : ' looks atualizados.'));
+  return n;
+}
+
+// Arruma tudo de uma vez, mantendo em cada grupo o nome que ela mais usou —
+// que é o que ela pediu: assumir a versão com mais looks e resolver.
+function arrumarTodasAsEtiquetas() {
+  var grupos = gruposDeEtiquetasIguais();
+  if (!grupos.length) return;
+  var mapa = {}, nomes = [];
+  grupos.forEach(function(g){
+    var manter = g.variantes[0].tag; // já vem ordenado por número de looks
+    nomes.push(manter);
+    g.variantes.slice(1).forEach(function(v){ mapa[v.tag] = manter; });
+  });
+  if (!confirm('Arrumar ' + grupos.length + ' peças, mantendo em cada uma o nome que você mais usou?\n\nDá pra desfazer depois.')) return;
+  var n = aplicarUnificacao(mapa);
+  showSavedToast(grupos.length + ' peças arrumadas em ' + n + ' looks.');
+}
+
+function desfazerUnificacao() {
+  if (!ultimaUnificacao || !ultimaUnificacao.mudancas) return;
+  var voltaram = 0;
+  ultimaUnificacao.mudancas.forEach(function(m){
+    var look = data.find(function(l){ return l.id === m.id; });
+    if (!look) return;
+    look.tags = m.antes.slice();
+    voltaram++;
+  });
+  ultimaUnificacao = null;
+  lsSet('looks_tina_ultimaunificacao_v1', 'null');
+  saveToStorage();
+  buildChips();
+  renderGrid();
+  renderConsultoria();
+  showSavedToast(voltaram + ' looks voltaram como estavam.');
 }
 
 function pecasQueSustentam(quantas) {
@@ -12147,6 +12198,17 @@ function renderConsultoria() {
 
   var html = '';
 
+  // A volta atrás fica no topo, enquanto for recente — mexer em centenas de
+  // looks sem poder desfazer é o tipo de coisa que dá medo de clicar.
+  if (ultimaUnificacao && ultimaUnificacao.mudancas && ultimaUnificacao.mudancas.length) {
+    var horas = (Date.now() - new Date(ultimaUnificacao.quando).getTime()) / 3600000;
+    if (horas < 48) {
+      html += '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#FAFAF8;border:1px solid #E0E0DB;border-radius:10px;padding:9px 12px;margin-bottom:18px;font-size:.8rem;color:#666666;">'
+        + '<span>Arrumei ' + ultimaUnificacao.mudancas.length + ' looks na última vez.</span>'
+        + '<button class="btn btn-ghost" style="padding:4px 10px;font-size:.75rem;" onclick="desfazerUnificacao()">Desfazer</button></div>';
+    }
+  }
+
   // ── 1. peças iguais escritas diferente ──
   var grupos = gruposDeEtiquetasIguais();
   if (!grupos.length) {
@@ -12166,9 +12228,13 @@ function renderConsultoria() {
         + linhas + '</div>';
     }).join('');
     var extra = grupos.length > 20 ? '<div style="font-size:.76rem;color:#A8A8A4;">…e mais ' + (grupos.length - 20) + '. Depois de unificar estes, os próximos aparecem aqui.</div>' : '';
+    // O caminho rápido primeiro: ela pediu pra não ter que decidir uma a uma.
+    var botaoTudo = '<button class="btn btn-week" style="width:100%;justify-content:center;margin-bottom:12px;" onclick="arrumarTodasAsEtiquetas()">'
+      + '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><polyline points="4.5 12.2 9.8 17.5 19.5 6.5"/></svg>'
+      + ' Arrumar todas (' + grupos.length + ') — mantendo o nome mais usado</button>';
     html += bloco('PEÇAS ESCRITAS DE DOIS JEITOS (' + grupos.length + ')',
-      corpo + extra,
-      'A mesma peça com as palavras em outra ordem vira duas peças diferentes pro app: ele pode repetir a mesma bolsa na semana achando que variou, e a estatística dela fica dividida. Escolha o nome que fica.');
+      botaoTudo + corpo + extra,
+      'A mesma peça com as palavras em outra ordem vira duas peças diferentes pro app: ele pode repetir a mesma bolsa na semana achando que variou, e a estatística dela fica dividida. Arrume todas de uma vez, ou escolha o nome que fica em cada uma.');
   }
 
   // ── 2. as que sustentam ──
