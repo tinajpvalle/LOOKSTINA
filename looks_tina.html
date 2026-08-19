@@ -1424,12 +1424,43 @@ function pullRemoteUpdates() {
   });
   syncGet('looks_tina_preferencias_v1').then(function(res) {
     liberarEnvio('looks_tina_preferencias_v1', !!(res && res.value != null));
-    if (!res || res.value == null) return;
+    if (!res || res.value == null) { if (temAlgoAqui(preferencias)) savePreferencias(); return; }
+    if (servidorVeioVazio(res.value) && temAlgoAqui(preferencias)) { savePreferencias(); return; }
     if (servidorVeioVazio(res.value) && temAlgoAqui(preferencias)) { savePreferencias(); return; }
     if (res.value !== JSON.stringify(preferencias)) {
       try {
         preferencias = JSON.parse(res.value) || {};
         lsSet('looks_tina_preferencias_v1', res.value);
+        if (typeof renderStats === 'function' && document.getElementById('statsContent')) renderStats();
+      } catch (e) {}
+    }
+  });
+  // Faltavam estas duas leituras, e o efeito não era só "não sincroniza": o envio
+  // fica segurado até a chave ser lida do servidor (pra aparelho vazio não apagar
+  // o que existe), então sem leitura o envio esperava para sempre. As regras que
+  // ela escreveu nunca saíram do aparelho por causa disso.
+  syncGet('looks_tina_combinacoes_v1').then(function(res) {
+    liberarEnvio('looks_tina_combinacoes_v1', !!(res && res.value != null));
+    if (!res || res.value == null) { if (temAlgoAqui(combinacoes)) saveCombinacoes(); return; }
+    if (servidorVeioVazio(res.value) && temAlgoAqui(combinacoes)) { saveCombinacoes(); return; }
+    if (res.value !== JSON.stringify(combinacoes)) {
+      try {
+        combinacoes = JSON.parse(res.value) || {};
+        lsSet('looks_tina_combinacoes_v1', res.value);
+        if (typeof renderStats === 'function' && document.getElementById('statsContent')) renderStats();
+      } catch (e) {}
+    }
+  });
+  syncGet('looks_tina_regras_v1').then(function(res) {
+    liberarEnvio('looks_tina_regras_v1', !!(res && res.value != null));
+    // servidor sem nada e regras aqui: sobem sozinhas, sem ela reescrever
+    if (!res || res.value == null) { if (temAlgoAqui(regrasEscritas)) saveRegrasEscritas(); return; }
+    if (servidorVeioVazio(res.value) && temAlgoAqui(regrasEscritas)) { saveRegrasEscritas(); return; }
+    if (res.value !== JSON.stringify(regrasEscritas)) {
+      try {
+        regrasEscritas = JSON.parse(res.value) || [];
+        regrasEscritas.forEach(function(r){ if (!r.tipo) r.tipo = 'proibe'; });
+        lsSet('looks_tina_regras_v1', res.value);
         if (typeof renderStats === 'function' && document.getElementById('statsContent')) renderStats();
       } catch (e) {}
     }
