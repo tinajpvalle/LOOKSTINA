@@ -810,6 +810,7 @@ body.compare-mode .card-compare-btn { display: flex; }
   <div class="tab" id="tabPecas" onclick="switchTab('pecas')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg> Peças Avulsas</div>
   <div class="tab" id="tabMontados" onclick="switchTab('montados')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M12 7.2a2.1 2.1 0 1 1 2.1-2.1c0 1.1-1 1.5-2.1 2.1v2"/><path d="M12 9.2 3.6 15.3A1.5 1.5 0 0 0 4.5 18h15a1.5 1.5 0 0 0 .9-2.7L12 9.2z"/></svg> Looks Montados</div>
   <div class="tab" id="tabInsp" onclick="switchTab('insp')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="m12 3.5 2.4 5.4 5.9.6-4.4 4 1.2 5.8L12 16.4 6.9 19.3l1.2-5.8-4.4-4 5.9-.6L12 3.5z"/></svg> Inspirações</div>
+  <div class="tab" id="tabConsultoria" onclick="switchTab('consultoria')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M4 19.6V9.4M9.3 19.6V4.4M14.7 19.6v-7.2M20 19.6V7"/></svg> Consultoria</div>
   <div class="tab" id="tabStats" onclick="switchTab('stats')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M3.5 20.5h17"/><path d="M6.5 17.5v-5M12 17.5V5.5M17.5 17.5v-8"/></svg> Relatório</div>
   <div class="tab" id="tabAdmin" onclick="switchTab('admin')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M3.5 11.4V5.2A1.7 1.7 0 0 1 5.2 3.5h6.2l9.1 9.1-7.9 7.9-9.1-9.1z"/><circle cx="7.8" cy="7.8" r="1.3"/></svg> Tags</div>
   <div class="tab" id="tabImport" onclick="switchTab('import')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><circle cx="12" cy="12" r="8.5"/><path d="M12 8.2v7.6M8.2 12h7.6"/></svg> Importar</div>
@@ -7400,6 +7401,7 @@ function switchTab(tab) {
   document.getElementById('tabWeek').classList.toggle('active', tab==='week');
   document.getElementById('tabAdmin').classList.toggle('active', tab==='admin');
   document.getElementById('tabStats').classList.toggle('active', tab==='stats');
+  document.getElementById('tabConsultoria').classList.toggle('active', tab==='consultoria');
   document.getElementById('tabCal').classList.toggle('active', tab==='cal');
   document.getElementById('tabImport').classList.toggle('active', tab==='import');
   document.getElementById('tabPecas').classList.toggle('active', tab==='pecas');
@@ -7409,6 +7411,7 @@ function switchTab(tab) {
   document.getElementById('weekView').classList.toggle('show', tab==='week');
   document.getElementById('adminView').classList.toggle('show', tab==='admin');
   document.getElementById('statsView').style.display = tab==='stats' ? '' : 'none';
+  document.getElementById('consultoriaView').style.display = tab==='consultoria' ? '' : 'none';
   document.getElementById('calView').style.display = tab==='cal' ? '' : 'none';
   document.getElementById('importView').style.display = tab==='import' ? '' : 'none';
   document.getElementById('pecasView').style.display = tab==='pecas' ? '' : 'none';
@@ -7417,6 +7420,7 @@ function switchTab(tab) {
   if (tab==='week') renderWeek();
   if (tab==='admin') renderAdmin();
   if (tab==='stats') renderStats();
+  if (tab==='consultoria') renderConsultoria();
   if (tab==='cal') renderCal();
   if (tab==='import') renderImportView();
   if (tab==='insp') renderInspiracoes();
@@ -12004,6 +12008,212 @@ function renderCal() {
   }
 }
 
+// ── Consultoria do armário ──
+// Análise do que já existe: nada aqui pede que ela preencha nada. Os números
+// saem do catálogo, das peças e da previsão que o app já usa.
+
+// Duas etiquetas com as mesmas palavras em ordem diferente são a mesma peça —
+// "bolsa: mini trançada preta" e "bolsa: preta mini trançada". Isso não é só
+// bagunça: o app acredita que são duas bolsas, então pode repetir a mesma peça
+// na semana achando que variou, e a estatística dela fica dividida.
+// Todas as palavras entram, inclusive as curtas: ignorar as de duas letras
+// juntava "casaco: caramelo" com "casaco: caramelo lã", que são dois casacos.
+// Só a ordem pode diferir — é isso que caracteriza a mesma peça escrita
+// diferente.
+function chaveDaPeca(tag) {
+  var cat = tag.split(':')[0].trim().toLowerCase();
+  var resto = textoParaBusca(tag.split(':').slice(1).join(':'))
+    .split(' ').filter(Boolean).sort().join(' ');
+  return cat + '|' + resto;
+}
+
+function contagemDeEtiquetas() {
+  var conta = {};
+  data.forEach(function(l){
+    if (l.archived) return;
+    (l.tags||[]).forEach(function(t){
+      var tag = t.trim();
+      var cat = tag.split(':')[0].trim().toLowerCase();
+      if (tag.indexOf(':') === -1) return;
+      if (['marca','ocasião','ocasiao','estação','estacao'].indexOf(cat) !== -1) return;
+      conta[tag] = (conta[tag] || 0) + 1;
+    });
+  });
+  return conta;
+}
+
+function gruposDeEtiquetasIguais() {
+  var conta = contagemDeEtiquetas();
+  var grupos = {};
+  Object.keys(conta).forEach(function(tag){
+    var k = chaveDaPeca(tag);
+    (grupos[k] = grupos[k] || []).push({ tag: tag, looks: conta[tag] });
+  });
+  return Object.keys(grupos)
+    .filter(function(k){ return grupos[k].length > 1; })
+    .map(function(k){
+      var variantes = grupos[k].sort(function(a,b){ return b.looks - a.looks; });
+      return { chave: k, variantes: variantes, total: variantes.reduce(function(n,v){ return n + v.looks; }, 0) };
+    })
+    .sort(function(a,b){ return b.total - a.total; });
+}
+
+// Unifica um grupo na etiqueta escolhida por ela.
+function unificarEtiquetas(chave, escolhida) {
+  var grupo = gruposDeEtiquetasIguais().find(function(g){ return g.chave === chave; });
+  if (!grupo) return 0;
+  var outras = grupo.variantes.map(function(v){ return v.tag; }).filter(function(t){ return t !== escolhida; });
+  if (!outras.length) return 0;
+
+  var looksMexidos = 0;
+  data.forEach(function(l){
+    if (!l.tags || !l.tags.length) return;
+    var mexeu = false;
+    var novas = [];
+    l.tags.forEach(function(t){
+      var tag = t.trim();
+      if (outras.indexOf(tag) !== -1) { tag = escolhida; mexeu = true; }
+      if (novas.indexOf(tag) === -1) novas.push(tag); // não duplica se as duas estavam no mesmo look
+    });
+    if (mexeu) { l.tags = novas; looksMexidos++; }
+  });
+
+  saveToStorage();
+  buildChips();
+  renderGrid();
+  renderConsultoria();
+  showSavedToast(looksMexidos + (looksMexidos === 1 ? ' look atualizado.' : ' looks atualizados.'));
+  return looksMexidos;
+}
+
+function pecasQueSustentam(quantas) {
+  var conta = contagemDeEtiquetas();
+  var ordenadas = Object.keys(conta).sort(function(a,b){ return conta[b] - conta[a]; });
+  return {
+    topo: ordenadas.slice(0, quantas || 8).map(function(t){ return { tag: t, looks: conta[t] }; }),
+    emUmLookSo: ordenadas.filter(function(t){ return conta[t] === 1; }).length,
+    distintas: ordenadas.length
+  };
+}
+
+var PERFIS_PRA_CONSULTORIA = [
+  { chave: 'frio_chuva', nome: 'frio com chuva' },
+  { chave: 'frio_seco', nome: 'frio seco' },
+  { chave: 'ameno', nome: 'ameno (18–24°)' },
+  { chave: 'quente', nome: 'quente (25–30°)' },
+  { chave: 'muito_quente', nome: 'muito quente (30°+)' }
+];
+
+function buracosDoArmario() {
+  var comTags = data.filter(function(p){ return !p.archived && (p.tags||[]).length; });
+  var porClima = PERFIS_PRA_CONSULTORIA.map(function(perfil){
+    var n = comTags.filter(function(l){ return weatherScore(l.tags, perfil.chave) >= 0; }).length;
+    return { nome: perfil.nome, looks: n, fatia: comTags.length ? Math.round(n / comTags.length * 100) : 0 };
+  });
+  var porCategoria = {};
+  allPecas().filter(function(p){ return !pecaArquivada(p.id); }).forEach(function(p){
+    porCategoria[p.category] = (porCategoria[p.category] || 0) + 1;
+  });
+  return { total: comTags.length, porClima: porClima, porCategoria: porCategoria };
+}
+
+function paletaDoArmario() {
+  var minhas = allPecas().filter(function(p){ return !pecaArquivada(p.id); });
+  var porCor = {}, neutras = 0, semCor = 0;
+  minhas.forEach(function(p){
+    var perfil = perfilDaCor(p.color);
+    if (!perfil) { semCor++; return; }
+    porCor[perfil.nome] = (porCor[perfil.nome] || 0) + 1;
+    if (perfil.neutra) neutras++;
+  });
+  return {
+    pecas: minhas.length,
+    neutras: neutras,
+    coloridas: minhas.length - neutras - semCor,
+    cores: Object.keys(porCor).sort(function(a,b){ return porCor[b] - porCor[a]; }).map(function(c){ return { cor: c, n: porCor[c] }; })
+  };
+}
+
+function renderConsultoria() {
+  var el = document.getElementById('consultoriaContent');
+  if (!el) return;
+
+  function bloco(titulo, corpo, subtitulo) {
+    return '<div style="margin-bottom:26px;">'
+      + '<div style="font-size:.72rem;font-weight:600;letter-spacing:.08em;color:#A8A8A4;margin-bottom:4px;">' + titulo + '</div>'
+      + (subtitulo ? '<div style="font-size:.78rem;color:#666666;margin-bottom:10px;line-height:1.5;">' + subtitulo + '</div>' : '<div style="height:6px"></div>')
+      + corpo + '</div>';
+  }
+
+  var html = '';
+
+  // ── 1. peças iguais escritas diferente ──
+  var grupos = gruposDeEtiquetasIguais();
+  if (!grupos.length) {
+    html += bloco('PEÇAS ESCRITAS DE DOIS JEITOS',
+      '<div style="font-size:.85rem;color:#666666;">Nenhuma. Suas etiquetas estão consistentes.</div>');
+  } else {
+    var corpo = grupos.slice(0, 20).map(function(g){
+      var linhas = g.variantes.map(function(v){
+        return '<button class="btn btn-ghost" style="justify-content:flex-start;width:100%;text-align:left;margin-bottom:4px;font-size:.8rem;" '
+          + 'onclick="unificarEtiquetas(' + JSON.stringify(g.chave).replace(/"/g,'&quot;') + ', ' + JSON.stringify(v.tag).replace(/"/g,'&quot;') + ')">'
+          + '<span style="flex:1;">' + v.tag + '</span>'
+          + '<span style="color:#A8A8A4;font-size:.72rem;white-space:nowrap;">' + v.looks + (v.looks === 1 ? ' look' : ' looks') + '</span>'
+          + '</button>';
+      }).join('');
+      return '<div style="border:1px solid #E0E0DB;border-radius:10px;padding:10px 12px;margin-bottom:10px;">'
+        + '<div style="font-size:.72rem;color:#A8A8A4;margin-bottom:6px;">clique no nome que você quer manter</div>'
+        + linhas + '</div>';
+    }).join('');
+    var extra = grupos.length > 20 ? '<div style="font-size:.76rem;color:#A8A8A4;">…e mais ' + (grupos.length - 20) + '. Depois de unificar estes, os próximos aparecem aqui.</div>' : '';
+    html += bloco('PEÇAS ESCRITAS DE DOIS JEITOS (' + grupos.length + ')',
+      corpo + extra,
+      'A mesma peça com as palavras em outra ordem vira duas peças diferentes pro app: ele pode repetir a mesma bolsa na semana achando que variou, e a estatística dela fica dividida. Escolha o nome que fica.');
+  }
+
+  // ── 2. as que sustentam ──
+  var sust = pecasQueSustentam(8);
+  var listaSust = '<div style="display:flex;flex-direction:column;gap:5px;">' + sust.topo.map(function(x){
+    return '<div style="display:flex;justify-content:space-between;gap:10px;font-size:.82rem;">'
+      + '<span>' + x.tag + '</span><span style="color:#A8A8A4;white-space:nowrap;">' + x.looks + ' looks</span></div>';
+  }).join('') + '</div>'
+   + '<div style="font-size:.76rem;color:#A8A8A4;margin-top:10px;">De ' + sust.distintas + ' peças diferentes no catálogo, '
+   + sust.emUmLookSo + ' aparecem em um único look.</div>';
+  html += bloco('AS QUE SUSTENTAM O ARMÁRIO', listaSust,
+    'As peças mais combinadas. Se uma delas sai de cena, dezenas de looks saem junto.');
+
+  // ── 3. buracos ──
+  var bur = buracosDoArmario();
+  var barras = bur.porClima.map(function(c){
+    return '<div style="margin-bottom:7px;">'
+      + '<div style="display:flex;justify-content:space-between;font-size:.8rem;margin-bottom:3px;"><span>' + c.nome + '</span>'
+      + '<span style="color:#A8A8A4;">' + c.looks + ' looks · ' + c.fatia + '%</span></div>'
+      + '<div style="height:6px;background:#F0F0EC;border-radius:3px;overflow:hidden;">'
+      + '<div style="height:100%;width:' + c.fatia + '%;background:#1A1A1A;"></div></div></div>';
+  }).join('');
+  var cats = Object.keys(bur.porCategoria).sort(function(a,b){ return bur.porCategoria[b] - bur.porCategoria[a]; })
+    .map(function(c){ return (NOME_CATEGORIA[c] || c) + ': ' + bur.porCategoria[c]; }).join(' · ');
+  html += bloco('BURACOS DO ARMÁRIO',
+    barras + '<div style="font-size:.76rem;color:#A8A8A4;margin-top:10px;">Peças cadastradas — ' + cats + '</div>',
+    'Quantos dos seus ' + bur.total + ' looks servem pra cada tipo de dia. A faixa mais curta é onde a sugestão repete mais.');
+
+  // ── 4. paleta ──
+  var pal = paletaDoArmario();
+  var cores = pal.cores.slice(0, 10).map(function(c){
+    var rgb = rgbDaCorConhecida(c.cor) || [200,200,200];
+    return '<div style="display:flex;align-items:center;gap:7px;font-size:.8rem;">'
+      + '<span style="width:13px;height:13px;border-radius:50%;border:1px solid rgba(0,0,0,.12);background:rgb(' + rgb.join(',') + ');display:inline-block;"></span>'
+      + c.cor + '<span style="color:#A8A8A4;">' + c.n + '</span></div>';
+  }).join('');
+  html += bloco('SUA PALETA',
+    '<div style="display:flex;flex-wrap:wrap;gap:10px 18px;">' + cores + '</div>'
+    + '<div style="font-size:.76rem;color:#A8A8A4;margin-top:12px;">' + pal.pecas + ' peças — '
+    + pal.neutras + ' neutras e ' + pal.coloridas + ' coloridas.</div>',
+    'Neutro é o que combina com tudo; colorido é o que dá caráter ao look.');
+
+  el.innerHTML = html;
+}
+
 function renderStats() {
   var el = document.getElementById('statsContent');
   var active = data.filter(function(p){ return !p.archived; });
@@ -12475,6 +12685,12 @@ function applySuggestions() {
     <div id="suggestPickerGrid"></div>
   </div>
 </div>
+<div id="consultoriaView" style="display:none;padding:24px;max-width:860px;margin:0 auto;">
+  <h2 style="font-size:1.2rem;font-weight:700;margin-bottom:4px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M4 19.6V9.4M9.3 19.6V4.4M14.7 19.6v-7.2M20 19.6V7"/></svg> Consultoria do armário</h2>
+  <p style="color:#666666;font-size:.85rem;margin-bottom:20px;">O que dá pra ver olhando o conjunto: o que se repete, o que sustenta, onde falta e as cores que você usa. Tudo calculado do que já está cadastrado.</p>
+  <div id="consultoriaContent"></div>
+</div>
+
 <!-- IMPORT VIEW -->
 <div id="importView" style="display:none;padding:24px;max-width:860px;margin:0 auto;">
   <h2 style="font-size:1.2rem;font-weight:700;margin-bottom:4px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><circle cx="12" cy="12" r="8.5"/><path d="M12 8.2v7.6M8.2 12h7.6"/></svg> Importar looks novos</h2>
