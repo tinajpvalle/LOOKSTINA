@@ -4390,7 +4390,9 @@ function renderSuggestionLegend(pieces) {
   legend.innerHTML = pieces.map(function(p) {
     var idx = suggestionSlots.findIndex(function(s) { return s.pieceId === p.id; });
     var locked = isSuggestionLocked(p.id);
-    var cat = CATEGORIA_EM_PT[p.category] || p.category;
+    // "Calça" para uma saia fica errado, e agora o rótulo está em letra grande.
+    // A lista da mala já chama essa categoria de "calças e saias".
+    var cat = (p.category === 'Bottoms') ? 'Calça / Saia' : (CATEGORIA_EM_PT[p.category] || p.category);
     return '<div class="sugg-peca' + (locked ? ' travada' : '') + '">'
       + '<div class="sugg-peca-txt">'
       + '<span class="sugg-peca-cat">' + tripEsc(cat) + '</span>'
