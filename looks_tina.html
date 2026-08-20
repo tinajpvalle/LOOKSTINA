@@ -399,6 +399,12 @@ body.week-pick-mode .card-week-btn { display: block; }
 .trip-form-row { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end; margin: 4px 0 16px; }
 .trip-form-row label { font-size: .78rem; color: var(--txt-2); }
 .trip-form-row input { padding: 7px 10px; border: 1px solid var(--line-input); border-radius: var(--r-md); font-size: .85rem; font-family: inherit; margin-top: 3px; background: transparent; color: var(--ink); }
+.trip-ocasiao-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.trip-ocasiao-pill { border: 1px solid var(--line-input); background: transparent; color: var(--txt-2); border-radius: var(--r-pill); padding: 6px 12px; font-size: .78rem; cursor: pointer; font-family: inherit; }
+.trip-ocasiao-pill.active { background: var(--ink); border-color: var(--ink); color: var(--surface); }
+.trip-pack-cell { min-width: 0; }
+.trip-pack-trocar { display: block; width: 100%; margin-top: 2px; border: none; background: none; color: var(--txt-3); font-size: .6rem; font-family: inherit; cursor: pointer; text-decoration: underline; padding: 1px 0; }
+.trip-pack-trocar:hover { color: var(--ink); }
 .trip-dest-results:empty { display: none; }
 .trip-dest-results { border: 1px solid var(--line); border-radius: var(--r-md); margin-top: 5px; overflow: hidden; }
 .trip-dest-row { padding: 7px 10px; font-size: .8rem; cursor: pointer; border-bottom: 1px solid var(--line-soft); color: var(--ink); }
@@ -1219,6 +1225,14 @@ body.compare-mode .card-compare-btn { display: flex; }
           <div class="trip-dest-results" id="tripDestResults"></div>
           <div class="trip-dest-chosen" id="tripDestChosen"></div>
         </div>
+        <div class="trip-field">
+          <label>Que tipo de viagem?</label>
+          <div class="trip-ocasiao-row" id="tripOcasiaoRow">
+            <button type="button" class="trip-ocasiao-pill" data-oc="praia" onclick="tripSetOcasiao('praia')">Praia, descanso</button>
+            <button type="button" class="trip-ocasiao-pill active" data-oc="passeio" onclick="tripSetOcasiao('passeio')">Passeio</button>
+            <button type="button" class="trip-ocasiao-pill" data-oc="arrumado" onclick="tripSetOcasiao('arrumado')">Trabalho, mais arrumado</button>
+          </div>
+        </div>
         <div class="trip-form-row">
           <div>
             <label for="tripStartDate">Data de início</label><br>
@@ -1249,6 +1263,7 @@ body.compare-mode .card-compare-btn { display: flex; }
         <div class="trip-day-list" id="tripDayList"></div>
         <div class="trip-pack-list" id="tripPackList"></div>
         <div class="trip-actions">
+          <button class="btn-next" id="tripNaoGosteiBtn" onclick="tripNaoGostei()">Não gostei, faz outra</button>
           <button class="btn-back" onclick="tripBackToStep1()">← Nova mala</button>
           <button class="btn-back" id="tripShoesAgainBtn" onclick="tripBackToShoes()">Trocar sapatos</button>
           <button class="btn-back" id="tripSaveBtn" onclick="saveCurrentTrip()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M12 3.5v11M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg> Salvar mala</button>
@@ -10433,6 +10448,7 @@ var tripCapsule = [];       // ids de todas as peças que vão na mala
 var tripDays = [];          // [{..clima.., dia:[ids], noite:[ids]}]
 var tripPacked = {};        // id -> true, o que ela já guardou na mala
 var tripFonteClima = '';    // 'previsao' | 'anoPassado' | 'estimativa'
+var tripRecusadas = [];     // peças que ela recusou nesta mala — não voltam em "faz outra"
 var tripViewOnly = false;   // visualizando mala salva com peça que sumiu do armário
 var TRIP_TMAX_BY_MONTH = [28,29,27,25,23,21,21,23,24,25,26,27]; // máxima média aproximada em SP, jan=0
 
@@ -10634,24 +10650,26 @@ function tripFonteClimaTexto() {
 var TRIP_RE_SANDALIA = /sandal|slide|espadrille|flip flop|thong|clog|open toe/i;
 var TRIP_RE_BOTA = /boot|bootie/i;
 var TRIP_RE_QUENTE = /wool|coat|puffer|parka|shearling|fur|cashmere|knit|sweater|fleece|corduroy|velvet|turtleneck|quilted|padded|trench|thermal|flannel|hooded/i;
-var TRIP_RE_FRESCO = /linen|tank|sleeveless|short sleeve|crop|shorts|mesh|swim|bikini|halter|camisole|sundress|silk/i;
+var TRIP_RE_FRESCO = /linen|tank|sleeveless|short sleeve|crop|mesh|swim|bikini|halter|camisole|sundress|silk|cotton|poplin|gauze/i;
+var TRIP_RE_PERNA_DE_FORA = /shorts|bermuda|mini skirt/i;
 
 function tripClimaScore(p, profile) {
   var t = ((p.name || '') + ' ' + (p.category || '')).toLowerCase();
   var sandal = TRIP_RE_SANDALIA.test(t), bota = TRIP_RE_BOTA.test(t);
   var quente = TRIP_RE_QUENTE.test(t), fresco = TRIP_RE_FRESCO.test(t);
   var outer = (p.category === 'Outerwear');
+  var pernaDeFora = TRIP_RE_PERNA_DE_FORA.test(t);
   var s = 0;
   if (profile === 'frio_chuva' || profile === 'frio_seco') {
-    if (sandal) s -= 6; if (bota) s += 3; if (quente) s += 3; if (fresco) s -= 4; if (outer) s += 2;
+    if (sandal) s -= 6; if (bota) s += 3; if (quente) s += 3; if (fresco) s -= 3; if (pernaDeFora) s -= 4; if (outer) s += 2;
   } else if (profile === 'agradavel') {
-    if (sandal) s -= 2; if (quente) s += 1; if (fresco) s -= 1; if (outer) s += 1;
+    if (sandal) s -= 2; if (quente) s += 1; if (fresco) s -= 1; if (pernaDeFora) s -= 2; if (outer) s += 1;
   } else if (profile === 'ameno') {
-    if (sandal) s -= 0.5; if (quente) s -= 1;
+    if (sandal) s -= 0.5; if (quente) s -= 1; if (pernaDeFora) s -= 0.5;
   } else if (profile === 'quente') {
-    if (sandal) s += 2; if (fresco) s += 2; if (quente) s -= 4; if (bota) s -= 3; if (outer) s -= 2;
+    if (sandal) s += 2; if (fresco) s += 2; if (quente) s -= 4; if (bota) s -= 3; if (outer) s -= 2; if (pernaDeFora) s += 0.8;
   } else if (profile === 'muito_quente') {
-    if (sandal) s += 3; if (fresco) s += 3; if (quente) s -= 6; if (bota) s -= 5; if (outer) s -= 4;
+    if (sandal) s += 3; if (fresco) s += 3; if (quente) s -= 6; if (bota) s -= 5; if (outer) s -= 4; if (pernaDeFora) s += 1.5;
   }
   return s;
 }
@@ -10680,6 +10698,7 @@ function tripGoToShoes() {
   tripShoeIds = [];
   tripPacked = {};
   tripSavedIdx = null; // senão as marcações da mala nova iam parar na mala salva anterior
+  tripRecusadas = [];
 
   document.getElementById('tripHeaderTitle').textContent = tripName || 'Mala de viagem';
   document.getElementById('tripShoeLead').textContent = 'Buscando o clima do destino…';
@@ -10768,6 +10787,112 @@ function tripRenderShoeBar() {
   btn.style.opacity = n === 0 ? '.4' : '';
 }
 
+// Por que a cápsula é escolhida assim 
+// A primeira versão pontuava cada peça por compatibilidade com o sapato
+// escolhido. Medindo depois que ela reclamou: a nota deu 5,85 ou 6,00 pras 49
+// calças do armário — não separava nada, porque contra um sapato neutro (que é
+// quase todo sapato) tudo "combina". Na prática a mala sorteava, e caía em
+// moletom e "Calça Tec casa" pra uma viagem.
+//
+// O que separa de verdade é o que ela já ensinou ao app e a mala ignorava:
+// 213 votos de gostei/não gostei por par de peças. Ela é o critério de maior
+// peso aqui; o resto (paleta, tipo de peça, clima, ocasião) só entra pra decidir
+// entre peças sobre as quais ela nunca opinou.
+
+// As combinações foram gravadas como "calça: striped metallic wide leg pants" —
+// categoria e nome, sem a cor. `etiquetaDaPeca` cola a cor no fim, então nenhuma
+// consulta batia: 0 de 61. Sem a cor, batem 59 de 61.
+function tripEtiqueta(p) {
+  if (!p) return '';
+  var cat = (CATEGORIA_EM_PT[p.category] || p.category || '').toLowerCase();
+  return cat + ': ' + (p.name || p.color || '').toLowerCase();
+}
+
+// Média do voto dela pra essa peça contra cada peça que já está na mala.
+function tripNotaAprendida(p, outras) {
+  if (!outras || !outras.length) return 0;
+  var soma = 0, contados = 0;
+  outras.forEach(function(q){
+    if (!q || q.id === p.id) return;
+    var n = combinacaoScore([tripEtiqueta(p), tripEtiqueta(q)]);
+    if (n === 0) return; // par sobre o qual ela nunca opinou não conta como neutro
+    soma += n; contados++;
+  });
+  return contados ? soma / contados : 0;
+}
+
+// Roupa de casa e de academia não vai pra viagem. São 13 peças das 276 — mas 6
+// delas são calça, e calça só tem 49, então elas dominavam a lista.
+var TRIP_RE_CASA = /sweatpant|track pant|sweatshirt|jogger|legging|athletic|running|\bgym\b|pajama|pyjama|\bcasa\b|lounge|hoodie|hooded sweat/i;
+function tripEhDeCasa(p) {
+  return TRIP_RE_CASA.test((p && p.name) || '');
+}
+
+// Tipo da peça, pra mala não virar quatro camisas de manga curta em quatro cores.
+// O armário dela é pesado em camisa (49 das 129 blusas), então sem isso é
+// exatamente nisso que a escolha cai.
+var TRIP_TIPOS = [
+  [/tank|sleeveless|camisole|halter/i, 'regata'],
+  [/\bpolo\b/i, 'polo'],
+  [/t[- ]?shirt|\btee\b/i, 'camiseta'],
+  [/cardigan/i, 'cardigã'],
+  [/sweater|\bknit\b|turtleneck|pullover/i, 'tricô'],
+  [/\bvest\b/i, 'colete'],
+  [/button.?up|button.?down|\bshirt\b|blouse/i, 'camisa'],
+  [/shorts|bermuda/i, 'shorts'],
+  [/skirt/i, 'saia'],
+  [/jeans|denim/i, 'jeans'],
+  [/culottes/i, 'culotte'],
+  [/pants|trousers|slacks/i, 'calça'],
+  [/blazer/i, 'blazer'],
+  [/coat|parka|puffer|trench/i, 'casacão'],
+  [/jacket/i, 'jaqueta']
+];
+function tripTipoDaPeca(p) {
+  var n = (p && p.name) || '';
+  for (var i = 0; i < TRIP_TIPOS.length; i++) if (TRIP_TIPOS[i][0].test(n)) return TRIP_TIPOS[i][1];
+  return '(outro)';
+}
+
+// Paleta: uma mala fecha quando qualquer blusa serve com qualquer calça, e isso
+// se consegue com poucas cores fortes. Neutro entra sempre; a primeira cor forte
+// é livre; a partir da segunda família de cor, penaliza.
+function tripNotaPaleta(p, capsula) {
+  var perfil = perfilDaCor(p.color);
+  if (!perfil) return 0;
+  if (perfil.neutra) return 0.8;
+  var fortes = (capsula || []).map(function(q){ return perfilDaCor(q.color); })
+    .filter(function(x){ return x && !x.neutra; });
+  if (!fortes.length) return 0.5;
+  var melhor = 0, familias = {};
+  fortes.forEach(function(q){
+    melhor = Math.max(melhor, notaDeCombinacao(perfil, q).n);
+    familias[Math.round(q.h / 40)] = 1;
+  });
+  familias[Math.round(perfil.h / 40)] = 1;
+  var extras = Math.max(0, Object.keys(familias).length - 2); // base + uma cor forte é de graça
+  return (melhor / 4) * 1.2 - extras * 1.1;
+}
+
+// Ocasião da viagem: o clima dizia se cabia bermuda, mas nada dizia se a viagem
+// é praia ou trabalho — e "casual demais" foi uma das reclamações dela.
+var tripOcasiao = 'passeio'; // 'praia' | 'passeio' | 'arrumado'
+var TRIP_OCASIAO_LABEL = { praia: 'praia e descanso', passeio: 'passeio', arrumado: 'trabalho ou mais arrumado' };
+
+function tripSetOcasiao(v) {
+  tripOcasiao = v;
+  [].forEach.call(document.querySelectorAll('#tripOcasiaoRow .trip-ocasiao-pill'), function(b){
+    b.classList.toggle('active', b.getAttribute('data-oc') === v);
+  });
+}
+
+function tripNotaOcasiao(p) {
+  var dressy = inferOccasion(p) === 'dressy';
+  if (tripOcasiao === 'arrumado') return dressy ? 1.5 : -0.9;
+  if (tripOcasiao === 'praia') return dressy ? -1.0 : 0.7;
+  return 0.3;
+}
+
 // A cápsula: o conjunto fechado de peças que vai na mala 
 // Aqui está a diferença pra versão antiga. Em vez de escolher um look por dia e
 // somar tudo o que apareceu, primeiro se fecha a lista de peças — dimensionada
@@ -10777,8 +10902,8 @@ function tripAlvosDaCapsula(perfil) {
   var looks = tripNumDays * 2; // dia e noite
   var frio = tripFrio(perfil);
   return {
-    Bottoms: Math.max(2, Math.min(6, Math.ceil(tripNumDays / 2) + (tripNumDays > 3 ? 1 : 0))),
-    Tops: Math.max(3, Math.min(10, Math.ceil(looks * 0.65))),
+    Bottoms: Math.max(3, Math.min(7, Math.ceil(tripNumDays * 0.8))),
+    Tops: Math.max(4, Math.min(11, Math.ceil(looks * 0.75))),
     Outerwear: frio ? (tripNumDays > 3 ? 2 : 1) : (perfil === 'ameno' ? 1 : 0),
     Bags: tripNumDays <= 2 ? 1 : 2,
     Jewelry: 1,
@@ -10811,12 +10936,20 @@ function tripEscolherPraCapsula(cat, n, perfil, sapatos, jaNaCapsula) {
       var p = pool[i];
       if (out.indexOf(p) !== -1) continue;
       if (pecaProibidaComAsOutras(p, sapatos.concat(jaNaCapsula, out))) continue;
-      var nota = tripMediaCompat(p, sapatos) * 6          // combinar com os sapatos escolhidos é o critério principal
-        + tripMediaCompat(p, out.concat(jaNaCapsula)) * 2 // e a cápsula tem que fechar entre si
+      var naMala = sapatos.concat(jaNaCapsula, out);
+      var nota =
+          tripNotaAprendida(p, naMala) * 3.5        // o voto dela é o critério de maior peso
+        + tripNotaPaleta(p, naMala) * 3.0           // poucas cores fortes = qualquer peça com qualquer peça
+        + tripNotaOcasiao(p) * 2.0
         + tripClimaScore(p, perfil) * 1.2
-        + (NEUTRAL_COLORS.indexOf((p.color || '').toLowerCase()) !== -1 ? 1.2 : 0) // neutro rende mais combinação por peça
-        + fatorDeRodizioDaPeca(p) * 0.6                   // não repetir sempre as mesmas entre uma viagem e outra
-        + Math.random() * 0.6;
+        + tripMediaCompat(p, sapatos) * 1.0         // desempate fraco: quase não separa nada
+        + fatorDeRodizioDaPeca(p) * 0.6
+        + Math.random() * 0.8;
+      if (tripEhDeCasa(p)) nota -= 5;                                  // moletom não vai pra viagem
+      if (tripRecusadas.indexOf(p.id) !== -1) nota -= 20;              // "não gostei, faz outra"
+      var tipo = tripTipoDaPeca(p);
+      var repetidas = out.filter(function(q){ return tripTipoDaPeca(q) === tipo; }).length;
+      nota -= repetidas * 2.5;                                         // não é pra levar 4 camisas
       if (out.some(function(q){ return tripQuaseIgual(q, p); })) nota -= 4;
       if (nota > melhorNota) { melhorNota = nota; melhor = p; }
     }
@@ -10853,7 +10986,9 @@ function tripEscolherDoLook(lista, uso, refs, perfil, evitar, dressy) {
   var melhor = null, melhorNota = -Infinity;
   lista.forEach(function(p){
     if (evitar && evitar.indexOf(p.id) !== -1) return;
-    var nota = tripMediaCompat(p, refs) * 4
+    var nota = tripNotaAprendida(p, refs) * 4
+      + tripNotaPaleta(p, refs) * 1.5
+      + tripMediaCompat(p, refs) * 1.5
       + tripClimaScore(p, perfil) * 0.8
       - (uso[p.id] || 0) * 2.2
       + (dressy && inferOccasion(p) === 'dressy' ? 1.6 : 0)
@@ -10909,15 +11044,58 @@ var tripUso = {};
 
 function tripDistribuirPelosDias() {
   tripUso = {};
+  var ultimoLook = []; // o último look montado, pra duas noites seguidas não saírem iguais
   tripDays = tripForecast.map(function(f){
     var d = {
       date: f.date, day: f.day, dateLabel: f.dateLabel,
       temp: f.temp, cond: f.cond, profile: f.profile, estimated: f.estimated
     };
-    d.dia = tripMontarLook(f, 'dia', tripUso, []);
-    d.noite = tripMontarLook(f, 'noite', tripUso, d.dia);
+    d.dia = tripMontarLook(f, 'dia', tripUso, ultimoLook.slice());
+    d.noite = tripMontarLook(f, 'noite', tripUso, d.dia.concat(ultimoLook));
+    ultimoLook = d.noite.slice();
     return d;
   });
+}
+
+// Ela olhou a mala e não gostou de nada. Sem isto, a única saída era voltar e
+// escolher outros sapatos — que não era o problema. Guarda tudo o que estava na
+// mala como recusado e monta de novo; a penalidade de -20 na nota garante que
+// venha outra seleção de verdade, não a mesma embaralhada.
+function tripNaoGostei() {
+  if (!tripCapsule.length || tripViewOnly) return;
+  tripCapsule.forEach(function(id){
+    if (tripShoeIds.indexOf(id) !== -1) return; // os sapatos são escolha dela, ficam
+    if (tripRecusadas.indexOf(id) === -1) tripRecusadas.push(id);
+  });
+  var antes = tripCapsule.slice();
+  tripMontarCapsula();
+  tripDistribuirPelosDias();
+  tripPacked = {};
+  tripRenderResultado();
+  var novas = tripCapsule.filter(function(id){ return antes.indexOf(id) === -1; }).length;
+  document.getElementById('tripModal').scrollTop = 0;
+  showSavedToast(novas ? ('Outra mala — ' + novas + ' peças novas.') : 'Já mostrei quase tudo o que serve pra esse clima.');
+}
+
+// Trocar uma peça só, sem mexer no resto: tira ela da mala, marca como recusada
+// e põe a melhor da mesma categoria no lugar. Os looks são redistribuídos.
+function tripTrocarPeca(id) {
+  if (tripViewOnly) return;
+  var p = findPieceById(id);
+  if (!p) return;
+  if (tripShoeIds.indexOf(id) !== -1) { tripBackToShoes(); return; } // sapato se troca no passo dos sapatos
+  if (tripRecusadas.indexOf(id) === -1) tripRecusadas.push(id);
+  var pos = tripCapsule.indexOf(id);
+  if (pos !== -1) tripCapsule.splice(pos, 1);
+  delete tripPacked[id];
+  var perfil = tripPerfilDominante();
+  var sapatos = tripShoeIds.map(findPieceById).filter(Boolean);
+  var resto = tripCapsule.map(findPieceById).filter(Boolean);
+  var nova = tripEscolherPraCapsula(p.category, 1, perfil, sapatos, resto)[0];
+  if (nova) tripCapsule.push(nova.id);
+  tripDistribuirPelosDias();
+  tripRenderResultado();
+  showSavedToast(nova ? ('Troquei por ' + tripNomeCurto(nova) + '.') : 'Sem outra peça dessa categoria que sirva.');
 }
 
 function tripBuild() {
@@ -10947,10 +11125,11 @@ function tripRenderResultado() {
   document.getElementById('tripHeaderTitle').textContent = tripName || 'Mala de viagem';
   var onde = tripDest ? (' · ' + tripEsc(tripDest.nome)) : '';
   document.getElementById('tripSubtitle').innerHTML =
-    tripDays.length + ' dia(s)' + onde + ' · ' + tripFonteClimaTexto()
+    tripDays.length + ' dia(s)' + onde + ' · ' + TRIP_OCASIAO_LABEL[tripOcasiao] + ' · ' + tripFonteClimaTexto()
     + (tripViewOnly ? ' · mala salva' : '');
   document.getElementById('tripSaveBtn').style.display = tripViewOnly ? 'none' : 'inline-block';
   document.getElementById('tripShoesAgainBtn').style.display = tripViewOnly ? 'none' : 'inline-block';
+  document.getElementById('tripNaoGosteiBtn').style.display = tripViewOnly ? 'none' : 'inline-block';
   tripRenderDays();
   tripRenderPackList();
 }
@@ -11020,7 +11199,7 @@ function tripRenderPackList() {
 
   var html = '<div class="trip-pack-title"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M9 7V4h6v3M3 13.5h18"/></svg> O que vai na mala</div>'
     + '<div class="trip-pack-sub">' + pecas.length + ' peças pros ' + tripDays.length + ' dia(s)'
-    + (guardadas ? ' · ' + guardadas + ' já na mala' : ' · toca na foto conforme for guardando') + '</div>';
+    + (guardadas ? ' · ' + guardadas + ' já na mala' : ' · toca na foto conforme for guardando, ou em "trocar" pra pedir outra') + '</div>';
 
   if (!pecas.length) {
     html += '<div class="trip-pack-sub">Nenhuma peça ainda.</div>';
@@ -11031,10 +11210,13 @@ function tripRenderPackList() {
       html += '<div class="trip-pack-cat">' + (TRIP_CAT_PT[cat] || cat) + ' (' + doCat.length + ')</div>'
         + '<div class="trip-pack-grid">'
         + doCat.map(function(p){
-            return '<div class="trip-pack-piece' + (tripPacked[p.id] ? ' packed' : '') + '" onclick="tripTogglePacked(\'' + p.id + '\')">'
+            return '<div class="trip-pack-cell">'
+              + '<div class="trip-pack-piece' + (tripPacked[p.id] ? ' packed' : '') + '" onclick="tripTogglePacked(\'' + p.id + '\')">'
               + '<img src="' + tripEsc(p.img) + '" alt="' + tripEsc(p.name) + '" loading="lazy">'
               + '<div class="trip-pack-piece-check">✓</div>'
               + '<div class="trip-pack-lbl">' + tripEsc(tripNomeCurto(p)) + '</div>'
+              + '</div>'
+              + '<button class="trip-pack-trocar" onclick="event.stopPropagation();tripTrocarPeca(\'' + p.id + '\')">trocar</button>'
               + '</div>';
           }).join('')
         + '</div>';
@@ -11061,6 +11243,7 @@ function tripEntradaAtual() {
     startVal: tripStartVal,
     numDays: tripNumDays,
     dest: tripDest,
+    ocasiao: tripOcasiao,
     fonteClima: tripFonteClima,
     shoeIds: tripShoeIds.slice(),
     capsule: tripCapsule.slice(),
@@ -11131,6 +11314,7 @@ function viewSavedTrip(idx) {
   tripStartVal = t.startVal;
   tripNumDays = t.numDays;
   tripDest = t.dest || null;
+  tripOcasiao = t.ocasiao || 'passeio';
   tripFonteClima = t.fonteClima || 'estimativa';
   tripRenderDestChosen();
 
