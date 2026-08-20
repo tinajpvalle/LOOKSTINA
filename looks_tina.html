@@ -529,6 +529,12 @@ body.week-pick-mode .card-week-btn { display: block; }
 }
 .day-noite-add { width: calc(100% - 12px); margin: 6px 6px 0; font-size: .66rem; color: #666666; background: transparent; border: 1px dashed #E0E0DB; border-radius: 6px; padding: 3px 6px; cursor: pointer; font-family: inherit; }
 .day-noite-add:hover { border-color: #1A1A1A; color: #1A1A1A; }
+.day-noite-acoes { display: flex; gap: 4px; }
+.day-noite-acoes .day-noite-add { width: auto; flex: 1; margin: 6px 0 0; }
+.day-noite-acoes .day-noite-add:first-child { margin-left: 6px; }
+.day-noite-acoes .day-noite-add:last-child { margin-right: 6px; flex: 0 0 auto; }
+.day-noite-outra { position: absolute; top: 4px; right: 4px; z-index: 3; font-size: .6rem; background: rgba(255,255,255,.92); border: 1px solid var(--line-input); border-radius: 5px; padding: 1px 6px; cursor: pointer; font-family: inherit; color: var(--txt-2); }
+.day-noite-outra:hover { border-color: var(--ink); color: var(--ink); }
 /* mesma proporção e largura do look do dia — a foto da noite estava achatada */
 .day-noite { position: relative; margin: 6px 0 0; }
 .day-noite img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; cursor: pointer; }
@@ -6123,12 +6129,22 @@ function blocoDaNoite(col, day, alvo) {
   var occ = noiteDoDia(day, alvo);
   var noite = occ && occ.look;
   if (!occ) {
+    // Duas saídas pra noite vazia: escolher à mão ou pedir uma sugestão. Antes
+    // só dava pra escolher, e um sábado sem plano ficava sem plano.
+    var linha = document.createElement('div');
+    linha.className = 'day-noite-acoes';
     var add = document.createElement('button');
     add.className = 'day-noite-add';
     add.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.6 8.6 0 1 0 11.1 11.1z"/></svg> + noite';
     add.title = 'Escolher um look pra noite de ' + day;
     add.onclick = (function(d,a){ return function(e){ e.stopPropagation(); openDayPicker(d, a, 'noite'); }; })(day, alvo);
-    col.appendChild(add);
+    var sug = document.createElement('button');
+    sug.className = 'day-noite-add';
+    sug.textContent = 'sugerir';
+    sug.title = 'Sugerir um look pra noite de ' + day;
+    sug.onclick = (function(d,a){ return function(e){ e.stopPropagation(); sugerirLookParaDia(d, a, 'noite'); }; })(day, alvo);
+    linha.appendChild(add); linha.appendChild(sug);
+    col.appendChild(linha);
     return;
   }
   var wrap = document.createElement('div'); wrap.className = 'day-noite';
@@ -6145,6 +6161,12 @@ function blocoDaNoite(col, day, alvo) {
     fl.onclick = (function(mid){ return function(){ switchTab('montados'); openMontadoDetail(mid); }; })(occ.montado.id);
     wrap.appendChild(fl);
   }
+  var outra = document.createElement('button');
+  outra.className = 'day-noite-outra';
+  outra.textContent = 'outra';
+  outra.title = 'Sugerir outro look pra noite de ' + day;
+  outra.onclick = (function(d,a){ return function(e){ e.stopPropagation(); sugerirLookParaDia(d, a, 'noite'); }; })(day, alvo);
+  wrap.appendChild(outra);
   var lb = document.createElement('span'); lb.className = 'day-noite-label';
   lb.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.6 8.6 0 1 0 11.1 11.1z"/></svg> noite';
   wrap.appendChild(lb);
@@ -10185,34 +10207,74 @@ function notaParaODia(tags, profile, extra) {
        + ((extra && extra.rating) || 0) * 0.5;
 }
 
-function sugerirLookParaDia(day, alvo) {
+// Look de noite tem cara própria. As etiquetas do catálogo estão em português e
+// os nomes das peças em inglês, então a busca vale nos dois.
+var RE_LOOK_DE_NOITE = /vestido|saia|blazer|alfaiataria|seda|cetim|veludo|salto|scarpin|midi|longo|renda|dress|silk|satin|velvet|heel|pump|sequin|lace|slip/i;
+var RE_LOOK_DE_DIA = /moletom|jeans|tênis|tenis|boné|sweatpant|sweatshirt|hoodie|sneaker|athletic|running|track pant/i;
+
+function notaDeNoite(tags) {
+  var t = (tags || []).join(' ').toLowerCase();
+  return (RE_LOOK_DE_NOITE.test(t) ? 2.5 : 0) - (RE_LOOK_DE_DIA.test(t) ? 1.5 : 0);
+}
+
+// Tudo o que já está na semana, nos dois turnos. A sugestão do dia só olhava o
+// turno dele; pra noite não servir o mesmo look que já está em outro dia,
+// precisa dos dois.
+function looksJaNaSemana(alvo, exceto) {
+  var ids = [];
+  DAYS.forEach(function(d){
+    ['dia','noite'].forEach(function(t){
+      if (exceto && exceto.day === d && exceto.turno === t) return;
+      var l = weekLookFor(d, alvo, t);
+      if (l) ids.push(l.id);
+    });
+  });
+  return ids;
+}
+
+function sugerirLookParaDia(day, alvo, turno) {
+  turno = (turno === 'noite') ? 'noite' : 'dia';
+  var noite = (turno === 'noite');
   var info = infoParaDia(day, alvo || 'atual');
   var profile = info.fc ? info.fc.profile : 'ameno';
-  var ocupa = weekOccupants(day, info.alvo); // o que já está no dia, se houver
+  var ocupa = noite ? (noiteDoDia(day, info.alvo) || {}) : weekOccupants(day, info.alvo);
+  var doDia = noite ? weekOccupants(day, info.alvo) : null; // à noite, não repetir o look do próprio dia
   delete todayCardState[info.chave]; // sorteia de novo a cada clique
-  var st = todayCardPool(info);
 
-  // Candidatos do catálogo (a faixa já vem filtrada e embaralhada)
-  var cands = st.pool
-    .filter(function(p){ return !ocupa.look || p.id !== ocupa.look.id; })
-    .map(function(p){ return { look: p, s: notaParaODia(p.tags || [], profile, p) }; });
+  var usados = looksJaNaSemana(info.alvo, { day: day, turno: turno });
+  var base = data.filter(function(p){
+    return !p.archived && (p.tags||[]).length && usados.indexOf(p.id) === -1
+      && !(ocupa.look && p.id === ocupa.look.id);
+  });
+  if (!base.length) base = data.filter(function(p){ return !p.archived && (p.tags||[]).length; });
+  base = semOsProibidos(base);
+
+  var cands = shuffledCopy(base).map(function(p){
+    return { look: p, s: notaParaODia(p.tags || [], profile, p) + (noite ? notaDeNoite(p.tags) : 0) };
+  });
 
   // Looks montados entram no mesmo páreo. Sem lastWorn nem wornCount, o
   // recencyBonus dá a eles o mesmo 3 de quem nunca foi usado — que é a verdade.
-  var campo = campoMontadoDe(info.alvo), k = chaveDoDia(day);
+  var campo = campoMontadoDe(info.alvo, turno);
+  var campoOutro = campoMontadoDe(info.alvo, noite ? 'dia' : 'noite');
+  var k = chaveDoDia(day);
   // Dia marcado "em casa" pede look de casa: se existe algum, só eles concorrem.
-  var emCasa = casaNoDia(day, info.alvo);
+  // À noite isso não vale — sair à noite não é ficar em casa.
+  var emCasa = !noite && casaNoDia(day, info.alvo);
   var temCasa = montagens.some(function(m){ return m.casa && !m[campo]; });
   if (emCasa && temCasa) cands = [];
   montagens.forEach(function(m){
     if (!(m.pieceIds||[]).length) return;
-    if (m[campo]) return; // já está em algum dia desta semana
+    if (m[campo] || m[campoOutro]) return; // já está em algum dia desta semana, de dia ou de noite
     if (ocupa.montado && ocupa.montado.id === m.id) return;
+    if (doDia && doDia.montado && doDia.montado.id === m.id) return;
     if (emCasa && temCasa && !m.casa) return;
+    if (noite && m.casa) return; // look de ficar em casa não é look de sair
+    var tags = tagsDoMontado(m);
     // Bônus por ser feito à mão: são poucos contra 851 do catálogo, e vários
     // empatam na nota máxima — sem isso eles quase nunca sairiam sorteados. Um
     // look que ela montou peça por peça diz mais de intenção do que uma foto.
-    cands.push({ montado: m, s: notaParaODia(tagsDoMontado(m), profile, m) + 2.5 });
+    cands.push({ montado: m, s: notaParaODia(tags, profile, m) + 2.5 + (noite ? notaDeNoite(tags) : 0) });
   });
 
   if (!cands.length) { showSavedToast('Nenhum look disponível pra sugerir.'); return; }
@@ -10221,21 +10283,21 @@ function sugerirLookParaDia(day, alvo) {
   var faixa = cands.filter(function(c){ return c.s >= cands[0].s - 2; });
   var esc = faixa[Math.floor(Math.random() * faixa.length)];
 
-  clearWeekOccupants(day, info.alvo); // sugerir substitui o que estava no dia
+  if (noite) limparNoiteDoDia(day, info.alvo);
+  else clearWeekOccupants(day, info.alvo); // sugerir substitui o que estava no dia
+
   if (esc.montado) {
     esc.montado[campo] = k;
     saveMontagens();
   } else {
-    setWeekLookFor(day, esc.look.id, info.alvo);
+    setWeekLookFor(day, esc.look.id, info.alvo, turno);
     saveToStorage();
   }
   renderGrid(); renderWeek();
-  showSavedToast((esc.montado ? 'Look montado' : 'Sugestão') + ' colocado em ' + day +
+  showSavedToast((esc.montado ? 'Look montado' : 'Sugestão') + ' na ' + (noite ? 'noite' : 'dia') + ' de ' + day +
     (info.alvo === 'proxima' ? ' da próxima semana' : '') + '.');
 }
 
-// Candidatos daquele dia: mesma nota da sugestão diária, mas com o clima do dia
-// em questão e sem repetir o que já está marcado em outro dia da mesma semana.
 function todayCardPool(info) {
   var st = todayCardState[info.chave];
   if (st && st.pool.length) return st;
@@ -11076,14 +11138,17 @@ var tripUso = {};
 
 function tripDistribuirPelosDias() {
   tripUso = {};
-  var ultimoLook = []; // o último look montado, pra duas noites seguidas não saírem iguais
+  var feitos = [];      // todos os looks já montados, pra nenhum sair repetido
+  var ultimoLook = [];  // o de antes, pra também não sair parecido em seguida
   tripDays = tripForecast.map(function(f){
     var d = {
       date: f.date, day: f.day, dateLabel: f.dateLabel,
       temp: f.temp, cond: f.cond, profile: f.profile, estimated: f.estimated
     };
-    d.dia = tripMontarLook(f, 'dia', tripUso, ultimoLook.slice());
-    d.noite = tripMontarLook(f, 'noite', tripUso, d.dia.concat(ultimoLook));
+    d.dia = tripMontarLookDiferente(f, 'dia', tripUso, ultimoLook.slice(), feitos);
+    feitos.push(d.dia);
+    d.noite = tripMontarLookDiferente(f, 'noite', tripUso, d.dia.concat(ultimoLook), feitos);
+    feitos.push(d.noite);
     ultimoLook = d.noite.slice();
     return d;
   });
@@ -11141,15 +11206,73 @@ function tripBuild() {
   tripShowStep(3);
 }
 
+// Dois looks são "o mesmo look" quando as peças que o definem são as mesmas.
+// Bolsa, joia e cinto não contam: ela apontou como repetido um par de noites em
+// que a única diferença era o colar — e estava certa, é o mesmo look.
+var TRIP_CATS_QUE_DEFINEM = ['Tops', 'Bottoms', 'Shoes', 'Outerwear'];
+
+function tripAssinaturaDoLook(ids) {
+  return (ids || []).map(findPieceById)
+    .filter(function(p){ return p && TRIP_CATS_QUE_DEFINEM.indexOf(p.category) !== -1; })
+    .map(function(p){ return p.id; }).sort().join(',');
+}
+
+function tripLooksIguais(a, b) {
+  var sa = tripAssinaturaDoLook(a);
+  return !!sa && sa === tripAssinaturaDoLook(b);
+}
+
+// Monta um look que não repita nenhum dos `proibidos`. A escolha tem sorteio
+// dentro, então tentar de novo dá outro resultado; o que não dá pra fazer é
+// prometer o impossível — numa mala pequena o número de combinações acaba, e aí
+// devolve a primeira tentativa em vez de travar.
+function tripMontarLookDiferente(f, turno, uso, evitar, proibidos) {
+  var primeira = null;
+  for (var t = 0; t < 10; t++) {
+    var ids = tripMontarLook(f, turno, uso, evitar);
+    if (!primeira) primeira = ids;
+    var repetido = (proibidos || []).some(function(o){ return tripLooksIguais(ids, o); });
+    if (!repetido) return ids;
+    ids.forEach(function(id){ if (uso[id]) uso[id]--; }); // desfaz a contagem da tentativa descartada
+  }
+  primeira.forEach(function(id){ uso[id] = (uso[id] || 0) + 1; });
+  return primeira;
+}
+
+function tripTodosOsLooks(exceto) {
+  var lista = [];
+  tripDays.forEach(function(d, i){
+    ['dia','noite'].forEach(function(t){
+      if (exceto && exceto.dia === i && exceto.turno === t) return;
+      if (d[t] && d[t].length) lista.push(d[t]);
+    });
+  });
+  return lista;
+}
+
 // Trocar um look sem mexer no resto da mala: remonta só aquele turno, e só com
 // as peças que já estão na cápsula — a lista pra levar não muda.
+// Ela pediu pra trocar a noite do dia 2 e veio a noite do dia 1: o `evitar` só
+// olhava para o próprio dia, então nada impedia de cair num look de outro dia.
 function tripRerollTurno(diaIdx, turno) {
   var d = tripDays[diaIdx];
   if (!d || tripViewOnly) return;
-  (d[turno] || []).forEach(function(id){ if (tripUso[id]) tripUso[id]--; });
-  var evitar = (turno === 'noite') ? (d.dia || []).concat(d.noite || []) : (d.dia || []).concat(d.noite || []);
-  d[turno] = tripMontarLook(d, turno, tripUso, evitar);
+  var anterior = (d[turno] || []).slice();
+  anterior.forEach(function(id){ if (tripUso[id]) tripUso[id]--; });
+
+  var outros = tripTodosOsLooks({ dia: diaIdx, turno: turno });
+  var vizinho = (turno === 'noite') ? (d.dia || []) : (d.noite || []);
+  // As peças do look que está saindo entram no `evitar`. Sem isso a escolha
+  // devolvia exatamente ele de novo: a nota é quase a mesma toda vez, e o
+  // sorteio de desempate não dá conta de virar o resultado. "Trocar" tem que
+  // trocar; onde não houver alternativa, o próprio tripEscolherDoLook relaxa.
+  var evitar = vizinho.concat(anterior);
+  d[turno] = tripMontarLookDiferente(d, turno, tripUso, evitar, outros.concat([anterior]));
+
   tripRenderDays();
+  if (tripLooksIguais(d[turno], anterior)) {
+    showSavedToast('A mala é pequena demais pra outra combinação aqui — troque uma peça na lista, ou use "Não gostei, faz outra".');
+  }
 }
 
 // Resultado 
