@@ -51,7 +51,7 @@ const ALLOWED_KEYS = new Set([
   'looks_tina_inspiracoes_v1',      // prints de referência + paleta lida da foto
   'looks_tina_preferencias_v1',     // sim/não por etiqueta, aprendido do que ela recusa
   'looks_tina_combinacoes_v1',      // gostei/não gostei por par de peças
-  'looks_tina_regras_v1'            // regras escritas por ela ("X com Y não fica bom"),
+  'looks_tina_regras_v1',           // regras escritas por ela ("X com Y não fica bom")
   'looks_tina_trips_v1'             // malas de viagem montadas a partir dos sapatos
 ]);
 
