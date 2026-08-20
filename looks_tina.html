@@ -723,8 +723,21 @@ body.compare-mode .card-compare-btn { display: flex; }
 .montado-card .flatlay-canvas { max-width: none; border-radius: 12px 12px 0 0; }
 .flatlay-icon-btn.active { background: #1A1A1A; border-color: #1A1A1A; color: #fff; }
 .sugg-lock-hint { font-size: .72rem; color: #666666; margin: 8px 0 0; }
-.sugg-legend { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 4px; }
-.sugg-legend-item { font-size: .68rem; color: #666666; background: #F5F4F1; border-radius: 8px; padding: 3px 9px; }
+.sugg-legend { display: flex; flex-direction: column; gap: 4px; margin: 10px 0 8px; }
+.sugg-peca { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 10px; border: 1px solid var(--line); border-radius: var(--r-md); }
+.sugg-peca.travada { background: var(--bg); }
+.sugg-peca-txt { min-width: 0; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.sugg-peca-cat { font-size: 9.5px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: var(--txt-3); }
+.sugg-peca-nome { font-size: .78rem; color: var(--ink); }
+.sugg-peca-meta { font-size: .68rem; color: var(--txt-3); }
+.sugg-peca-acoes { display: flex; gap: 4px; flex-shrink: 0; }
+.sugg-peca-btn { border: 1px solid var(--line-input); background: transparent; color: var(--txt-2); border-radius: var(--r-sm); font-size: .7rem; padding: 3px 9px; cursor: pointer; font-family: inherit; }
+.sugg-peca-btn:hover { border-color: var(--ink); color: var(--ink); }
+.sugg-peca-btn.forte { border-color: var(--ink); color: var(--ink); font-weight: 500; }
+@media (max-width: 560px) {
+  .sugg-peca { flex-direction: column; align-items: stretch; gap: 6px; }
+  .sugg-peca-acoes { justify-content: flex-end; }
+}
 .week-planner { display: grid; grid-template-columns: repeat(7, minmax(0,1fr)); gap: 8px; }
 .week-planner-col { background: #F5F4F1; border-radius: 10px; padding: 8px 6px; text-align: center; cursor: default; min-height: 56px; }
 .week-planner-col.filled { background: #F0F0EC; cursor: pointer; }
@@ -4339,7 +4352,6 @@ function renderSuggestionCanvas() {
     emptyMessage: 'Nenhuma peça no momento. Clique em "<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><rect x="3.6" y="3.6" width="16.8" height="16.8" rx="3"/><circle cx="8.6" cy="8.6" r="1.1"/><circle cx="15.4" cy="15.4" r="1.1"/><circle cx="12" cy="12" r="1.1"/></svg> Gerar nova sugestão" ou adicione uma categoria abaixo.',
     zoomable: true,
     renderExtra: function(wrap, p) {
-      var idx = suggestionSlots.findIndex(function(s) { return s.pieceId === p.id; });
       var locked = isSuggestionLocked(p.id);
       var actions = document.createElement('div');
       actions.className = 'flatlay-icon-actions';
@@ -4348,18 +4360,11 @@ function renderSuggestionCanvas() {
       var lockSvg = locked
         ? '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><rect x="4.6" y="10.4" width="14.8" height="10" rx="2"/><path d="M8.2 10.4V7.2a3.8 3.8 0 0 1 7.6 0v3.2"/></svg>'
         : '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><rect x="4.6" y="10.4" width="14.8" height="10" rx="2"/><path d="M8.2 10.4V7.2a3.8 3.8 0 0 1 7.3-1.2"/></svg>';
+      // Só o cadeado, que é estado. Trocar e tirar foram pra lista embaixo do
+      // flat lay: três ícones na caixa do sapato invadiam a caixa da bolsa.
       actions.innerHTML =
-        '<span class="flatlay-icon-btn' + (locked ? ' active' : '') + '" title="' + (locked ? 'Destravar peça' : 'Travar peça — fica fixa ao gerar nova sugestão') + '">' + lockSvg + '</span>' +
-        (locked ? '' : '<span class="flatlay-icon-btn" title="Trocar peça"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M20.3 12a8.3 8.3 0 1 1-2.7-6.1"/><path d="M20.3 3.6v4.7h-4.7"/></svg></span>') +
-        '<span class="flatlay-icon-btn" title="Remover categoria"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"/></svg></span>';
-      var btns = actions.querySelectorAll('.flatlay-icon-btn');
-      btns[0].onclick = function(e) { e.stopPropagation(); toggleSuggestionLock(p.id); };
-      if (locked) {
-        btns[1].onclick = function(e) { e.stopPropagation(); removeSuggestionSlot(idx); };
-      } else {
-        btns[1].onclick = function(e) { e.stopPropagation(); rerollSlot(idx); };
-        btns[2].onclick = function(e) { e.stopPropagation(); removeSuggestionSlot(idx); };
-      }
+        '<span class="flatlay-icon-btn' + (locked ? ' active' : '') + '" title="' + (locked ? 'Destravar peça' : 'Travar peça — fica fixa ao gerar nova sugestão') + '">' + lockSvg + '</span>';
+      actions.querySelector('.flatlay-icon-btn').onclick = function(e) { e.stopPropagation(); toggleSuggestionLock(p.id); };
       wrap.appendChild(actions);
     }
   });
@@ -4367,13 +4372,38 @@ function renderSuggestionCanvas() {
   renderSuggestionLockHint();
 }
 
+// Legenda com os controles de cada peça 
+// Os botões de trocar/travar/tirar ficavam no canto de cima da caixa da peça, no
+// flat lay. Funciona pra blusa e calça, que são grandes; não funciona pro sapato
+// e pra bolsa. Medindo: os três ícones do sapato ocupavam x 615–687 e os da
+// bolsa 710–782, na mesma altura — uma fileira só de seis ícones minúsculos, sem
+// como saber quais eram de qual peça. E como a foto tem margem transparente, o
+// botão do sapato aparecia em cima da calça.
+//
+// Aqui cada peça tem uma linha própria, dizendo qual é, com os botões ao lado.
+// Na imagem fica só o cadeado, que é estado e não ação — foi o que ela pediu
+// quando reclamou do contorno em volta da foto.
 function renderSuggestionLegend(pieces) {
   var legend = document.getElementById('suggestionLegend');
   if (!legend) return;
   if (!pieces || pieces.length === 0) { legend.innerHTML = ''; return; }
   legend.innerHTML = pieces.map(function(p) {
-    return '<span class="sugg-legend-item">' + p.category + ' · ' + p.color + ' · ' +
-      SEASON_LABEL_PT[inferSeason(p)] + ' · ' + OCCASION_LABEL_PT[inferOccasion(p)] + '</span>';
+    var idx = suggestionSlots.findIndex(function(s) { return s.pieceId === p.id; });
+    var locked = isSuggestionLocked(p.id);
+    var cat = CATEGORIA_EM_PT[p.category] || p.category;
+    return '<div class="sugg-peca' + (locked ? ' travada' : '') + '">'
+      + '<div class="sugg-peca-txt">'
+      + '<span class="sugg-peca-cat">' + tripEsc(cat) + '</span>'
+      + '<span class="sugg-peca-nome">' + tripEsc(p.name) + '</span>'
+      + '<span class="sugg-peca-meta">' + tripEsc(p.color) + ' · ' + SEASON_LABEL_PT[inferSeason(p)] + ' · ' + OCCASION_LABEL_PT[inferOccasion(p)] + '</span>'
+      + '</div>'
+      + '<div class="sugg-peca-acoes">'
+      + (locked
+          ? '<button class="sugg-peca-btn" onclick="toggleSuggestionLock(\'' + p.id + '\')" title="Destravar — volta a mudar quando gerar de novo">destravar</button>'
+          : '<button class="sugg-peca-btn forte" onclick="rerollSlot(' + idx + ')" title="Trocar só esta peça">trocar</button>'
+            + '<button class="sugg-peca-btn" onclick="toggleSuggestionLock(\'' + p.id + '\')" title="Travar — fica fixa quando gerar de novo">travar</button>')
+      + '<button class="sugg-peca-btn" onclick="removeSuggestionSlot(' + idx + ')" title="Tirar esta categoria do look">tirar</button>'
+      + '</div></div>';
   }).join('');
 }
 
@@ -13820,7 +13850,7 @@ function applySuggestions() {
       <div style="font-size:1.1rem;font-weight:700;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><rect x="3.6" y="3.6" width="16.8" height="16.8" rx="3"/><circle cx="8.6" cy="8.6" r="1.1"/><circle cx="15.4" cy="15.4" r="1.1"/><circle cx="12" cy="12" r="1.1"/></svg> Sugestão automática de look</div>
       <span style="cursor:pointer;font-size:1.4rem;line-height:1;" onclick="closeSuggestionBuilder()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"/></svg></span>
     </div>
-    <p style="color:#666666;font-size:.8rem;margin:-6px 0 14px;">Combinação sugerida levando em conta cor, estação e ocasião de cada peça (estimados a partir do nome/categoria — não são dados oficiais do Alta). Clique em <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M20.3 12a8.3 8.3 0 1 1-2.7-6.1"/><path d="M20.3 3.6v4.7h-4.7"/></svg> pra trocar só aquela peça, <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><rect x="4.6" y="10.4" width="14.8" height="10" rx="2"/><path d="M8.2 10.4V7.2a3.8 3.8 0 0 1 7.3-1.2"/></svg> pra travar a peça e ela ficar fixa nas próximas, <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"/></svg> pra tirar a categoria do look, ou gere tudo de novo.</p>
+    <p style="color:#666666;font-size:.8rem;margin:-6px 0 14px;">Combinação sugerida levando em conta cor, estação e ocasião de cada peça (estimados a partir do nome/categoria — não são dados oficiais do Alta). Na lista abaixo do look, cada peça tem <strong>trocar</strong> (troca só ela), <strong>travar</strong> (fica fixa quando você gerar de novo) e <strong>tirar</strong>.</p>
     <div id="suggestionCanvas" style="margin-bottom:6px;"></div>
     <div id="suggestionVoto"></div>
     <div id="suggestionLockHint" class="sugg-lock-hint"></div>
