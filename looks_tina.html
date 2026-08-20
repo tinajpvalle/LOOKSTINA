@@ -390,33 +390,82 @@ body.week-pick-mode .card-week-btn { display: block; }
 .assign-day-wx { font-size: .62rem; color: #666666; text-align: center; padding: 3px 6px; background: #FAFAF8; border-bottom: 1px solid #E0E0DB; }
 .assign-day-temp { font-weight: 700; color: #1A1A1A; }
 
-/* Mala de viagem */
-.trip-modal { max-width: 480px; }
+/* Mala de viagem — montada a partir dos sapatos */
+.trip-modal { max-width: 520px; }
+.trip-lead { font-size: .82rem; color: var(--txt-2); margin: 6px 0 16px; line-height: 1.45; }
+.trip-field { margin-bottom: 14px; position: relative; }
+.trip-field label { font-size: .78rem; color: var(--txt-2); display: block; margin-bottom: 3px; }
+.trip-field input { width: 100%; padding: 7px 10px; border: 1px solid var(--line-input); border-radius: var(--r-md); font-size: .85rem; font-family: inherit; background: transparent; color: var(--ink); }
 .trip-form-row { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end; margin: 4px 0 16px; }
-.trip-form-row label { font-size: .78rem; color: #666666; }
-.trip-form-row input { padding: 7px 10px; border: 1px solid #E0E0DB; border-radius: 7px; font-size: .85rem; font-family: inherit; margin-top: 3px; }
-.trip-day-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; max-height: 46vh; overflow-y: auto; }
-.trip-day-card { display: flex; gap: 10px; align-items: center; background: #FAFAF8; border-radius: 10px; padding: 8px; }
-.trip-day-card img { width: 58px; height: 58px; object-fit: cover; border-radius: 8px; flex-shrink: 0; cursor: zoom-in; }
-.trip-day-info { flex: 1; min-width: 0; }
-.trip-day-date { font-size: .78rem; font-weight: 600; color: #1A1A1A; }
-.trip-day-wx { font-size: .68rem; color: #666666; margin-top: 1px; }
-.trip-day-tags { font-size: .7rem; color: #666666; margin-top: 3px; line-height: 1.35; }
-.trip-day-nav { display: flex; gap: 4px; flex-shrink: 0; }
-.trip-day-nav button { border: none; background: #F0F0EC; border-radius: 6px; width: 24px; height: 24px; cursor: pointer; font-size: .85rem; }
-.trip-day-nav button:hover { background: #E0E0DB; }
-.trip-pack-list { background: #FAFAF8; border-radius: 10px; padding: 12px 14px; }
-.trip-pack-title { font-size: .85rem; font-weight: 700; margin-bottom: 6px; }
-.trip-pack-cat { font-size: .7rem; font-weight: 700; color: #A8A8A4; margin: 8px 0 3px; text-transform: uppercase; letter-spacing: .03em; }
-.trip-pack-item { font-size: .8rem; color: #333333; padding: 2px 0; }
-.saved-trip-card { display: flex; align-items: center; gap: 8px; background: #FAFAF8; border-radius: 10px; padding: 8px 10px; margin-bottom: 6px; cursor: pointer; }
-.saved-trip-card:hover { background: #F0F0EC; }
+.trip-form-row label { font-size: .78rem; color: var(--txt-2); }
+.trip-form-row input { padding: 7px 10px; border: 1px solid var(--line-input); border-radius: var(--r-md); font-size: .85rem; font-family: inherit; margin-top: 3px; background: transparent; color: var(--ink); }
+.trip-dest-results:empty { display: none; }
+.trip-dest-results { border: 1px solid var(--line); border-radius: var(--r-md); margin-top: 5px; overflow: hidden; }
+.trip-dest-row { padding: 7px 10px; font-size: .8rem; cursor: pointer; border-bottom: 1px solid var(--line-soft); color: var(--ink); }
+.trip-dest-row:last-child { border-bottom: none; }
+.trip-dest-row:hover { background: var(--bg); }
+.trip-dest-row small { color: var(--txt-3); }
+.trip-dest-chosen:empty { display: none; }
+.trip-dest-chosen { font-size: .78rem; color: var(--ink); margin-top: 6px; display: flex; align-items: baseline; gap: 8px; }
+.trip-dest-chosen button { border: none; background: none; color: var(--txt-3); cursor: pointer; font-size: .72rem; font-family: inherit; text-decoration: underline; padding: 0; }
+
+/* Passo dos sapatos */
+.trip-step-line { font-size: 9.5px; font-weight: 700; letter-spacing: 1.6px; text-transform: uppercase; color: var(--txt-3); margin-bottom: 8px; }
+.trip-shoe-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding-bottom: 96px; }
+.trip-shoe-card { position: relative; border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; cursor: pointer; background: var(--surface); }
+.trip-shoe-card img { width: 100%; aspect-ratio: 1; object-fit: contain; display: block; background: var(--bg); }
+.trip-shoe-card.sel { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.trip-shoe-card.fora img { opacity: .4; }
+.trip-shoe-txt { padding: 4px 6px 7px; line-height: 1.25; }
+.trip-shoe-brand { font-size: .6rem; color: var(--ink); font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.trip-shoe-name { font-size: .64rem; color: var(--txt-2); margin-top: 1px; }
+.trip-shoe-aviso { font-size: .6rem; color: var(--accent); margin-top: 3px; }
+.trip-shoe-check { position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; border-radius: 50%; background: var(--ink); color: var(--surface); display: flex; align-items: center; justify-content: center; font-size: .68rem; }
+.trip-float-bar { position: fixed; left: 50%; transform: translateX(-50%); bottom: 16px; z-index: 9998; width: calc(100% - 40px); max-width: 470px; box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; box-shadow: 0 6px 24px rgba(0,0,0,.16); }
+.trip-float-txt { font-size: .78rem; color: var(--ink); min-width: 0; }
+.trip-float-txt small { display: block; color: var(--txt-3); font-size: .68rem; margin-top: 1px; }
+.trip-float-bar .btn-next, .trip-float-bar .btn-back { flex-shrink: 0; }
+
+/* Resultado: um cartão por dia, com o look do dia e o da noite */
+.trip-day-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+.trip-day { border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); overflow: hidden; }
+.trip-day-hdr { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--line-soft); }
+.trip-day-date { font-size: .82rem; font-weight: 600; color: var(--ink); }
+.trip-day-wx { font-size: .7rem; color: var(--txt-2); text-align: right; }
+.trip-turnos { display: flex; }
+.trip-turno { flex: 1; min-width: 0; padding: 8px; }
+.trip-turno + .trip-turno { border-left: 1px solid var(--line-soft); }
+.trip-turno-hdr { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 6px; }
+.trip-turno-label { font-size: 9.5px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: var(--txt-3); }
+.trip-turno-btn { border: 1px solid var(--line-input); background: transparent; color: var(--ink); border-radius: var(--r-sm); cursor: pointer; font-size: .68rem; padding: 2px 7px; font-family: inherit; }
+.trip-turno-btn:hover { border-color: var(--ink); }
+.trip-turno .flatlay-canvas { max-width: none; border-radius: var(--r-md); }
+.trip-turno-list { font-size: .64rem; color: var(--txt-2); margin-top: 5px; line-height: 1.4; }
+
+/* Lista da mala: foto de cada peça, com marcação de já guardada */
+.trip-pack-list { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 12px 14px; }
+.trip-pack-title { font-size: .85rem; font-weight: 700; margin-bottom: 2px; }
+.trip-pack-sub { font-size: .72rem; color: var(--txt-3); margin-bottom: 4px; }
+.trip-pack-cat { font-size: 9.5px; font-weight: 700; color: var(--txt-3); margin: 12px 0 5px; text-transform: uppercase; letter-spacing: 1.6px; }
+.trip-pack-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
+.trip-pack-piece { position: relative; cursor: pointer; }
+.trip-pack-piece img { width: 100%; aspect-ratio: 1; object-fit: contain; display: block; background: var(--bg); border-radius: var(--r-md); }
+.trip-pack-piece.packed img { opacity: .3; }
+/* Só o estado marcado aparece. Um círculo vazio sobre cada peça polui a grade —
+   e a peça guardada já fica clara pela foto apagada. */
+.trip-pack-piece-check { display: none; position: absolute; top: 4px; right: 4px; width: 18px; height: 18px; border-radius: 50%; align-items: center; justify-content: center; font-size: .58rem; background: var(--ink); color: var(--surface); }
+.trip-pack-piece.packed .trip-pack-piece-check { display: flex; }
+.trip-pack-lbl { font-size: .58rem; color: var(--txt-3); line-height: 1.2; margin-top: 3px; text-align: center; }
+.trip-pack-piece.packed .trip-pack-lbl { color: var(--txt-mute); }
+.trip-actions { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+.saved-trip-card { display: flex; align-items: center; gap: 8px; background: var(--surface); border-radius: 10px; padding: 8px 10px; margin-bottom: 6px; cursor: pointer; }
+.saved-trip-card:hover { background: var(--bg); }
 .saved-trip-info { flex: 1; min-width: 0; }
-.saved-trip-name { font-size: .82rem; font-weight: 600; color: #1A1A1A; }
-.saved-trip-dates { font-size: .68rem; color: #666666; margin-top: 1px; }
-.saved-trip-del { border: none; background: none; color: #B0B0AC; cursor: pointer; font-size: .9rem; padding: 4px 6px; flex-shrink: 0; }
-.saved-trip-del:hover { color: #8C8C88; }
-.saved-trip-empty { font-size: .78rem; color: #A8A8A4; }
+.saved-trip-name { font-size: .82rem; font-weight: 600; color: var(--ink); }
+.saved-trip-dates { font-size: .68rem; color: var(--txt-2); margin-top: 1px; }
+.saved-trip-del { border: none; background: none; color: var(--txt-mute); cursor: pointer; font-size: .9rem; padding: 4px 6px; flex-shrink: 0; }
+.saved-trip-del:hover { color: var(--danger); }
+.saved-trip-empty { font-size: .78rem; color: var(--txt-3); }
 .day-ocasiao-row { display: flex; gap: 3px; justify-content: center; padding: 5px 4px; border-top: 1px solid #F0F0EC; flex-wrap: wrap; }
 .day-ocasiao-btn { border: 1px solid #EAEAE7; background: #fff; border-radius: 6px; font-size: .68rem; padding: 2px 5px; cursor: pointer; line-height: 1.3; color: #A8A8A4; }
 .day-ocasiao-btn.active { background: #1A1A1A; border-color: #1A1A1A; color: #fff; }
@@ -698,7 +747,7 @@ body.compare-mode .card-compare-btn { display: flex; }
 .wx-chip strong { color: var(--ink); }
 
 /* Blocos de conteúdo em cinza claro → superfície + hairline */
-.trip-day-card, .trip-pack-list, .saved-trip-card, .week-templates-card, .week-history-card,
+.trip-day, .trip-pack-list, .saved-trip-card, .week-templates-card, .week-history-card,
 .admin-row, .week-planner-col { background: var(--surface); border: 1px solid var(--line); }
 .week-planner-col.filled { background: var(--bg); }
 .week-instructions { background: var(--surface); border: 1px solid var(--line); border-left: 2px solid var(--ink); color: var(--txt-2); }
@@ -1150,17 +1199,25 @@ body.compare-mode .card-compare-btn { display: flex; }
   </div>
 </div>
 
-<!-- Trip packing wizard -->
+<!-- Mala de viagem: nome/destino/datas → sapatos → mala montada -->
 <div class="overlay" id="tripOverlay" onclick="if(event.target===this) closeTripWizard()">
   <div class="modal trip-modal" id="tripModal">
     <button class="close-btn" onclick="closeTripWizard()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"/></svg></button>
     <div class="modal-body">
       <h3 id="tripHeaderTitle" style="margin-bottom:4px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M9 7V4h6v3M3 13.5h18"/></svg> Mala de viagem</h3>
-      <div id="tripFormStep">
-        <p style="font-size:.82rem;color:#666666;margin:6px 0 14px;">Escolhe as datas da viagem e eu monto um look por dia (considerando o clima quando disponível) e a lista de peças pra levar na mala.</p>
-        <div style="margin-bottom:14px;">
-          <label for="tripNameInput" style="font-size:.78rem;color:#666666;">Nome da viagem (opcional)</label><br>
-          <input type="text" id="tripNameInput" placeholder="Ex: Praia em Floripa" style="width:100%;padding:7px 10px;border:1px solid #E0E0DB;border-radius:7px;font-size:.85rem;font-family:inherit;margin-top:3px;">
+
+      <!-- Passo 1: para onde e por quanto tempo -->
+      <div id="tripStep1">
+        <p class="trip-lead">Diz o nome, o destino e as datas. No passo seguinte você escolhe os sapatos que vão — e eu monto a mala inteira em cima deles, dia e noite.</p>
+        <div class="trip-field">
+          <label for="tripNameInput">Nome da viagem (opcional)</label>
+          <input type="text" id="tripNameInput" placeholder="Ex: Praia em Floripa">
+        </div>
+        <div class="trip-field">
+          <label for="tripDestInput">Destino</label>
+          <input type="text" id="tripDestInput" placeholder="Ex: Florianópolis" autocomplete="off" oninput="tripDestTyped()">
+          <div class="trip-dest-results" id="tripDestResults"></div>
+          <div class="trip-dest-chosen" id="tripDestChosen"></div>
         </div>
         <div class="trip-form-row">
           <div>
@@ -1172,23 +1229,42 @@ body.compare-mode .card-compare-btn { display: flex; }
             <input type="number" id="tripDays" min="1" max="14" value="4" style="width:70px;">
           </div>
         </div>
-        <button class="btn-next" onclick="generateTripPlan()">Gerar lista →</button>
-        <div id="savedTripsSection" style="margin-top:22px;padding-top:16px;border-top:1px solid #F0F0EC;">
-          <div style="font-size:.78rem;font-weight:700;color:#666666;margin-bottom:8px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M3 7.2A2 2 0 0 1 5 5.2h3.8l2.1 2.6H19a2 2 0 0 1 2 2v8.4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7.2z"/></svg> Malas salvas</div>
+        <button class="btn-next" onclick="tripGoToShoes()">Escolher os sapatos →</button>
+        <div id="savedTripsSection" style="margin-top:22px;padding-top:16px;border-top:1px solid var(--line-soft);">
+          <div style="font-size:.78rem;font-weight:700;color:var(--txt-2);margin-bottom:8px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M3 7.2A2 2 0 0 1 5 5.2h3.8l2.1 2.6H19a2 2 0 0 1 2 2v8.4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7.2z"/></svg> Malas salvas</div>
           <div id="savedTripsList"></div>
         </div>
       </div>
-      <div id="tripResultStep" style="display:none;">
-        <div id="tripSubtitle" style="font-size:.78rem;color:#666666;margin-bottom:10px;"></div>
+
+      <!-- Passo 2: os sapatos, que mandam no resto -->
+      <div id="tripStep2" style="display:none;">
+        <div class="trip-step-line">Passo 2 · os sapatos</div>
+        <p class="trip-lead" id="tripShoeLead">Buscando a previsão do destino…</p>
+        <div class="trip-shoe-grid" id="tripShoeGrid"></div>
+      </div>
+
+      <!-- Passo 3: a mala montada -->
+      <div id="tripStep3" style="display:none;">
+        <div id="tripSubtitle" style="font-size:.78rem;color:var(--txt-2);margin-bottom:10px;"></div>
         <div class="trip-day-list" id="tripDayList"></div>
         <div class="trip-pack-list" id="tripPackList"></div>
-        <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;">
-          <button class="btn-back" onclick="backToTripForm()">← Nova busca</button>
+        <div class="trip-actions">
+          <button class="btn-back" onclick="tripBackToStep1()">← Nova mala</button>
+          <button class="btn-back" id="tripShoesAgainBtn" onclick="tripBackToShoes()">Trocar sapatos</button>
           <button class="btn-back" id="tripSaveBtn" onclick="saveCurrentTrip()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M12 3.5v11M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg> Salvar mala</button>
           <button class="btn-back" onclick="printTripPlan()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M6.5 9V3.5h11V9"/><rect x="3" y="9" width="18" height="7.5" rx="2"/><path d="M6.5 14.5h11v6h-11z"/></svg> PDF</button>
           <button class="btn-back" onclick="emailTripPlan()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><rect x="3" y="5.2" width="18" height="13.6" rx="2"/><path d="m3.6 6.6 8.4 5.9 8.4-5.9"/></svg> Email</button>
         </div>
       </div>
+    </div>
+  </div>
+  <!-- Barra de ação flutuante: a grade de sapatos é longa e um botão no fim da
+       rolagem não é achado (foi o que ela relatou na tela de peças). -->
+  <div class="trip-float-bar" id="tripShoeBar" style="display:none;">
+    <div class="trip-float-txt" id="tripShoeCount"></div>
+    <div style="display:flex;gap:6px;flex-shrink:0;">
+      <button class="btn-back" onclick="tripBackToStep1()">←</button>
+      <button class="btn-next" id="tripBuildBtn" onclick="tripBuild()">Montar mala →</button>
     </div>
   </div>
 </div>
@@ -1267,7 +1343,7 @@ function lsSet(key, value) {
 // Se o servidor não responder (ex: site aberto direto do GitHub Pages, sem
 // backend, ou sem internet), tudo falha silenciosamente e o app continua
 // funcionando 100% localmente, como sempre funcionou.
-var SYNC_KEYS = ['looks_tina_catalog_v1', 'looks_tina_montados_v1', 'looks_tina_pecas_avulsas_v1', 'looks_tina_proxsemana_v1', 'looks_tina_pecas_arquivadas_v1', 'looks_tina_proxsemana_dias_v1', 'looks_tina_proxsemana_noite_v1', 'looks_tina_inspiracoes_v1', 'looks_tina_preferencias_v1', 'looks_tina_combinacoes_v1', 'looks_tina_regras_v1'];
+var SYNC_KEYS = ['looks_tina_catalog_v1', 'looks_tina_montados_v1', 'looks_tina_pecas_avulsas_v1', 'looks_tina_proxsemana_v1', 'looks_tina_pecas_arquivadas_v1', 'looks_tina_proxsemana_dias_v1', 'looks_tina_proxsemana_noite_v1', 'looks_tina_inspiracoes_v1', 'looks_tina_preferencias_v1', 'looks_tina_combinacoes_v1', 'looks_tina_regras_v1', 'looks_tina_trips_v1'];
 // Um aparelho que abre o app sem nada salvo começa com o catálogo embutido (851
 // looks) e a lista de montados vazia. Se ele mandar isso pro servidor antes de
 // ler o que está lá, apaga o que existe — foi o que aconteceu em 17/08/2026,
@@ -1465,6 +1541,20 @@ function pullRemoteUpdates() {
         regrasEscritas.forEach(function(r){ if (!r.tipo) r.tipo = 'proibe'; });
         lsSet('looks_tina_regras_v1', res.value);
         if (typeof renderStats === 'function' && document.getElementById('statsContent')) renderStats();
+      } catch (e) {}
+    }
+  });
+  syncGet('looks_tina_trips_v1').then(function(res) {
+    liberarEnvio('looks_tina_trips_v1', !!(res && res.value != null));
+    // A mala nunca sincronizou: ficava só no aparelho em que foi montada, e ela
+    // faz a mala no computador pra conferir no celular na hora de arrumar.
+    if (!res || res.value == null) { if (temAlgoAqui(savedTrips)) salvarMalas(); return; }
+    if (servidorVeioVazio(res.value) && temAlgoAqui(savedTrips)) { salvarMalas(); return; }
+    if (res.value !== JSON.stringify(savedTrips)) {
+      try {
+        savedTrips = JSON.parse(res.value) || [];
+        lsSet('looks_tina_trips_v1', res.value);
+        if (document.getElementById('savedTripsList')) renderSavedTripsList();
       } catch (e) {}
     }
   });
@@ -10318,22 +10408,41 @@ function markTodaySuggestionWorn() {
 }
 
 // Mala de viagem 
-// Monta 1 look por dia pro período da viagem (não mexe na "Semana" nem no histórico
-// de uso — é só um plano/lista separado) e consolida as peças únicas usadas numa
-// lista pra levar na mala. Usa a previsão real quando o período cabe dentro da
-// janela de ~16 dias da Open-Meteo; fora disso, cai numa estimativa por mês/estação.
-var tripAssigned = [];
-var tripHasEstimate = false;
+// Refeita em 20/08/2026, por ideia dela: começar pelos sapatos.
+//
+// A versão anterior escolhia, pra cada dia, uma foto de look inteiro do catálogo
+// antigo. Cinco dias davam cinco looks sem nenhuma peça em comum — a mala mais
+// pesada possível, que é o contrário do que se quer — e a "lista pra levar" saía
+// como texto das etiquetas, sem foto.
+//
+// Agora a mala é montada com as PEÇAS (as mesmas do montador e da sugestão), e o
+// ponto de partida são os sapatos: é a peça que menos se leva e a que mais manda
+// no resto. Com 2 ou 3 pares escolhidos à mão, o resto tem um alvo:
+//   1. monta a cápsula — o conjunto fechado de peças que vai na mala, cada uma
+//      escolhida por combinar com aqueles sapatos e com o clima do destino;
+//   2. distribui essa cápsula pelos dias, um look de dia e um de noite,
+//      revezando as peças em vez de gastar uma nova a cada look.
+// Nada aqui mexe na Semana nem no histórico de uso: é um plano separado.
 var tripName = '';
 var tripStartVal = '';
 var tripNumDays = 0;
-var tripViewOnly = false; // true quando visualizando uma mala salva (sem trocar looks)
-var TRIP_TMAX_BY_MONTH = [28,29,27,25,23,21,21,23,24,25,26,27]; // média aproximada de máxima em SP, jan=índice 0
+var tripDest = null;        // {nome, label, lat, lon, tz}
+var tripForecast = [];      // um item por dia: {date, day, dateLabel, temp, cond, profile, estimated}
+var tripShoeIds = [];       // os sapatos que ela escolheu
+var tripCapsule = [];       // ids de todas as peças que vão na mala
+var tripDays = [];          // [{..clima.., dia:[ids], noite:[ids]}]
+var tripPacked = {};        // id -> true, o que ela já guardou na mala
+var tripFonteClima = '';    // 'previsao' | 'anoPassado' | 'estimativa'
+var tripViewOnly = false;   // visualizando mala salva com peça que sumiu do armário
+var TRIP_TMAX_BY_MONTH = [28,29,27,25,23,21,21,23,24,25,26,27]; // máxima média aproximada em SP, jan=0
+
+function tripEsc(s) {
+  return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 
 function openTripWizard() {
   document.getElementById('tripOverlay').classList.add('open');
-  document.getElementById('tripFormStep').style.display = 'block';
-  document.getElementById('tripResultStep').style.display = 'none';
+  tripShowStep(1);
   var dateInput = document.getElementById('tripStartDate');
   if (dateInput && !dateInput.value) {
     var tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
@@ -10344,218 +10453,648 @@ function openTripWizard() {
 
 function closeTripWizard() {
   document.getElementById('tripOverlay').classList.remove('open');
+  document.getElementById('tripShoeBar').style.display = 'none';
 }
 
-function backToTripForm() {
-  document.getElementById('tripFormStep').style.display = 'block';
-  document.getElementById('tripResultStep').style.display = 'none';
+function tripShowStep(n) {
+  ['tripStep1','tripStep2','tripStep3'].forEach(function(id, i){
+    document.getElementById(id).style.display = (i + 1 === n) ? 'block' : 'none';
+  });
+  document.getElementById('tripShoeBar').style.display = (n === 2) ? 'flex' : 'none';
+  var modal = document.getElementById('tripModal');
+  if (modal) modal.scrollTop = 0;
+}
+
+function tripBackToStep1() {
+  document.getElementById('tripHeaderTitle').textContent = 'Mala de viagem';
+  tripShowStep(1);
   renderSavedTripsList();
 }
 
-function tripSeasonEstimate(date) {
-  var tmax = TRIP_TMAX_BY_MONTH[date.getMonth()];
-  return { temp: '~' + tmax + '°C', cond: 'Estimativa sazonal', profile: profileFor(tmax, false) };
+// Destino 
+// A mala antiga usava sempre a previsão de São Paulo, mesmo pra viagem pra
+// Salvador. A busca de cidade e a previsão do lugar certo são da Open-Meteo,
+// abertas e sem chave.
+var _tripDestOptions = [];
+var _tripDestTimer = null;
+
+function tripDestTyped() {
+  clearTimeout(_tripDestTimer);
+  var q = (document.getElementById('tripDestInput').value || '').trim();
+  var box = document.getElementById('tripDestResults');
+  if (q.length < 3) { box.innerHTML = ''; return; }
+  _tripDestTimer = setTimeout(function(){ tripGeocode(q); }, 400);
+}
+
+function tripGeocode(q) {
+  var box = document.getElementById('tripDestResults');
+  box.innerHTML = '<div class="trip-dest-row" style="color:var(--txt-3);cursor:default;">procurando…</div>';
+  if (typeof fetch !== 'function') { box.innerHTML = ''; return; }
+  fetch('https://geocoding-api.open-meteo.com/v1/search?count=6&language=pt&format=json&name=' + encodeURIComponent(q))
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      var res = (j && j.results) || [];
+      _tripDestOptions = res;
+      if (!res.length) { box.innerHTML = '<div class="trip-dest-row" style="color:var(--txt-3);cursor:default;">não achei essa cidade</div>'; return; }
+      box.innerHTML = res.map(function(r, i){
+        var sub = [r.admin1, r.country].filter(Boolean).join(', ');
+        return '<div class="trip-dest-row" onclick="tripPickDest(' + i + ')">' + tripEsc(r.name)
+          + (sub ? ' <small>' + tripEsc(sub) + '</small>' : '') + '</div>';
+      }).join('');
+    })
+    .catch(function(){
+      box.innerHTML = '<div class="trip-dest-row" style="color:var(--txt-3);cursor:default;">sem internet pra buscar a cidade agora</div>';
+    });
+}
+
+function tripPickDest(i) {
+  var r = _tripDestOptions[i];
+  if (!r) return;
+  tripDest = {
+    nome: r.name,
+    label: [r.name, r.admin1, r.country].filter(Boolean).join(', '),
+    lat: r.latitude, lon: r.longitude, tz: r.timezone || 'auto'
+  };
+  document.getElementById('tripDestInput').value = r.name;
+  document.getElementById('tripDestResults').innerHTML = '';
+  tripRenderDestChosen();
+}
+
+function tripClearDest() {
+  tripDest = null;
+  document.getElementById('tripDestInput').value = '';
+  tripRenderDestChosen();
+}
+
+function tripRenderDestChosen() {
+  var box = document.getElementById('tripDestChosen');
+  if (!box) return;
+  box.innerHTML = tripDest
+    ? ('<span>' + tripEsc(tripDest.label) + '</span><button onclick="tripClearDest()">trocar</button>')
+    : '';
+}
+
+// Clima do destino 
+// Três fontes, em ordem de qualidade, e a tela sempre diz qual delas foi usada:
+//   1. previsão real, quando as datas cabem na janela de ~16 dias;
+//   2. o mesmo período do ano passado, medido naquele lugar (arquivo da
+//      Open-Meteo) — pra viagem marcada com meses de antecedência;
+//   3. estimativa por mês e hemisfério, quando não há internet.
+function tripEstimativaSazonal(date, lat) {
+  var m = date.getMonth();
+  var norte = (lat != null && lat > 0);
+  var idx = norte ? (m + 6) % 12 : m; // no hemisfério norte as estações são as opostas
+  var tmax = TRIP_TMAX_BY_MONTH[idx];
+  if (lat != null) {
+    var absLat = Math.abs(lat);
+    if (absLat < 15) tmax += 3;          // trópico: quente o ano todo
+    else if (absLat > 40) tmax -= 6;     // longe do equador: mais frio
+  }
+  return { temp: '~' + tmax + '°C', cond: 'Estimativa', profile: profileFor(tmax, false) };
+}
+
+function tripDiasDoPeriodo(startDate, numDays) {
+  var days = [];
+  for (var i = 0; i < numDays; i++) { var d = new Date(startDate); d.setDate(startDate.getDate() + i); days.push(d); }
+  return days;
+}
+
+function tripDiaBase(d) {
+  return { date: d, day: JS_DOW_TO_PT[d.getDay()], dateLabel: brDate(d) };
 }
 
 function loadTripForecast(startDate, numDays) {
-  var days = [];
-  for (var i = 0; i < numDays; i++) { var d = new Date(startDate); d.setDate(startDate.getDate() + i); days.push(d); }
+  var days = tripDiasDoPeriodo(startDate, numDays);
+  var lat = tripDest ? tripDest.lat : SP_LAT;
+  var lon = tripDest ? tripDest.lon : SP_LON;
+  var tz = tripDest ? (tripDest.tz || 'auto') : 'America/Sao_Paulo';
 
-  var today = new Date(); today.setHours(0,0,0,0);
-  var maxForecastDate = new Date(today); maxForecastDate.setDate(today.getDate() + 15); // janela ~16 dias da Open-Meteo
-  var withinRange = days.every(function(d){ return d >= today && d <= maxForecastDate; });
-
-  function buildFromEstimate() {
+  function estimativa() {
+    tripFonteClima = 'estimativa';
     return days.map(function(d){
-      var est = tripSeasonEstimate(d);
-      return { date: d, day: JS_DOW_TO_PT[d.getDay()], dateLabel: brDate(d), temp: est.temp, cond: est.cond, profile: est.profile, estimated: true };
+      var e = tripEstimativaSazonal(d, lat);
+      var base = tripDiaBase(d);
+      base.temp = e.temp; base.cond = e.cond; base.profile = e.profile; base.estimated = true;
+      return base;
     });
   }
 
-  if (!withinRange || typeof fetch !== 'function') {
-    return Promise.resolve(buildFromEstimate());
+  function lerDiario(json, listaDeDatas, fonte) {
+    var dd = json && json.daily;
+    if (!dd || !dd.temperature_2m_max) throw new Error('sem daily');
+    return listaDeDatas.map(function(d, i){
+      var tmax = Math.round(dd.temperature_2m_max[i]);
+      var tmin = Math.round(dd.temperature_2m_min[i]);
+      if (isNaN(tmax)) throw new Error('dia sem dado');
+      var wc = WMO_MAP[dd.weathercode ? dd.weathercode[i] : 0] || ['Tempo variável', false];
+      var base = tripDiaBase(d);
+      base.temp = tmin + '–' + tmax + '°C';
+      base.cond = wc[0];
+      base.profile = profileFor(tmax, wc[1]);
+      base.estimated = (fonte !== 'previsao');
+      return base;
+    });
   }
 
-  var url = 'https://api.open-meteo.com/v1/forecast?latitude=' + SP_LAT + '&longitude=' + SP_LON
-    + '&daily=temperature_2m_max,temperature_2m_min,weathercode&timezone=America%2FSao_Paulo'
-    + '&start_date=' + isoDate(days[0]) + '&end_date=' + isoDate(days[days.length - 1]);
+  if (typeof fetch !== 'function') return Promise.resolve(estimativa());
 
-  return fetch(url)
+  var hoje = new Date(); hoje.setHours(0,0,0,0);
+  var limite = new Date(hoje); limite.setDate(hoje.getDate() + 15); // janela da previsão
+  var cabeNaPrevisao = days.every(function(d){ return d >= hoje && d <= limite; });
+
+  var base = '&latitude=' + lat + '&longitude=' + lon + '&timezone=' + encodeURIComponent(tz)
+    + '&daily=temperature_2m_max,temperature_2m_min,weathercode';
+
+  if (cabeNaPrevisao) {
+    return fetch('https://api.open-meteo.com/v1/forecast?' + base
+        + '&start_date=' + isoDate(days[0]) + '&end_date=' + isoDate(days[days.length - 1]))
+      .then(function(r){ if(!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function(j){ tripFonteClima = 'previsao'; return lerDiario(j, days, 'previsao'); })
+      .catch(function(){ return estimativa(); });
+  }
+
+  // Fora da janela: mesmas datas do ano passado, medidas naquele destino.
+  var anoPassado = days.map(function(d){ var x = new Date(d); x.setFullYear(x.getFullYear() - 1); return x; });
+  return fetch('https://archive-api.open-meteo.com/v1/archive?' + base
+      + '&start_date=' + isoDate(anoPassado[0]) + '&end_date=' + isoDate(anoPassado[anoPassado.length - 1]))
     .then(function(r){ if(!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-    .then(function(json){
-      var d = json.daily;
-      return days.map(function(day, i){
-        var tmax = Math.round(d.temperature_2m_max[i]);
-        var tmin = Math.round(d.temperature_2m_min[i]);
-        var wc = WMO_MAP[d.weathercode[i]] || ['Tempo variável', false];
-        return { date: day, day: JS_DOW_TO_PT[day.getDay()], dateLabel: brDate(day), temp: tmin + '–' + tmax + '°C', cond: wc[0], profile: profileFor(tmax, wc[1]), estimated: false };
-      });
-    })
-    .catch(function(){ return buildFromEstimate(); });
+    .then(function(j){ tripFonteClima = 'anoPassado'; return lerDiario(j, days, 'anoPassado'); })
+    .catch(function(){ return estimativa(); });
 }
 
-function generateTripPlan() {
+function tripFonteClimaTexto() {
+  var onde = tripDest ? tripDest.nome : 'São Paulo';
+  if (tripFonteClima === 'previsao') return 'previsão real de ' + onde;
+  if (tripFonteClima === 'anoPassado') return '<span style="color:var(--accent);">longe demais pra previsão — usando o mesmo período do ano passado em ' + tripEsc(onde) + '</span>';
+  return '<span style="color:var(--accent);">sem previsão disponível — usando estimativa por época do ano</span>';
+}
+
+// Quanto uma peça serve pro clima de um dia. O weatherScore antigo lê etiqueta
+// de look ("sandália: dourada"); aqui a entrada é a peça, com nome e categoria.
+var TRIP_RE_SANDALIA = /sandal|slide|espadrille|flip flop|thong|clog|open toe/i;
+var TRIP_RE_BOTA = /boot|bootie/i;
+var TRIP_RE_QUENTE = /wool|coat|puffer|parka|shearling|fur|cashmere|knit|sweater|fleece|corduroy|velvet|turtleneck|quilted|padded|trench|thermal|flannel|hooded/i;
+var TRIP_RE_FRESCO = /linen|tank|sleeveless|short sleeve|crop|shorts|mesh|swim|bikini|halter|camisole|sundress|silk/i;
+
+function tripClimaScore(p, profile) {
+  var t = ((p.name || '') + ' ' + (p.category || '')).toLowerCase();
+  var sandal = TRIP_RE_SANDALIA.test(t), bota = TRIP_RE_BOTA.test(t);
+  var quente = TRIP_RE_QUENTE.test(t), fresco = TRIP_RE_FRESCO.test(t);
+  var outer = (p.category === 'Outerwear');
+  var s = 0;
+  if (profile === 'frio_chuva' || profile === 'frio_seco') {
+    if (sandal) s -= 6; if (bota) s += 3; if (quente) s += 3; if (fresco) s -= 4; if (outer) s += 2;
+  } else if (profile === 'agradavel') {
+    if (sandal) s -= 2; if (quente) s += 1; if (fresco) s -= 1; if (outer) s += 1;
+  } else if (profile === 'ameno') {
+    if (sandal) s -= 0.5; if (quente) s -= 1;
+  } else if (profile === 'quente') {
+    if (sandal) s += 2; if (fresco) s += 2; if (quente) s -= 4; if (bota) s -= 3; if (outer) s -= 2;
+  } else if (profile === 'muito_quente') {
+    if (sandal) s += 3; if (fresco) s += 3; if (quente) s -= 6; if (bota) s -= 5; if (outer) s -= 4;
+  }
+  return s;
+}
+
+function tripPerfilDominante() {
+  var contas = {};
+  tripForecast.forEach(function(f){ contas[f.profile] = (contas[f.profile] || 0) + 1; });
+  var melhor = null;
+  Object.keys(contas).forEach(function(p){ if (!melhor || contas[p] > contas[melhor]) melhor = p; });
+  return melhor || 'ameno';
+}
+
+function tripFrio(profile) {
+  return profile === 'frio_seco' || profile === 'frio_chuva' || profile === 'agradavel';
+}
+
+// Passo 2: os sapatos 
+function tripGoToShoes() {
   var startVal = document.getElementById('tripStartDate').value;
-  var numDays = parseInt(document.getElementById('tripDays').value, 10) || 1;
-  numDays = Math.max(1, Math.min(14, numDays));
   if (!startVal) { alert('Escolhe a data de início da viagem.'); return; }
-  var startDate = new Date(startVal + 'T00:00:00');
-  tripName = (document.getElementById('tripNameInput').value || '').trim();
+  var numDays = parseInt(document.getElementById('tripDays').value, 10) || 1;
+  tripNumDays = Math.max(1, Math.min(14, numDays));
   tripStartVal = startVal;
-  tripNumDays = numDays;
+  tripName = (document.getElementById('tripNameInput').value || '').trim();
   tripViewOnly = false;
+  tripShoeIds = [];
+  tripPacked = {};
+  tripSavedIdx = null; // senão as marcações da mala nova iam parar na mala salva anterior
 
-  document.getElementById('tripHeaderTitle').textContent = tripName ? ('' + tripName) : 'Mala de viagem';
-  document.getElementById('tripFormStep').style.display = 'none';
-  document.getElementById('tripResultStep').style.display = 'block';
-  document.getElementById('tripSubtitle').textContent = 'Montando a mala…';
-  document.getElementById('tripDayList').innerHTML = '';
-  document.getElementById('tripPackList').innerHTML = '';
+  document.getElementById('tripHeaderTitle').textContent = tripName || 'Mala de viagem';
+  document.getElementById('tripShoeLead').textContent = 'Buscando o clima do destino…';
+  document.getElementById('tripShoeGrid').innerHTML = '';
+  tripShowStep(2);
+  tripRenderShoeBar();
 
-  var saveBtn = document.getElementById('tripSaveBtn');
-  if (saveBtn) saveBtn.style.display = 'inline-block';
-
-  loadTripForecast(startDate, numDays).then(function(tripForecast){
-    buildTripAssignments(tripForecast);
-    tripHasEstimate = tripForecast.some(function(f){ return f.estimated; });
-    document.getElementById('tripSubtitle').innerHTML = tripAssigned.length + ' dia(s) de viagem'
-      + (tripHasEstimate ? ' · <span style="color:#C4985A;">previsão real indisponível pra parte do período — usando estimativa sazonal</span>' : ' · previsão real do período');
-    renderTripDayList();
-    renderTripPackList();
+  loadTripForecast(new Date(startVal + 'T00:00:00'), tripNumDays).then(function(fc){
+    tripForecast = fc;
+    tripRenderShoeLead();
+    tripRenderShoeGrid();
   });
 }
 
-function buildTripAssignments(tripForecast) {
-  var idRange = catalogIdRange();
-  var usedIds = new Set();
-  var usedTagFreq = {};
-  tripAssigned = [];
+function tripBackToShoes() {
+  document.getElementById('tripHeaderTitle').textContent = tripName || 'Mala de viagem';
+  tripShowStep(2);
+  tripRenderShoeBar();
+  // Numa mala salva o clima não está carregado (só os dias já montados). Sem
+  // rebuscar, "Montar mala" percorreria uma previsão vazia e devolveria 0 dias.
+  if (tripForecast.length === tripNumDays) { tripRenderShoeLead(); tripRenderShoeGrid(); return; }
+  document.getElementById('tripShoeLead').textContent = 'Buscando o clima do destino…';
+  document.getElementById('tripShoeGrid').innerHTML = '';
+  loadTripForecast(new Date(tripStartVal + 'T00:00:00'), tripNumDays).then(function(fc){
+    tripForecast = fc;
+    tripRenderShoeLead();
+    tripRenderShoeGrid();
+  });
+}
 
-  function score(p, profile) {
-    return weatherScore(p.tags, profile) * 3
-         + recencyBonus(p) * 2
-         + noveltyScore(p, idRange) * 0.5
-         + ((p.tags||[]).some(function(t){ return t.toLowerCase().indexOf('viagem')!==-1 && t.toLowerCase().indexOf('ocasi')!==-1; }) ? 4 : 0)
-         - diversityPenalty(p.tags, usedTagFreq);
+function tripSugestaoDePares() {
+  return Math.max(2, Math.min(4, Math.ceil(tripNumDays / 3) + 1));
+}
+
+function tripRenderShoeLead() {
+  var perfil = tripPerfilDominante();
+  var temps = tripForecast.map(function(f){ return f.temp; });
+  var faixa = temps.length ? (temps[0] === temps[temps.length-1] ? temps[0] : temps[0] + ' a ' + temps[temps.length-1]) : '';
+  var onde = tripDest ? tripDest.nome : 'São Paulo';
+  var conselho = tripFrio(perfil)
+    ? 'vai fazer frio, então um par fechado resolve mais dias do que parece'
+    : (perfil === 'ameno' ? 'clima de meia estação: um fechado e um aberto cobrem tudo'
+                          : 'vai fazer calor, sandália rende');
+  document.getElementById('tripShoeLead').innerHTML =
+    '<strong>' + tripEsc(onde) + '</strong> · ' + tripEsc(faixa) + ' · ' + tripFonteClimaTexto() + '.<br>'
+    + 'Escolhe os sapatos que vão na mala — ' + tripSugestaoDePares() + ' pares dão conta de ' + tripNumDays + ' dia(s), e '
+    + conselho + '. O resto da mala sai desses pares.';
+}
+
+function tripRenderShoeGrid() {
+  var grid = document.getElementById('tripShoeGrid');
+  var perfil = tripPerfilDominante();
+  var sapatos = piecesByCategory('Shoes').slice().sort(pecaNewestFirst);
+  grid.innerHTML = sapatos.map(function(p){
+    var nota = tripClimaScore(p, perfil);
+    var sel = tripShoeIds.indexOf(p.id) !== -1;
+    var aviso = '';
+    if (nota <= -2) aviso = tripFrio(perfil) ? 'frio demais pra esse' : 'quente demais pra esse';
+    return '<div class="trip-shoe-card' + (sel ? ' sel' : '') + (nota <= -2 && !sel ? ' fora' : '') + '" onclick="tripToggleShoe(\'' + p.id + '\')">'
+      + '<img src="' + tripEsc(p.img) + '" alt="' + tripEsc(p.name) + '" loading="lazy">'
+      + (sel ? '<div class="trip-shoe-check">✓</div>' : '')
+      + '<div class="trip-shoe-txt">'
+      + '<div class="trip-shoe-brand">' + tripEsc(p.brand) + '</div>'
+      + '<div class="trip-shoe-name">' + tripEsc(p.name) + '</div>'
+      + (aviso ? '<div class="trip-shoe-aviso">' + aviso + '</div>' : '')
+      + '</div></div>';
+  }).join('');
+}
+
+function tripToggleShoe(id) {
+  var i = tripShoeIds.indexOf(id);
+  if (i === -1) tripShoeIds.push(id); else tripShoeIds.splice(i, 1);
+  tripRenderShoeGrid();
+  tripRenderShoeBar();
+}
+
+function tripRenderShoeBar() {
+  var n = tripShoeIds.length;
+  var sugerido = tripSugestaoDePares();
+  var txt = n === 0 ? 'Nenhum par escolhido' : (n + (n === 1 ? ' par' : ' pares'));
+  var dica = n === 0 ? ('sugestão: ' + sugerido + ' pra ' + tripNumDays + ' dia(s)')
+    : (n > sugerido ? 'dá pra viajar com menos' : 'pros ' + tripNumDays + ' dia(s) da viagem');
+  document.getElementById('tripShoeCount').innerHTML = tripEsc(txt) + '<small>' + tripEsc(dica) + '</small>';
+  var btn = document.getElementById('tripBuildBtn');
+  btn.disabled = (n === 0);
+  btn.style.opacity = n === 0 ? '.4' : '';
+}
+
+// A cápsula: o conjunto fechado de peças que vai na mala 
+// Aqui está a diferença pra versão antiga. Em vez de escolher um look por dia e
+// somar tudo o que apareceu, primeiro se fecha a lista de peças — dimensionada
+// pelos dias, não pelos looks — e só depois ela é distribuída pelos dias. É o
+// que faz a mala caber.
+function tripAlvosDaCapsula(perfil) {
+  var looks = tripNumDays * 2; // dia e noite
+  var frio = tripFrio(perfil);
+  return {
+    Bottoms: Math.max(2, Math.min(6, Math.ceil(tripNumDays / 2) + (tripNumDays > 3 ? 1 : 0))),
+    Tops: Math.max(3, Math.min(10, Math.ceil(looks * 0.65))),
+    Outerwear: frio ? (tripNumDays > 3 ? 2 : 1) : (perfil === 'ameno' ? 1 : 0),
+    Bags: tripNumDays <= 2 ? 1 : 2,
+    Jewelry: 1,
+    Accessories: frio ? 1 : 0
+  };
+}
+
+// Duas peças quase iguais na mala é espaço jogado fora — e ela tem pares
+// repetidos no armário (duas sandálias Chanel de corrente, por exemplo).
+function tripQuaseIgual(a, b) {
+  if (!a || !b || a.category !== b.category) return false;
+  if ((a.color || '').toLowerCase() !== (b.color || '').toLowerCase()) return false;
+  var wa = (a.name || '').toLowerCase().split(/\s+/), wb = (b.name || '').toLowerCase().split(/\s+/);
+  var comuns = wa.filter(function(w){ return wb.indexOf(w) !== -1; }).length;
+  return comuns >= Math.min(wa.length, wb.length) - 1;
+}
+
+function tripMediaCompat(p, lista) {
+  if (!lista.length) return 0.6;
+  return lista.reduce(function(s, q){ return s + compatibilityScore(p, q); }, 0) / lista.length;
+}
+
+function tripEscolherPraCapsula(cat, n, perfil, sapatos, jaNaCapsula) {
+  if (n <= 0) return [];
+  var pool = piecesByCategory(cat).filter(function(p){ return tripShoeIds.indexOf(p.id) === -1; });
+  var out = [];
+  for (var k = 0; k < n && pool.length; k++) {
+    var melhor = null, melhorNota = -Infinity;
+    for (var i = 0; i < pool.length; i++) {
+      var p = pool[i];
+      if (out.indexOf(p) !== -1) continue;
+      if (pecaProibidaComAsOutras(p, sapatos.concat(jaNaCapsula, out))) continue;
+      var nota = tripMediaCompat(p, sapatos) * 6          // combinar com os sapatos escolhidos é o critério principal
+        + tripMediaCompat(p, out.concat(jaNaCapsula)) * 2 // e a cápsula tem que fechar entre si
+        + tripClimaScore(p, perfil) * 1.2
+        + (NEUTRAL_COLORS.indexOf((p.color || '').toLowerCase()) !== -1 ? 1.2 : 0) // neutro rende mais combinação por peça
+        + fatorDeRodizioDaPeca(p) * 0.6                   // não repetir sempre as mesmas entre uma viagem e outra
+        + Math.random() * 0.6;
+      if (out.some(function(q){ return tripQuaseIgual(q, p); })) nota -= 4;
+      if (nota > melhorNota) { melhorNota = nota; melhor = p; }
+    }
+    if (!melhor) break;
+    out.push(melhor);
+  }
+  return out;
+}
+
+function tripMontarCapsula() {
+  var perfil = tripPerfilDominante();
+  var sapatos = tripShoeIds.map(findPieceById).filter(Boolean);
+  var alvos = tripAlvosDaCapsula(perfil);
+  var escolhidas = sapatos.slice();
+  // Ordem importa: a calça/saia entra primeiro porque é a peça que mais amarra o
+  // resto do look, e as seguintes já são escolhidas pra fechar com ela.
+  ['Bottoms','Tops','Outerwear','Bags','Jewelry','Accessories'].forEach(function(cat){
+    var novas = tripEscolherPraCapsula(cat, alvos[cat] || 0, perfil, sapatos, escolhidas);
+    escolhidas = escolhidas.concat(novas);
+  });
+  tripCapsule = escolhidas.map(function(p){ return p.id; });
+  escolhidas.forEach(function(p){ contarPecaNoMontador(p.id); anotarPecaMostrada(p.id); });
+  salvarRodizioDePecas();
+}
+
+function tripCapsulaPorCategoria(cat) {
+  return tripCapsule.map(findPieceById).filter(function(p){ return p && p.category === cat; });
+}
+
+// Distribuir a cápsula pelos dias 
+// A conta de uso (quantas vezes cada peça já saiu na viagem) é o que faz o
+// rodízio: entre duas peças que combinam igual, ganha a que ainda não foi usada.
+function tripEscolherDoLook(lista, uso, refs, perfil, evitar, dressy) {
+  var melhor = null, melhorNota = -Infinity;
+  lista.forEach(function(p){
+    if (evitar && evitar.indexOf(p.id) !== -1) return;
+    var nota = tripMediaCompat(p, refs) * 4
+      + tripClimaScore(p, perfil) * 0.8
+      - (uso[p.id] || 0) * 2.2
+      + (dressy && inferOccasion(p) === 'dressy' ? 1.6 : 0)
+      + (!dressy && inferOccasion(p) === 'casual' ? 0.5 : 0)
+      + Math.random() * 1.1;
+    if (nota > melhorNota) { melhorNota = nota; melhor = p; }
+  });
+  return melhor;
+}
+
+function tripMontarLook(f, turno, uso, evitarIds) {
+  var noite = (turno === 'noite');
+  var perfil = f.profile;
+  var evitar = evitarIds || [];
+  var escolhidas = [];
+
+  var sapatos = tripShoeIds.map(findPieceById).filter(Boolean);
+  var sapato = tripEscolherDoLook(sapatos, uso, [], perfil, (sapatos.length > 1 ? evitar : null), noite)
+            || tripEscolherDoLook(sapatos, uso, [], perfil, null, noite);
+  if (sapato) escolhidas.push(sapato);
+
+  var bottom = tripEscolherDoLook(tripCapsulaPorCategoria('Bottoms'), uso, escolhidas, perfil, evitar, noite)
+            || tripEscolherDoLook(tripCapsulaPorCategoria('Bottoms'), uso, escolhidas, perfil, null, noite);
+  if (bottom) escolhidas.push(bottom);
+
+  var top = tripEscolherDoLook(tripCapsulaPorCategoria('Tops'), uso, escolhidas, perfil, evitar, noite)
+         || tripEscolherDoLook(tripCapsulaPorCategoria('Tops'), uso, escolhidas, perfil, null, noite);
+  if (top) escolhidas.push(top);
+
+  // Casaco: no frio sempre; no clima de meia estação, só à noite, que é quando esfria.
+  var outers = tripCapsulaPorCategoria('Outerwear');
+  if (outers.length && (tripFrio(perfil) || (noite && perfil === 'ameno'))) {
+    var outer = tripEscolherDoLook(outers, uso, escolhidas, perfil, null, noite);
+    if (outer) escolhidas.push(outer);
   }
 
-  tripForecast.forEach(function(f){
-    var pool = data.filter(function(p){ return !p.archived && !usedIds.has(p.id) && (p.tags||[]).length > 0; });
-    pool.sort(function(a,b){ return score(b, f.profile) - score(a, f.profile); });
-    var best = pool[0];
-    if (!best) return;
-    usedIds.add(best.id);
-    (best.tags||[]).forEach(function(t){ usedTagFreq[t.trim()] = (usedTagFreq[t.trim()]||0) + 1; });
+  var bolsas = tripCapsulaPorCategoria('Bags');
+  if (bolsas.length) escolhidas.push(noite ? bolsas[bolsas.length - 1] : bolsas[0]);
 
-    var alts = data.filter(function(p){ return !p.archived && p.id !== best.id && (p.tags||[]).length > 0; })
-      .sort(function(a,b){ return score(b, f.profile) - score(a, f.profile); }).slice(0, 8);
+  if (noite) {
+    var joias = tripCapsulaPorCategoria('Jewelry');
+    if (joias.length && Math.random() < 0.75) escolhidas.push(joias[0]);
+  } else {
+    var acs = tripCapsulaPorCategoria('Accessories');
+    if (acs.length && tripFrio(perfil) && Math.random() < 0.55) escolhidas.push(acs[0]);
+  }
 
-    tripAssigned.push({
-      date: f.date, day: f.day, dateLabel: f.dateLabel, temp: f.temp, cond: f.cond, estimated: f.estimated,
-      curId: best.id, curThumb: lookThumb(best), curTags: best.tags || [],
-      allPool: [best].concat(alts), poolIdx: 0
-    });
+  escolhidas.forEach(function(p){ uso[p.id] = (uso[p.id] || 0) + 1; });
+  return escolhidas.map(function(p){ return p.id; });
+}
+
+var tripUso = {};
+
+function tripDistribuirPelosDias() {
+  tripUso = {};
+  tripDays = tripForecast.map(function(f){
+    var d = {
+      date: f.date, day: f.day, dateLabel: f.dateLabel,
+      temp: f.temp, cond: f.cond, profile: f.profile, estimated: f.estimated
+    };
+    d.dia = tripMontarLook(f, 'dia', tripUso, []);
+    d.noite = tripMontarLook(f, 'noite', tripUso, d.dia);
+    return d;
   });
 }
 
-function renderTripDayList() {
+function tripBuild() {
+  if (!tripShoeIds.length) return;
+  tripViewOnly = false;
+  tripPacked = {};
+  tripSavedIdx = null;
+  tripMontarCapsula();
+  tripDistribuirPelosDias();
+  tripRenderResultado();
+  tripShowStep(3);
+}
+
+// Trocar um look sem mexer no resto da mala: remonta só aquele turno, e só com
+// as peças que já estão na cápsula — a lista pra levar não muda.
+function tripRerollTurno(diaIdx, turno) {
+  var d = tripDays[diaIdx];
+  if (!d || tripViewOnly) return;
+  (d[turno] || []).forEach(function(id){ if (tripUso[id]) tripUso[id]--; });
+  var evitar = (turno === 'noite') ? (d.dia || []).concat(d.noite || []) : (d.dia || []).concat(d.noite || []);
+  d[turno] = tripMontarLook(d, turno, tripUso, evitar);
+  tripRenderDays();
+}
+
+// Resultado 
+function tripRenderResultado() {
+  document.getElementById('tripHeaderTitle').textContent = tripName || 'Mala de viagem';
+  var onde = tripDest ? (' · ' + tripEsc(tripDest.nome)) : '';
+  document.getElementById('tripSubtitle').innerHTML =
+    tripDays.length + ' dia(s)' + onde + ' · ' + tripFonteClimaTexto()
+    + (tripViewOnly ? ' · mala salva' : '');
+  document.getElementById('tripSaveBtn').style.display = tripViewOnly ? 'none' : 'inline-block';
+  document.getElementById('tripShoesAgainBtn').style.display = tripViewOnly ? 'none' : 'inline-block';
+  tripRenderDays();
+  tripRenderPackList();
+}
+
+function tripNomeCurto(p) {
+  if (!p) return '';
+  return (p.name || '').replace(/\b(leather|suede|canvas|cotton|patterned)\b/gi, '').replace(/\s+/g, ' ').trim() || p.name;
+}
+
+function tripRenderDays() {
   var list = document.getElementById('tripDayList');
   list.innerHTML = '';
-  tripAssigned.forEach(function(a, idx){
-    var card = document.createElement('div'); card.className = 'trip-day-card';
-    var img = document.createElement('img'); img.src = a.curThumb; img.alt = a.day;
-    applyRotation(img, data.find(function(pp){ return pp.id === a.curId; }));
-    img.onclick = (function(thumb, tags, rot, lid){ return function(){ openZoom(thumb, tags, rot, lid); }; })(a.curThumb, a.curTags, getRotation(data.find(function(pp){ return pp.id === a.curId; })), a.curId);
-    card.appendChild(img);
+  tripDays.forEach(function(d, idx){
+    var card = document.createElement('div');
+    card.className = 'trip-day';
 
-    var info = document.createElement('div'); info.className = 'trip-day-info';
-    var mainTags = (a.curTags||[]).filter(function(t){ return t.split(':')[0].trim().toLowerCase() !== 'marca'; })
-      .map(function(t){ return t.split(':').slice(1).join(':').trim(); }).join(' · ');
-    info.innerHTML = '<div class="trip-day-date">' + a.day + ' · ' + a.dateLabel + '</div>'
-      + '<div class="trip-day-wx">' + a.cond + ' ' + a.temp + '</div>'
-      + '<div class="trip-day-tags">' + (mainTags || 'sem tags') + '</div>';
-    card.appendChild(info);
+    var hdr = document.createElement('div');
+    hdr.className = 'trip-day-hdr';
+    hdr.innerHTML = '<div class="trip-day-date">' + tripEsc(d.day) + ' · ' + tripEsc(d.dateLabel) + '</div>'
+      + '<div class="trip-day-wx">' + tripEsc(d.cond) + '<br>' + tripEsc(d.temp) + '</div>';
+    card.appendChild(hdr);
 
-    if (!tripViewOnly) {
-      var nav = document.createElement('div'); nav.className = 'trip-day-nav';
-      var prevBtn = document.createElement('button'); prevBtn.textContent = '‹'; prevBtn.title = 'Trocar look';
-      prevBtn.onclick = (function(i){ return function(){ cycleTripLook(i, -1); }; })(idx);
-      var nextBtn = document.createElement('button'); nextBtn.textContent = '›'; nextBtn.title = 'Trocar look';
-      nextBtn.onclick = (function(i){ return function(){ cycleTripLook(i, 1); }; })(idx);
-      nav.appendChild(prevBtn); nav.appendChild(nextBtn);
-      card.appendChild(nav);
-    }
+    var turnos = document.createElement('div');
+    turnos.className = 'trip-turnos';
+    [['dia','Dia'], ['noite','Noite']].forEach(function(t){
+      var chave = t[0];
+      var box = document.createElement('div');
+      box.className = 'trip-turno';
 
+      var th = document.createElement('div');
+      th.className = 'trip-turno-hdr';
+      th.innerHTML = '<span class="trip-turno-label">' + t[1] + '</span>';
+      if (!tripViewOnly) {
+        var b = document.createElement('button');
+        b.className = 'trip-turno-btn';
+        b.textContent = 'trocar';
+        b.title = 'Monta outro look com as mesmas peças da mala';
+        b.onclick = (function(i, k){ return function(){ tripRerollTurno(i, k); }; })(idx, chave);
+        th.appendChild(b);
+      }
+      box.appendChild(th);
+
+      var canvas = document.createElement('div');
+      box.appendChild(canvas);
+      var pecas = (d[chave] || []).map(findPieceById).filter(Boolean);
+      renderFlatLay(canvas, pecas, { zoomable: true, emptyMessage: 'sem peça' });
+
+      var legenda = document.createElement('div');
+      legenda.className = 'trip-turno-list';
+      legenda.textContent = pecas.map(tripNomeCurto).join(' · ');
+      box.appendChild(legenda);
+
+      turnos.appendChild(box);
+    });
+    card.appendChild(turnos);
     list.appendChild(card);
   });
 }
 
-function cycleTripLook(idx, dir) {
-  var a = tripAssigned[idx];
-  if (!a || !a.allPool || a.allPool.length < 2) return;
-  a.poolIdx = (a.poolIdx + dir + a.allPool.length) % a.allPool.length;
-  var p = a.allPool[a.poolIdx];
-  a.curId = p.id; a.curThumb = lookThumb(p); a.curTags = p.tags || [];
-  renderTripDayList();
-  renderTripPackList();
-}
+var TRIP_CAT_ORDEM = ['Shoes','Bottoms','Tops','Outerwear','Bags','Jewelry','Accessories'];
+var TRIP_CAT_PT = { Shoes: 'sapatos', Bottoms: 'calças e saias', Tops: 'blusas', Outerwear: 'casacos', Bags: 'bolsas', Jewelry: 'joias', Accessories: 'acessórios' };
 
-function renderTripPackList() {
-  var CATS_ORDER = ['casaco','jaqueta','blazer','colete','moletom','suéter','cardigan','kimono',
-    'calça','saia','vestido','macacão','shorts','bermuda',
-    'blusa','camisa','top','conjunto',
-    'sapato','sandália','bota','tênis','mocassim','sapatilha',
-    'bolsa','cinto','acessório'];
-  var byCat = {};
-  var seen = new Set();
-  tripAssigned.forEach(function(a){
-    (a.curTags||[]).forEach(function(t){
-      var cat = t.split(':')[0].trim().toLowerCase();
-      if (cat === 'marca' || cat === 'estação' || cat === 'ocasião') return;
-      var key = t.trim();
-      if (seen.has(key)) return;
-      seen.add(key);
-      if (!byCat[cat]) byCat[cat] = [];
-      byCat[cat].push(t.split(':').slice(1).join(':').trim());
-    });
-  });
-  var orderedCats = CATS_ORDER.filter(function(c){ return byCat[c]; })
-    .concat(Object.keys(byCat).filter(function(c){ return CATS_ORDER.indexOf(c) === -1; }));
+function tripRenderPackList() {
+  var box = document.getElementById('tripPackList');
+  var pecas = tripCapsule.map(findPieceById).filter(Boolean);
+  var guardadas = pecas.filter(function(p){ return tripPacked[p.id]; }).length;
 
-  var html = '<div class="trip-pack-title"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M9 7V4h6v3M3 13.5h18"/></svg> Peças pra levar na mala</div>';
-  if (!orderedCats.length) {
-    html += '<div class="trip-pack-item" style="color:#A8A8A4;">Nenhuma peça ainda.</div>';
+  var html = '<div class="trip-pack-title"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M9 7V4h6v3M3 13.5h18"/></svg> O que vai na mala</div>'
+    + '<div class="trip-pack-sub">' + pecas.length + ' peças pros ' + tripDays.length + ' dia(s)'
+    + (guardadas ? ' · ' + guardadas + ' já na mala' : ' · toca na foto conforme for guardando') + '</div>';
+
+  if (!pecas.length) {
+    html += '<div class="trip-pack-sub">Nenhuma peça ainda.</div>';
   } else {
-    orderedCats.forEach(function(cat){
-      html += '<div class="trip-pack-cat">' + cat + ' (' + byCat[cat].length + ')</div>';
-      byCat[cat].forEach(function(v){
-        html += '<div class="trip-pack-item">' + v + '</div>';
-      });
+    TRIP_CAT_ORDEM.forEach(function(cat){
+      var doCat = pecas.filter(function(p){ return p.category === cat; });
+      if (!doCat.length) return;
+      html += '<div class="trip-pack-cat">' + (TRIP_CAT_PT[cat] || cat) + ' (' + doCat.length + ')</div>'
+        + '<div class="trip-pack-grid">'
+        + doCat.map(function(p){
+            return '<div class="trip-pack-piece' + (tripPacked[p.id] ? ' packed' : '') + '" onclick="tripTogglePacked(\'' + p.id + '\')">'
+              + '<img src="' + tripEsc(p.img) + '" alt="' + tripEsc(p.name) + '" loading="lazy">'
+              + '<div class="trip-pack-piece-check">✓</div>'
+              + '<div class="trip-pack-lbl">' + tripEsc(tripNomeCurto(p)) + '</div>'
+              + '</div>';
+          }).join('')
+        + '</div>';
     });
   }
-  document.getElementById('tripPackList').innerHTML = html;
+  box.innerHTML = html;
 }
 
-function saveCurrentTrip() {
-  if (!tripAssigned.length || !tripStartVal) return;
-  var entry = {
+function tripTogglePacked(id) {
+  if (tripPacked[id]) delete tripPacked[id]; else tripPacked[id] = true;
+  tripRenderPackList();
+  if (tripSavedIdx != null) tripSalvarPacked();
+}
+
+// Malas salvas 
+// Guarda só ids de peça: a foto e o nome vêm do armário na hora de abrir, então
+// a mala salva acompanha qualquer edição feita nas peças depois.
+var tripSavedIdx = null;
+
+function tripEntradaAtual() {
+  return {
+    v: 2,
     name: tripName || '',
     startVal: tripStartVal,
     numDays: tripNumDays,
+    dest: tripDest,
+    fonteClima: tripFonteClima,
+    shoeIds: tripShoeIds.slice(),
+    capsule: tripCapsule.slice(),
+    packed: Object.keys(tripPacked),
     savedAt: new Date().toISOString(),
-    days: tripAssigned.map(function(a){
-      return {
-        day: a.day, dateLabel: a.dateLabel, temp: a.temp, cond: a.cond, estimated: !!a.estimated,
-        curId: a.curId, curThumb: a.curThumb, curTags: a.curTags || []
-      };
+    days: tripDays.map(function(d){
+      return { day: d.day, dateLabel: d.dateLabel, temp: d.temp, cond: d.cond,
+        profile: d.profile, estimated: !!d.estimated, dia: (d.dia||[]).slice(), noite: (d.noite||[]).slice() };
     })
   };
-  var existingIdx = savedTrips.findIndex(function(t){ return t.startVal === tripStartVal && t.numDays === tripNumDays; });
-  if (existingIdx !== -1) savedTrips[existingIdx] = entry;
-  else savedTrips.push(entry);
-  lsSet('looks_tina_trips_v1', JSON.stringify(savedTrips));
+}
+
+function saveCurrentTrip() {
+  if (!tripDays.length || !tripStartVal) return;
+  var entry = tripEntradaAtual();
+  var i = savedTrips.findIndex(function(t){ return t.startVal === tripStartVal && t.numDays === tripNumDays; });
+  if (i !== -1) { savedTrips[i] = entry; tripSavedIdx = i; }
+  else { savedTrips.push(entry); tripSavedIdx = savedTrips.length - 1; }
+  salvarMalas();
   renderSavedTripsList();
   showSavedToast('Mala salva!');
+}
+
+function tripSalvarPacked() {
+  var t = savedTrips[tripSavedIdx];
+  if (!t) return;
+  t.packed = Object.keys(tripPacked);
+  salvarMalas();
+}
+
+function salvarMalas() {
+  var json = JSON.stringify(savedTrips);
+  lsSet('looks_tina_trips_v1', json);
+  syncPut('looks_tina_trips_v1', json);
 }
 
 function renderSavedTripsList() {
@@ -10566,52 +11105,64 @@ function renderSavedTripsList() {
     return;
   }
   var sorted = savedTrips.map(function(t, i){ return { t: t, i: i }; })
-    .sort(function(a,b){ return (b.t.savedAt||'').localeCompare(a.t.savedAt||''); });
-  var html = '';
-  sorted.forEach(function(entry){
+    .sort(function(a, b){ return (b.t.savedAt || '').localeCompare(a.t.savedAt || ''); });
+  box.innerHTML = sorted.map(function(entry){
     var t = entry.t, i = entry.i;
     var label = t.name || ('Viagem de ' + t.numDays + ' dia(s)');
-    var firstDay = t.days && t.days[0] ? t.days[0].dateLabel : '';
-    var lastDay = t.days && t.days.length ? t.days[t.days.length - 1].dateLabel : '';
-    html += '<div class="saved-trip-card" onclick="viewSavedTrip(' + i + ')">'
+    var dias = t.days || [];
+    var primeiro = dias[0] ? dias[0].dateLabel : '';
+    var ultimo = dias.length ? dias[dias.length - 1].dateLabel : '';
+    var onde = (t.dest && t.dest.nome) ? (t.dest.nome + ' · ') : '';
+    return '<div class="saved-trip-card" onclick="viewSavedTrip(' + i + ')">'
       + '<div class="saved-trip-info">'
-      + '<div class="saved-trip-name"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M9 7V4h6v3M3 13.5h18"/></svg> ' + label + '</div>'
-      + '<div class="saved-trip-dates">' + firstDay + (lastDay && lastDay !== firstDay ? (' – ' + lastDay) : '') + ' · ' + t.numDays + ' dia(s)</div>'
+      + '<div class="saved-trip-name"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M9 7V4h6v3M3 13.5h18"/></svg> ' + tripEsc(label) + '</div>'
+      + '<div class="saved-trip-dates">' + tripEsc(onde + primeiro) + (ultimo && ultimo !== primeiro ? (' – ' + tripEsc(ultimo)) : '') + ' · ' + t.numDays + ' dia(s)</div>'
       + '</div>'
       + '<button class="saved-trip-del" onclick="event.stopPropagation();deleteSavedTrip(' + i + ')" title="Excluir"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14"/></svg></button>'
       + '</div>';
-  });
-  box.innerHTML = html;
+  }).join('');
 }
 
 function viewSavedTrip(idx) {
   var t = savedTrips[idx];
   if (!t) return;
-  tripAssigned = (t.days || []).map(function(d){
-    return { day: d.day, dateLabel: d.dateLabel, temp: d.temp, cond: d.cond, estimated: d.estimated,
-      curId: d.curId, curThumb: d.curThumb, curTags: d.curTags || [], allPool: [], poolIdx: 0 };
-  });
+  tripSavedIdx = idx;
   tripName = t.name || '';
   tripStartVal = t.startVal;
   tripNumDays = t.numDays;
-  tripHasEstimate = tripAssigned.some(function(a){ return a.estimated; });
-  tripViewOnly = true;
+  tripDest = t.dest || null;
+  tripFonteClima = t.fonteClima || 'estimativa';
+  tripRenderDestChosen();
 
-  document.getElementById('tripHeaderTitle').textContent = tripName ? ('' + tripName) : 'Mala de viagem';
-  document.getElementById('tripFormStep').style.display = 'none';
-  document.getElementById('tripResultStep').style.display = 'block';
-  document.getElementById('tripSubtitle').innerHTML = tripAssigned.length + ' dia(s) de viagem · mala salva'
-    + (tripHasEstimate ? ' · <span style="color:#C4985A;">usava estimativa sazonal</span>' : '');
-  var saveBtn = document.getElementById('tripSaveBtn');
-  if (saveBtn) saveBtn.style.display = 'none';
-  renderTripDayList();
-  renderTripPackList();
+  if (t.v !== 2) {
+    // Mala do formato antigo (foto de look inteiro, sem peças). Não dá pra
+    // remontar: mostra o que dá e avisa que é de antes.
+    alert('Essa mala é do formato antigo, de antes da mala ser montada por peça. Vale refazer: nome, destino, datas e os sapatos.');
+    return;
+  }
+
+  tripShoeIds = (t.shoeIds || []).slice();
+  tripCapsule = (t.capsule || []).slice();
+  tripPacked = {};
+  (t.packed || []).forEach(function(id){ tripPacked[id] = true; });
+  tripDays = (t.days || []).map(function(d){
+    return { day: d.day, dateLabel: d.dateLabel, temp: d.temp, cond: d.cond,
+      profile: d.profile || 'ameno', estimated: d.estimated, dia: d.dia || [], noite: d.noite || [] };
+  });
+  tripViewOnly = false;
+  tripUso = {};
+  tripDays.forEach(function(d){
+    (d.dia || []).concat(d.noite || []).forEach(function(id){ tripUso[id] = (tripUso[id] || 0) + 1; });
+  });
+  tripRenderResultado();
+  tripShowStep(3);
 }
 
 function deleteSavedTrip(idx) {
   if (!confirm('Excluir esta mala salva?')) return;
   savedTrips.splice(idx, 1);
-  lsSet('looks_tina_trips_v1', JSON.stringify(savedTrips));
+  if (tripSavedIdx === idx) tripSavedIdx = null;
+  salvarMalas();
   renderSavedTripsList();
 }
 
@@ -11029,50 +11580,66 @@ function deleteWeekHistoryEntry(idx) {
 }
 
 function tripTitle() {
-  return tripName ? ('<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M9 7V4h6v3M3 13.5h18"/></svg> ' + tripName) : '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M9 7V4h6v3M3 13.5h18"/></svg> Mala de Viagem — Tina';
+  var base = tripName || 'Mala de viagem — Tina';
+  return tripDest ? (base + ' · ' + tripDest.nome) : base;
 }
 
-function tripMainTags(tags) {
-  return (tags||[]).filter(function(t){ return t.split(':')[0].trim().toLowerCase() !== 'marca'; })
-    .map(function(t){ return t.split(':').slice(1).join(':').trim(); }).join(' · ');
-}
-
+// PDF da mala: a lista de peças com foto vem primeiro, porque é ela que se usa
+// na hora de fazer a mala; os looks de cada dia vêm depois, em texto, que é o
+// que cabe numa folha e ainda dá pra ler.
 function buildTripPrintWindow() {
-  if (!tripAssigned.length) return null;
-  var cells = tripAssigned.map(function(a){
-    return '<div class="cell">'
-      + '<div class="day">' + a.day + ' <span class="date">' + a.dateLabel + '</span></div>'
-      + '<div class="temp">' + a.temp + '</div>'
-      + '<img src="' + a.curThumb + '">'
-      + '<div class="piece">' + tripMainTags(a.curTags) + '</div>'
+  if (!tripDays.length) return null;
+
+  var pecas = tripCapsule.map(findPieceById).filter(Boolean);
+  var packHtml = '';
+  TRIP_CAT_ORDEM.forEach(function(cat){
+    var doCat = pecas.filter(function(p){ return p.category === cat; });
+    if (!doCat.length) return;
+    packHtml += '<div class="cat">' + (TRIP_CAT_PT[cat] || cat) + ' (' + doCat.length + ')</div><div class="pgrid">'
+      + doCat.map(function(p){
+          return '<div class="pitem"><img src="' + tripEsc(p.img) + '"><div class="plbl">' + tripEsc(tripNomeCurto(p)) + '</div></div>';
+        }).join('')
       + '</div>';
+  });
+
+  var rows = tripDays.map(function(d){
+    function nomes(ids) { return (ids || []).map(findPieceById).filter(Boolean).map(tripNomeCurto).join(' · '); }
+    return '<tr><th>' + tripEsc(d.day) + '<br><span class="sub">' + tripEsc(d.dateLabel) + '</span><br><span class="sub">' + tripEsc(d.temp) + '</span></th>'
+      + '<td>' + tripEsc(nomes(d.dia)) + '</td><td>' + tripEsc(nomes(d.noite)) + '</td></tr>';
   }).join('');
-  var packHtml = document.getElementById('tripPackList').innerHTML;
-  var win = window.open('', '_blank', 'width=1400,height=700');
-  win.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + tripTitle() + ' — Tina</title>'
+
+  var periodo = tripDays.length ? (tripDays[0].dateLabel + ' – ' + tripDays[tripDays.length-1].dateLabel) : '';
+  var win = window.open('', '_blank', 'width=1000,height=800');
+  if (!win) return null;
+  win.document.write('<!DOCTYPE html><html><head><meta charset="utf-8">'
+    + '<base href="' + location.href + '">'
+    + '<title>' + tripEsc(tripTitle()) + '</title>'
     + '<style>'
-    + '@page{size:A4 landscape;margin:8mm}'
+    + '@page{size:A4 portrait;margin:10mm}'
     + '*{box-sizing:border-box;margin:0;padding:0}'
-    + 'body{font-family:Helvetica,Arial,sans-serif;background:#fff}'
-    + '.title{text-align:center;font-size:12pt;font-weight:700;padding:5px 0 8px}'
-    + '.grid{display:flex;flex-wrap:wrap;width:100%;gap:2mm;margin-bottom:6mm;}'
-    + '.cell{width:22%;display:flex;flex-direction:column;align-items:center;padding:2mm;border:1px solid #F0F0EC;border-radius:3mm;margin-bottom:2mm;}'
-    + '.day{font-weight:700;font-size:7.5pt;text-align:center}'
-    + '.date{font-weight:400;color:#666666;font-size:6.5pt}'
-    + '.temp{font-size:6pt;color:#666666;margin:1mm 0 2mm}'
-    + '.cell img{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:2mm}'
-    + '.piece{font-size:6pt;color:#666666;font-style:italic;margin-top:2mm;text-align:center;line-height:1.3}'
-    + '.pack{font-size:9pt;column-count:3;column-gap:8mm;}'
-    + '.trip-pack-title{font-size:11pt;font-weight:700;margin-bottom:4mm;column-span:all;}'
-    + '.trip-pack-cat{font-weight:700;color:#A8A8A4;margin:3mm 0 1mm;text-transform:uppercase;font-size:7.5pt;}'
-    + '.trip-pack-item{font-size:8.5pt;padding:.5mm 0;}'
-    + '.print-btn{display:block;margin:8px auto;padding:8px 24px;background:#1A1A1A;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer}'
+    + 'body{font-family:Helvetica,Arial,sans-serif;background:#fff;color:#1A1A1A}'
+    + '.title{font-size:15pt;font-weight:700;margin-bottom:1mm}'
+    + '.meta{font-size:9pt;color:#666;margin-bottom:6mm}'
+    + '.sect{font-size:11pt;font-weight:700;margin:5mm 0 3mm}'
+    + '.cat{font-size:7.5pt;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:.08em;margin:4mm 0 1.5mm}'
+    + '.pgrid{display:flex;flex-wrap:wrap;gap:2mm}'
+    + '.pitem{width:23mm}'
+    + '.pitem img{width:100%;height:23mm;object-fit:contain;background:#FAFAF8;border-radius:2mm}'
+    + '.plbl{font-size:6pt;color:#666;text-align:center;line-height:1.2;margin-top:1mm}'
+    + 'table{width:100%;border-collapse:collapse;margin-top:2mm}'
+    + 'th,td{border:1px solid #EAEAE7;padding:2mm;font-size:8pt;text-align:left;vertical-align:top}'
+    + 'th{width:20mm;font-weight:700}'
+    + 'thead th{background:#FAFAF8;width:auto}'
+    + '.sub{font-weight:400;color:#666;font-size:6.5pt}'
+    + '.print-btn{display:block;margin:6mm auto;padding:8px 24px;background:#1A1A1A;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer}'
     + '@media print{.print-btn{display:none}}'
     + '</style></head><body>'
-    + '<div class="title">' + tripTitle() + '</div>'
-    + '<div class="grid">' + cells + '</div>'
-    + '<div class="pack">' + packHtml + '</div>'
-    + '<button class="print-btn" onclick="window.print()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M6.5 9V3.5h11V9"/><rect x="3" y="9" width="18" height="7.5" rx="2"/><path d="M6.5 14.5h11v6h-11z"/></svg> Salvar como PDF</button>'
+    + '<div class="title">' + tripEsc(tripTitle()) + '</div>'
+    + '<div class="meta">' + tripEsc(periodo) + ' · ' + tripDays.length + ' dia(s) · ' + pecas.length + ' peças</div>'
+    + '<div class="sect">O que vai na mala</div>' + packHtml
+    + '<div class="sect">Os looks de cada dia</div>'
+    + '<table><thead><tr><th>Dia</th><th>De dia</th><th>À noite</th></tr></thead><tbody>' + rows + '</tbody></table>'
+    + '<button class="print-btn" onclick="window.print()">Salvar como PDF</button>'
     + '</body></html>');
   win.document.close();
   return win;
@@ -11083,19 +11650,28 @@ function printTripPlan() {
 }
 
 function emailTripPlan() {
-  if (!tripAssigned.length) return;
-  // 1. Abrir janela de impressão (usuário salva como PDF pra anexar)
-  buildTripPrintWindow();
+  if (!tripDays.length) return;
+  buildTripPrintWindow(); // ela salva como PDF pra anexar
 
-  // 2. Corpo do email com os looks do período + peças pra levar
-  var lookLines = tripAssigned.map(function(a){
-    return a.day + ' ' + a.dateLabel + ' (' + a.temp + ') — ' + (tripMainTags(a.curTags) || 'sem tags');
+  var pecas = tripCapsule.map(findPieceById).filter(Boolean);
+  var lista = '';
+  TRIP_CAT_ORDEM.forEach(function(cat){
+    var doCat = pecas.filter(function(p){ return p.category === cat; });
+    if (!doCat.length) return;
+    lista += '\n' + (TRIP_CAT_PT[cat] || cat).toUpperCase() + ' (' + doCat.length + ')\n'
+      + doCat.map(function(p){ return '  - ' + p.brand + ' ' + tripNomeCurto(p); }).join('\n') + '\n';
+  });
+
+  var looks = tripDays.map(function(d){
+    function nomes(ids) { return (ids || []).map(findPieceById).filter(Boolean).map(tripNomeCurto).join(' · '); }
+    return d.day + ' ' + d.dateLabel + ' (' + d.temp + ')\n  dia:   ' + nomes(d.dia) + '\n  noite: ' + nomes(d.noite);
   }).join('\n');
-  var packText = document.getElementById('tripPackList').innerText || document.getElementById('tripPackList').textContent || '';
 
   setTimeout(function(){
     var subject = encodeURIComponent(tripTitle());
-    var body = encodeURIComponent('Looks da viagem:\n\n' + lookLines + '\n\n' + packText + '\n\n(Anexar o PDF salvo da janela que abriu)');
+    var body = encodeURIComponent('O QUE VAI NA MALA (' + pecas.length + ' peças)\n' + lista
+      + '\n\nOS LOOKS DE CADA DIA\n\n' + looks
+      + '\n\n(Anexar o PDF salvo da janela que abriu)');
     window.location.href = 'mailto:tina@teninvest.net?subject=' + subject + '&body=' + body;
   }, 1500);
 }
