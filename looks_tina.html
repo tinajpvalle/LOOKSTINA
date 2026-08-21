@@ -10984,6 +10984,52 @@ function tripToggleCatalogo(id) {
   tripRenderPicker(); tripRenderEscolhaBar();
 }
 
+// Aviso de repetição 
+// Ela escolheu uma blusa só e os cinco looks que eu montei saíram todos com ela.
+// O algoritmo estava certo — usou o que tinha — mas ficar calado fez parecer
+// defeito. Com uma peça só numa categoria, a conta é inevitável, e quem tem que
+// saber disso antes é ela.
+function tripQuantasEscolhidas(cat) {
+  return tripPecas.map(findPieceById).filter(function(p){ return p && p.category === cat; }).length;
+}
+
+var TRIP_ESSENCIAIS = [['Tops','blusa','blusas'], ['Bottoms','calça ou saia','calças e saias'], ['Shoes','sapato','sapatos']];
+
+function tripAvisoDeRepeticao(quantosVouMontar) {
+  if (quantosVouMontar < 2) return '';
+  var unicas = [];
+  TRIP_ESSENCIAIS.forEach(function(e){
+    if (tripQuantasEscolhidas(e[0]) === 1) unicas.push('1 ' + e[1]);
+  });
+  if (unicas.length) {
+    return 'você escolheu ' + unicas.join(' e ') + ' — vai aparecer nos ' + quantosVouMontar + ' looks';
+  }
+  // Sapato e calça repetirem numa viagem é o normal — é pra isso que a mala
+  // serve. A blusa é a que se troca, então só ela vira aviso, e só quando cada
+  // uma teria que sair três vezes ou mais.
+  var n = tripQuantasEscolhidas('Tops');
+  if (n > 1 && n * 2 < quantosVouMontar) {
+    return n + ' blusas pros ' + quantosVouMontar + ' looks: cada uma sai ' + Math.ceil(quantosVouMontar / n) + 'x';
+  }
+  return '';
+}
+
+// Na tela do resultado, dizer quais peças estão em todos os looks que eu montei.
+function tripPecasEmTodosOsLooks() {
+  var montados = [];
+  tripDays.forEach(function(d){
+    if (d.diaTipo === 'montado') montados.push(d.dia);
+    if (d.noiteTipo === 'montado') montados.push(d.noite);
+  });
+  if (montados.length < 2) return [];
+  return montados[0].filter(function(id){
+    var p = findPieceById(id);
+    // Sapato em todos os looks não é problema, é o objetivo da mala.
+    if (!p || ['Bags','Jewelry','Accessories','Shoes'].indexOf(p.category) !== -1) return false;
+    return montados.every(function(l){ return l.indexOf(id) !== -1; });
+  }).map(findPieceById).filter(Boolean);
+}
+
 function tripRenderEscolhaBar() {
   var slots = tripNumDays * 2;
   var looks = tripMeus.length + tripCatalogo.length;
@@ -10999,7 +11045,7 @@ function tripRenderEscolhaBar() {
   if (carregando) dica = '';
   else if (!partes.length) dica = 'escolhe peças, looks seus, ou os dois';
   else if (faltam === 0) dica = 'seus looks já cobrem os ' + slots + ' looks da viagem';
-  else if (tripPecas.length) dica = 'eu monto os ' + faltam + ' que faltam com as suas peças';
+  else if (tripPecas.length) dica = tripAvisoDeRepeticao(faltam) || ('eu monto os ' + faltam + ' que faltam com as suas peças');
   else dica = faltam + ' look(s) sem nada — escolhe peças pra eu montar';
 
   document.getElementById('tripShoeCount').innerHTML = carregando
@@ -11619,6 +11665,13 @@ function tripRenderResultado() {
   if (meus) linha += ' · ' + meus + ' eu montei com as suas peças';
   if (vazios) linha += ' · <span style="color:var(--accent);">' + vazios + ' sem look, falta '
     + tripEsc(tripTextoDoQueFalta()) + '</span>';
+  var repetidas = tripPecasEmTodosOsLooks();
+  if (repetidas.length && !tripViewOnly) {
+    linha += '<br><span style="color:var(--accent);">'
+      + tripEsc(repetidas.map(tripNomeCurto).join(' e ')) + ' ' + (repetidas.length > 1 ? 'estão' : 'está')
+      + ' em todos os ' + meus + ' looks que eu montei — foi o que você escolheu nessa categoria. '
+      + 'Escolhe mais em "Mudar o que vai".</span>';
+  }
   document.getElementById('tripSubtitle').innerHTML =
     tripDays.length + ' dia(s)' + onde + ' · ' + TRIP_OCASIAO_LABEL[tripOcasiao] + ' · ' + tripFonteClimaTexto()
     + '<br>' + linha + (tripViewOnly ? ' · mala salva' : '');
