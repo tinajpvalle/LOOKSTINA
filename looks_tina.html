@@ -11017,8 +11017,8 @@ function tripAvisoDeRepeticao(quantosVouMontar) {
   // serve. A blusa é a que se troca, então só ela vira aviso, e só quando cada
   // uma teria que sair três vezes ou mais.
   var n = tripQuantasEscolhidas('Tops');
-  if (n > 1 && n * 2 < quantosVouMontar) {
-    return n + ' blusas pros ' + quantosVouMontar + ' looks: cada uma sai ' + Math.ceil(quantosVouMontar / n) + 'x';
+  if (n > 1 && n < quantosVouMontar) {
+    return n + ' blusas pros ' + quantosVouMontar + ' looks: ' + (quantosVouMontar - n) + ' vão repetir blusa';
   }
   return '';
 }
@@ -11267,7 +11267,14 @@ function tripMediaCompat(p, lista) {
 
 function tripEscolherPraCapsula(cat, n, perfil, sapatos, jaNaCapsula) {
   if (n <= 0) return [];
-  var pool = piecesByCategory(cat).filter(function(p){ return tripShoeIds.indexOf(p.id) === -1; });
+  // Fora o que já está na mala: sem isto, "buscar mais blusas" devolvia uma que
+  // ela já tinha escolhido, marcada como "eu pus", e a conta de blusas novas não
+  // fechava.
+  var jaTem = {};
+  (jaNaCapsula || []).forEach(function(p){ if (p) jaTem[p.id] = 1; });
+  tripShoeIds.forEach(function(id){ jaTem[id] = 1; });
+  (tripCapsule || []).forEach(function(id){ jaTem[id] = 1; });
+  var pool = piecesByCategory(cat).filter(function(p){ return !jaTem[p.id]; });
   var out = [];
   for (var k = 0; k < n && pool.length; k++) {
     var melhor = null, melhorNota = -Infinity;
@@ -11332,8 +11339,20 @@ function tripMontarLook(f, turno, uso, evitarIds) {
             || tripEscolherDoLook(tripCapsulaPorCategoria('Bottoms'), uso, escolhidas, perfil, null, noite);
   if (bottom) escolhidas.push(bottom);
 
-  var top = tripEscolherDoLook(tripCapsulaPorCategoria('Tops'), uso, escolhidas, perfil, evitar, noite)
-         || tripEscolherDoLook(tripCapsulaPorCategoria('Tops'), uso, escolhidas, perfil, null, noite);
+  // Blusa diferente a cada look — pedido dela, e é a peça que não se repete numa
+  // viagem. A escolha sai sempre entre as menos usadas até agora: enquanto
+  // houver blusa que nunca saiu é uma delas, e quando não houver mais, a de
+  // menor uso. Só "a que nunca saiu" não bastava — com duas blusas pra seis
+  // looks a conta ficava 4x contra 2x, porque as outras notas atropelavam o
+  // desconto de uso. Assim fica 3x e 3x.
+  var todasAsBlusas = tripCapsulaPorCategoria('Tops');
+  var menorUso = todasAsBlusas.length
+    ? Math.min.apply(null, todasAsBlusas.map(function(p){ return uso[p.id] || 0; })) : 0;
+  var pool = todasAsBlusas.filter(function(p){ return (uso[p.id] || 0) === menorUso; });
+  if (!pool.length) pool = todasAsBlusas;
+  var top = tripEscolherDoLook(pool, uso, escolhidas, perfil, evitar, noite)
+         || tripEscolherDoLook(pool, uso, escolhidas, perfil, null, noite)
+         || tripEscolherDoLook(todasAsBlusas, uso, escolhidas, perfil, null, noite);
   if (top) escolhidas.push(top);
 
   // Casaco: no frio sempre; no clima de meia estação, só à noite, que é quando esfria.
@@ -11436,7 +11455,9 @@ function tripQuantosVouMontar() {
 // Blusa é a que se troca: no máximo duas saídas cada. Calça e sapato repetem sem
 // problema numa viagem — é para isso que a mala serve.
 function tripAlvoDaCategoria(cat, nMontar) {
-  if (cat === 'Tops') return Math.max(2, Math.ceil(nMontar / 2));
+  // Uma blusa por look: ela pediu que nunca se repita. Com teto, pra uma viagem
+  // longa não virar a mala inteira de blusa.
+  if (cat === 'Tops') return Math.max(2, Math.min(nMontar, 10));
   if (cat === 'Bottoms') return Math.max(2, Math.ceil(nMontar / 3));
   if (cat === 'Shoes') return nMontar >= 4 ? 2 : 1;
   return 0;
