@@ -10825,9 +10825,18 @@ var TRIP_CAT_LABEL = { Shoes:'Sapatos', Tops:'Blusas', Bottoms:'Calças e saias'
 // Vários lugares do código pedem "os sapatos da viagem"; agora eles saem da
 // escolha dela em vez de um passo próprio.
 function tripAtualizarSapatos() {
-  tripShoeIds = tripPecas.filter(function(id){
+  // Todo sapato que está na mala serve pra montar look: os que ela marcou, os
+  // que vieram num look dela, e os que eu trouxe ao completar. Antes só contava
+  // os marcados por ela, então o sapato que eu mesmo acabava de pôr não entrava
+  // em look nenhum — ficava na lista sem uso.
+  var ids = tripPecas.concat(tripAutoAdicionadas || []);
+  (tripMeus || []).forEach(function(mid){ ids = ids.concat(tripLookDoMontado(mid)); });
+  var vistos = {};
+  tripShoeIds = ids.filter(function(id){
     var p = findPieceById(id);
-    return p && p.category === 'Shoes';
+    if (!p || p.category !== 'Shoes' || vistos[id]) return false;
+    vistos[id] = 1;
+    return true;
   });
 }
 
@@ -11412,10 +11421,55 @@ function tripEncaixarEscolhidos(perfil) {
 }
 
 // O que falta na cápsula pra conseguir fechar um look completo.
+// Quantos looks eu vou montar (os que ela não preencheu com escolha própria).
+function tripQuantosVouMontar() {
+  if (!tripDays.length) {
+    return Math.max(0, tripNumDays * 2 - (tripMeus.length + tripCatalogo.length));
+  }
+  return tripDays.reduce(function(n, d){
+    return n + (d.diaTipo !== 'meu' && d.diaTipo !== 'catalogo' ? 1 : 0)
+             + (d.noiteTipo !== 'meu' && d.noiteTipo !== 'catalogo' ? 1 : 0);
+  }, 0);
+}
+
+// Quantas peças de cada categoria dão conta de N looks sem ficar repetitivo.
+// Blusa é a que se troca: no máximo duas saídas cada. Calça e sapato repetem sem
+// problema numa viagem — é para isso que a mala serve.
+function tripAlvoDaCategoria(cat, nMontar) {
+  if (cat === 'Tops') return Math.max(2, Math.ceil(nMontar / 2));
+  if (cat === 'Bottoms') return Math.max(2, Math.ceil(nMontar / 3));
+  if (cat === 'Shoes') return nMontar >= 4 ? 2 : 1;
+  return 0;
+}
+
+// Categorias em que o que ela escolheu não dá conta. Vazia conta, mas uma peça
+// só para seis looks também: foi o caso da camisa que saiu em todos.
+function tripCategoriasMagras() {
+  var n = tripQuantosVouMontar();
+  if (n < 1) return [];
+  return ['Tops','Bottoms','Shoes'].filter(function(cat){
+    return tripCapsulaPorCategoria(cat).length < tripAlvoDaCategoria(cat, n);
+  });
+}
+
 function tripFaltaPraMontar() {
   return ['Tops','Bottoms','Shoes'].filter(function(c){ return !tripCapsulaPorCategoria(c).length; });
 }
 
+function tripRotuloDoBotaoCompletar() {
+  var magras = tripCategoriasMagras();
+  if (!magras.length) return '';
+  var nomes = magras.map(function(c){
+    return { Tops: 'blusas', Bottoms: 'calças', Shoes: 'sapatos' }[c] || c;
+  });
+  var lista = nomes.length > 1 ? (nomes.slice(0, -1).join(', ') + ' e ' + nomes[nomes.length - 1]) : nomes[0];
+  return 'Buscar mais ' + lista + ' no armário';
+}
+
+// Ela perguntou: "se eu escolher só as calças, você não pode sugerir mais de uma
+// blusa?" Pode — e é o certo. Antes eu só buscava quando a categoria estava
+// vazia, e buscava uma peça, o que só empurrava o problema. Agora completo até o
+// alvo da categoria, e tudo o que entra fica marcado "eu pus" para ela tirar.
 function tripMontarPlano() {
   var perfil = tripPerfilDominante();
   var escolhidos = tripEncaixarEscolhidos(perfil);
@@ -11480,26 +11534,33 @@ function tripDistribuirPelosDias(porSlot) {
   });
 }
 
-// Ela pediu pra completar: busca o mínimo pra fechar os looks que faltam, e o
-// que entrar fica marcado na lista como escolha minha, não dela.
 function tripCompletarDoArmario() {
+  if (tripViewOnly) return;
+  var magras = tripCategoriasMagras();
+  if (!magras.length) return;
   var perfil = tripPerfilDominante();
-  var falta = tripFaltaPraMontar();
-  if (!falta.length) return;
+  var nMontar = tripQuantosVouMontar();
   var jaEscolhidas = tripCapsule.map(findPieceById).filter(Boolean);
   var sapatos = tripShoeIds.map(findPieceById).filter(Boolean);
-  falta.forEach(function(cat){
-    var novas = tripEscolherPraCapsula(cat, 1, perfil, sapatos, jaEscolhidas);
-    novas.forEach(function(p){
+  var entraram = [];
+
+  magras.forEach(function(cat){
+    var falta = tripAlvoDaCategoria(cat, nMontar) - tripCapsulaPorCategoria(cat).length;
+    if (falta <= 0) return;
+    tripEscolherPraCapsula(cat, falta, perfil, sapatos, jaEscolhidas).forEach(function(p){
       if (tripAutoAdicionadas.indexOf(p.id) === -1) tripAutoAdicionadas.push(p.id);
       jaEscolhidas.push(p);
+      entraram.push(p);
     });
   });
+
+  if (!entraram.length) { showSavedToast('Não achei mais nada que sirva pro clima do destino.'); return; }
   tripMontarPlano();
   tripRenderResultado();
-  showSavedToast('Completei com ' + tripAutoAdicionadas.length + ' peça(s) — estão marcadas na lista.');
+  document.getElementById('tripModal').scrollTop = 0;
+  showSavedToast('Trouxe ' + entraram.length + ' peça(s): ' + entraram.map(tripNomeCurto).join(', ')
+    + '. Estão marcadas "eu pus" na lista.');
 }
-
 function tripBuild() {
   if (!tripPecas.length && !tripMeus.length && !tripCatalogo.length) return;
   // A previsão chega depois da tela da escolha. Sem esta guarda dava pra montar
@@ -11670,13 +11731,17 @@ function tripRenderResultado() {
     linha += '<br><span style="color:var(--accent);">'
       + tripEsc(repetidas.map(tripNomeCurto).join(' e ')) + ' ' + (repetidas.length > 1 ? 'estão' : 'está')
       + ' em todos os ' + meus + ' looks que eu montei — foi o que você escolheu nessa categoria. '
-      + 'Escolhe mais em "Mudar o que vai".</span>';
+      + 'Use o botão abaixo pra eu buscar mais, ou escolha você em "Mudar o que vai".</span>';
   }
   document.getElementById('tripSubtitle').innerHTML =
     tripDays.length + ' dia(s)' + onde + ' · ' + TRIP_OCASIAO_LABEL[tripOcasiao] + ' · ' + tripFonteClimaTexto()
     + '<br>' + linha + (tripViewOnly ? ' · mala salva' : '');
   var btnComp = document.getElementById('tripCompletarBtn');
-  if (btnComp) btnComp.style.display = (vazios && !tripViewOnly) ? 'inline-block' : 'none';
+  if (btnComp) {
+    var rotulo = tripViewOnly ? '' : tripRotuloDoBotaoCompletar();
+    btnComp.style.display = rotulo ? 'inline-block' : 'none';
+    btnComp.textContent = rotulo;
+  }
   document.getElementById('tripSaveBtn').style.display = tripViewOnly ? 'none' : 'inline-block';
   document.getElementById('tripShoesAgainBtn').style.display = tripViewOnly ? 'none' : 'inline-block';
   document.getElementById('tripNaoGosteiBtn').style.display = tripViewOnly ? 'none' : 'inline-block';
