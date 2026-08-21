@@ -417,6 +417,18 @@ body.week-pick-mode .card-week-btn { display: block; }
 
 /* Passo dos sapatos */
 .trip-step-line { font-size: 9.5px; font-weight: 700; letter-spacing: 1.6px; text-transform: uppercase; color: var(--txt-3); margin-bottom: 8px; }
+.trip-fonte-bar { display: flex; gap: 6px; margin-bottom: 10px; }
+.trip-fonte-pill { flex: 1; border: 1px solid var(--line-input); background: transparent; color: var(--txt-2); border-radius: var(--r-md); padding: 7px 10px; font-size: .78rem; cursor: pointer; font-family: inherit; }
+.trip-fonte-pill.active { background: var(--ink); border-color: var(--ink); color: var(--surface); font-weight: 500; }
+.trip-cat-bar { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 8px; }
+.trip-cat-pill { border: 1px solid var(--line-input); background: transparent; color: var(--txt-2); border-radius: var(--r-pill); padding: 4px 10px; font-size: .72rem; cursor: pointer; font-family: inherit; }
+.trip-cat-pill.active { background: var(--ink); border-color: var(--ink); color: var(--surface); }
+.trip-cat-pill small { color: var(--txt-3); margin-left: 2px; }
+.trip-cat-pill.active small { color: var(--surface); opacity: .7; }
+.trip-busca { width: 100%; padding: 7px 10px; border: 1px solid var(--line-input); border-radius: var(--r-md); font-size: .82rem; font-family: inherit; background: transparent; color: var(--ink); margin-bottom: 10px; }
+.trip-picker-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding-bottom: 96px; }
+.trip-picker-grid.looks { grid-template-columns: repeat(2, 1fr); }
+.trip-picker-vazio { grid-column: 1/-1; font-size: .8rem; color: var(--txt-3); padding: 18px 4px; }
 .trip-shoe-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding-bottom: 96px; }
 .trip-shoe-card { position: relative; border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; cursor: pointer; background: var(--surface); }
 .trip-shoe-card img { width: 100%; aspect-ratio: 1; object-fit: contain; display: block; background: var(--bg); }
@@ -443,6 +455,13 @@ body.week-pick-mode .card-week-btn { display: block; }
 .trip-turno + .trip-turno { border-left: 1px solid var(--line-soft); }
 .trip-turno-hdr { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 6px; }
 .trip-turno-label { font-size: 9.5px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: var(--txt-3); }
+.trip-turno-vazio { border: 1px dashed var(--line-dash); border-radius: var(--r-md); padding: 22px 10px; text-align: center; font-size: .74rem; color: var(--txt-3); line-height: 1.5; }
+.trip-turno-vazio small { font-size: .68rem; }
+.trip-foto-look { width: 100%; aspect-ratio: 3/4; object-fit: cover; border-radius: var(--r-md); display: block; cursor: zoom-in; }
+.trip-pack-marca { position: absolute; left: 3px; bottom: 22px; font-size: .52rem; background: var(--ink); color: var(--surface); border-radius: var(--r-xs); padding: 1px 4px; letter-spacing: .02em; }
+.trip-pack-marca.clara { background: var(--surface); color: var(--txt-3); border: 1px solid var(--line); }
+.trip-pack-foto-item { font-size: .72rem; color: var(--txt-2); padding: 3px 0; border-bottom: 1px solid var(--line-soft); }
+.trip-seu-look { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: var(--r-sm); background: var(--ink); color: var(--surface); letter-spacing: .06em; }
 .trip-turno-btn { border: 1px solid var(--line-input); background: transparent; color: var(--ink); border-radius: var(--r-sm); cursor: pointer; font-size: .68rem; padding: 2px 7px; font-family: inherit; }
 .trip-turno-btn:hover { border-color: var(--ink); }
 .trip-turno .flatlay-canvas { max-width: none; border-radius: var(--r-md); }
@@ -1269,11 +1288,18 @@ body.compare-mode .card-compare-btn { display: flex; }
         </div>
       </div>
 
-      <!-- Passo 2: os sapatos, que mandam no resto -->
+      <!-- Passo 2: ela escolhe o que vai na mala -->
       <div id="tripStep2" style="display:none;">
-        <div class="trip-step-line">Passo 2 · os sapatos</div>
+        <div class="trip-step-line">Passo 2 · o que vai na mala</div>
         <p class="trip-lead" id="tripShoeLead">Buscando a previsão do destino…</p>
-        <div class="trip-shoe-grid" id="tripShoeGrid"></div>
+        <div class="trip-fonte-bar" id="tripFonteBar">
+          <button type="button" class="trip-fonte-pill active" data-f="pecas" onclick="tripSetFonte('pecas')">Peças</button>
+          <button type="button" class="trip-fonte-pill" data-f="meus" onclick="tripSetFonte('meus')">Meus looks</button>
+          <button type="button" class="trip-fonte-pill" data-f="catalogo" onclick="tripSetFonte('catalogo')">Catálogo</button>
+        </div>
+        <div class="trip-cat-bar" id="tripCatBar"></div>
+        <input type="text" id="tripBusca" class="trip-busca" placeholder="Buscar por nome ou marca…" autocomplete="off" oninput="tripBuscaMudou()">
+        <div class="trip-picker-grid" id="tripPickerGrid"></div>
       </div>
 
       <!-- Passo 3: a mala montada -->
@@ -1282,9 +1308,10 @@ body.compare-mode .card-compare-btn { display: flex; }
         <div class="trip-day-list" id="tripDayList"></div>
         <div class="trip-pack-list" id="tripPackList"></div>
         <div class="trip-actions">
-          <button class="btn-next" id="tripNaoGosteiBtn" onclick="tripNaoGostei()">Não gostei, faz outra</button>
+          <button class="btn-next" id="tripCompletarBtn" onclick="tripCompletarDoArmario()" style="display:none;">Completar do armário</button>
+          <button class="btn-back" id="tripNaoGosteiBtn" onclick="tripNaoGostei()">Remontar os meus</button>
           <button class="btn-back" onclick="tripBackToStep1()">← Nova mala</button>
-          <button class="btn-back" id="tripShoesAgainBtn" onclick="tripBackToShoes()">Trocar sapatos</button>
+          <button class="btn-back" id="tripShoesAgainBtn" onclick="tripBackToShoes()">Mudar o que vai</button>
           <button class="btn-back" id="tripSaveBtn" onclick="saveCurrentTrip()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M12 3.5v11M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg> Salvar mala</button>
           <button class="btn-back" onclick="printTripPlan()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M6.5 9V3.5h11V9"/><rect x="3" y="9" width="18" height="7.5" rx="2"/><path d="M6.5 14.5h11v6h-11z"/></svg> PDF</button>
           <button class="btn-back" onclick="emailTripPlan()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><rect x="3" y="5.2" width="18" height="13.6" rx="2"/><path d="m3.6 6.6 8.4 5.9 8.4-5.9"/></svg> Email</button>
@@ -10542,7 +10569,6 @@ var tripCapsule = [];       // ids de todas as peças que vão na mala
 var tripDays = [];          // [{..clima.., dia:[ids], noite:[ids]}]
 var tripPacked = {};        // id -> true, o que ela já guardou na mala
 var tripFonteClima = '';    // 'previsao' | 'anoPassado' | 'estimativa'
-var tripRecusadas = [];     // peças que ela recusou nesta mala — não voltam em "faz outra"
 var tripViewOnly = false;   // visualizando mala salva com peça que sumiu do armário
 var TRIP_TMAX_BY_MONTH = [28,29,27,25,23,21,21,23,24,25,26,27]; // máxima média aproximada em SP, jan=0
 
@@ -10780,7 +10806,210 @@ function tripFrio(profile) {
   return profile === 'frio_seco' || profile === 'frio_chuva' || profile === 'agradavel';
 }
 
-// Passo 2: os sapatos 
+// Passo 2: ela escolhe o que vai na mala 
+// Antes este passo era só os sapatos e o resto era decisão do app. Depois de
+// quatro rodadas em que ela não gostou de nenhuma escolha minha, a tática mudou:
+// ela escolhe — peças, looks que ela salvou, fotos do catálogo — e eu só
+// completo os dias que sobrarem, com o que ela escolheu.
+var tripPecas = [];       // ids de peça escolhidos
+var tripMeus = [];        // ids de look montado escolhidos
+var tripCatalogo = [];    // ids de look do catálogo escolhidos
+var tripFonte = 'pecas';  // 'pecas' | 'meus' | 'catalogo'
+var tripCatFiltro = '__all__';
+var tripBusca = '';
+
+var TRIP_CATS_PICKER = ['Shoes','Tops','Bottoms','Outerwear','Bags','Jewelry','Accessories'];
+var TRIP_CAT_LABEL = { Shoes:'Sapatos', Tops:'Blusas', Bottoms:'Calças e saias',
+  Outerwear:'Casacos', Bags:'Bolsas', Jewelry:'Joias', Accessories:'Acessórios' };
+
+// Vários lugares do código pedem "os sapatos da viagem"; agora eles saem da
+// escolha dela em vez de um passo próprio.
+function tripAtualizarSapatos() {
+  tripShoeIds = tripPecas.filter(function(id){
+    var p = findPieceById(id);
+    return p && p.category === 'Shoes';
+  });
+}
+
+function tripLimparEscolha() {
+  tripPecas = []; tripMeus = []; tripCatalogo = [];
+  tripShoeIds = [];
+  tripFonte = 'pecas'; tripCatFiltro = '__all__'; tripBusca = '';
+}
+
+function tripSetFonte(f) {
+  tripFonte = f;
+  tripBusca = '';
+  var b = document.getElementById('tripBusca');
+  if (b) b.value = '';
+  tripRenderEscolha();
+}
+
+function tripBuscaMudou() {
+  tripBusca = (document.getElementById('tripBusca').value || '').trim().toLowerCase();
+  tripRenderPicker();
+}
+
+function tripSetCatFiltro(c) {
+  tripCatFiltro = c;
+  tripRenderEscolha();
+}
+
+function tripRenderEscolha() {
+  [].forEach.call(document.querySelectorAll('#tripFonteBar .trip-fonte-pill'), function(b){
+    b.classList.toggle('active', b.getAttribute('data-f') === tripFonte);
+  });
+  var barra = document.getElementById('tripCatBar');
+  if (tripFonte === 'pecas') {
+    barra.style.display = 'flex';
+    barra.innerHTML = ['__all__'].concat(TRIP_CATS_PICKER).map(function(c){
+      var n = (c === '__all__') ? allPecas().length : piecesByCategory(c).length;
+      return '<button class="trip-cat-pill' + (tripCatFiltro === c ? ' active' : '') + '" onclick="tripSetCatFiltro(\'' + c + '\')">'
+        + (c === '__all__' ? 'Tudo' : tripEsc(TRIP_CAT_LABEL[c] || c)) + ' <small>' + n + '</small></button>';
+    }).join('');
+  } else {
+    barra.style.display = 'none';
+  }
+  var busca = document.getElementById('tripBusca');
+  busca.placeholder = tripFonte === 'catalogo' ? 'Buscar por etiqueta, marca…' : 'Buscar por nome ou marca…';
+  tripRenderPicker();
+  tripRenderEscolhaBar();
+}
+
+function tripRenderPicker() {
+  var grid = document.getElementById('tripPickerGrid');
+  if (tripFonte === 'pecas') return tripRenderPickerPecas(grid);
+  if (tripFonte === 'meus') return tripRenderPickerMeus(grid);
+  return tripRenderPickerCatalogo(grid);
+}
+
+function tripRenderPickerPecas(grid) {
+  var perfil = tripPerfilDominante();
+  var lista = (tripCatFiltro === '__all__' ? allPecas() : piecesByCategory(tripCatFiltro)).slice().sort(pecaNewestFirst);
+  if (tripBusca) {
+    lista = lista.filter(function(p){
+      return ((p.name||'') + ' ' + (p.brand||'') + ' ' + (p.color||'')).toLowerCase().indexOf(tripBusca) !== -1;
+    });
+  }
+  grid.className = 'trip-picker-grid';
+  if (!lista.length) { grid.innerHTML = '<div class="trip-picker-vazio">Nada encontrado.</div>'; return; }
+  grid.innerHTML = lista.map(function(p){
+    var nota = tripClimaScore(p, perfil);
+    var sel = tripPecas.indexOf(p.id) !== -1;
+    var aviso = (nota <= -2) ? (tripFrio(perfil) ? 'frio demais pra esse' : 'quente demais pra esse') : '';
+    return '<div class="trip-shoe-card' + (sel ? ' sel' : '') + (aviso && !sel ? ' fora' : '') + '" onclick="tripTogglePeca(\'' + p.id + '\')">'
+      + '<img src="' + tripEsc(p.img) + '" alt="' + tripEsc(p.name) + '" loading="lazy">'
+      + (sel ? '<div class="trip-shoe-check">✓</div>' : '')
+      + '<div class="trip-shoe-txt">'
+      + '<div class="trip-shoe-brand">' + tripEsc(p.brand) + '</div>'
+      + '<div class="trip-shoe-name">' + tripEsc(p.name) + '</div>'
+      + (aviso ? '<div class="trip-shoe-aviso">' + aviso + '</div>' : '')
+      + '</div></div>';
+  }).join('');
+}
+
+function tripRenderPickerMeus(grid) {
+  var perfil = tripPerfilDominante();
+  var lista = montagens.filter(function(m){ return (m.pieceIds||[]).length; });
+  if (tripBusca) {
+    lista = lista.filter(function(m){
+      var txt = (m.name || '') + ' ' + tripPecasDoMontado(m).map(function(p){ return p.name + ' ' + p.brand; }).join(' ');
+      return txt.toLowerCase().indexOf(tripBusca) !== -1;
+    });
+  }
+  grid.className = 'trip-picker-grid looks';
+  if (!lista.length) { grid.innerHTML = '<div class="trip-picker-vazio">Você ainda não salvou nenhum look em "Looks Montados".</div>'; return; }
+  grid.innerHTML = '';
+  lista.forEach(function(m){
+    var pecas = tripPecasDoMontado(m);
+    var sel = tripMeus.indexOf(m.id) !== -1;
+    var pior = pecas.length ? Math.min.apply(null, pecas.map(function(p){
+      if (p.category === 'Outerwear' && !TRIP_RE_QUENTE.test(p.name || '')) return 0;
+      return tripClimaScore(p, perfil);
+    })) : 0;
+    var card = document.createElement('div');
+    card.className = 'trip-shoe-card' + (sel ? ' sel' : '') + ((pior <= -3 && !sel) ? ' fora' : '');
+    card.onclick = (function(id){ return function(){ tripToggleMeu(id); }; })(m.id);
+    var fl = document.createElement('div');
+    fl.style.cssText = 'pointer-events:none';
+    card.appendChild(fl);
+    renderFlatLay(fl, pecas);
+    fl.style.maxWidth = 'none';
+    if (sel) { var c = document.createElement('div'); c.className = 'trip-shoe-check'; c.textContent = '✓'; card.appendChild(c); }
+    var txt = document.createElement('div');
+    txt.className = 'trip-shoe-txt';
+    txt.innerHTML = '<div class="trip-shoe-brand">' + tripEsc(m.name || 'Look sem nome') + '</div>'
+      + '<div class="trip-shoe-name">' + pecas.length + ' peças</div>'
+      + (m.casa ? '<div class="trip-shoe-aviso">look de casa</div>' : '')
+      + (pior <= -3 ? '<div class="trip-shoe-aviso">não combina com o clima</div>' : '');
+    card.appendChild(txt);
+    grid.appendChild(card);
+  });
+}
+
+function tripRenderPickerCatalogo(grid) {
+  var lista = data.filter(function(p){ return !p.archived && (p.tags||[]).length; });
+  if (tripBusca) {
+    lista = lista.filter(function(p){ return (p.tags||[]).join(' ').toLowerCase().indexOf(tripBusca) !== -1; });
+  }
+  lista = lista.slice().sort(byNewestFirst).slice(0, 120); // a grade não precisa dos 877 de uma vez
+  grid.className = 'trip-picker-grid fotos';
+  if (!lista.length) { grid.innerHTML = '<div class="trip-picker-vazio">Nada encontrado.</div>'; return; }
+  grid.innerHTML = lista.map(function(p){
+    var sel = tripCatalogo.indexOf(p.id) !== -1;
+    var etq = (p.tags||[]).filter(function(t){ return t.split(':')[0].trim().toLowerCase() !== 'marca'; })
+      .map(function(t){ return t.split(':').slice(1).join(':').trim(); }).slice(0,3).join(' · ');
+    return '<div class="trip-shoe-card' + (sel ? ' sel' : '') + '" onclick="tripToggleCatalogo(' + p.id + ')">'
+      + '<img src="' + tripEsc(lookThumb(p)) + '" alt="" loading="lazy" style="object-fit:cover;aspect-ratio:3/4">'
+      + (sel ? '<div class="trip-shoe-check">✓</div>' : '')
+      + '<div class="trip-shoe-txt"><div class="trip-shoe-name">' + tripEsc(etq) + '</div></div></div>';
+  }).join('');
+}
+
+function tripTogglePeca(id) {
+  var i = tripPecas.indexOf(id);
+  if (i === -1) tripPecas.push(id); else tripPecas.splice(i, 1);
+  tripAtualizarSapatos();
+  tripRenderPicker(); tripRenderEscolhaBar();
+}
+function tripToggleMeu(id) {
+  var i = tripMeus.indexOf(id);
+  if (i === -1) tripMeus.push(id); else tripMeus.splice(i, 1);
+  tripRenderPicker(); tripRenderEscolhaBar();
+}
+function tripToggleCatalogo(id) {
+  var i = tripCatalogo.indexOf(id);
+  if (i === -1) tripCatalogo.push(id); else tripCatalogo.splice(i, 1);
+  tripRenderPicker(); tripRenderEscolhaBar();
+}
+
+function tripRenderEscolhaBar() {
+  var slots = tripNumDays * 2;
+  var looks = tripMeus.length + tripCatalogo.length;
+  var partes = [];
+  if (tripPecas.length) partes.push(tripPecas.length + (tripPecas.length === 1 ? ' peça' : ' peças'));
+  if (tripMeus.length) partes.push(tripMeus.length + (tripMeus.length === 1 ? ' look seu' : ' looks seus'));
+  if (tripCatalogo.length) partes.push(tripCatalogo.length + ' do catálogo');
+  var txt = partes.length ? partes.join(' · ') : 'Nada escolhido ainda';
+
+  var carregando = (tripForecast.length !== tripNumDays);
+  var faltam = Math.max(0, slots - looks);
+  var dica;
+  if (carregando) dica = '';
+  else if (!partes.length) dica = 'escolhe peças, looks seus, ou os dois';
+  else if (faltam === 0) dica = 'seus looks já cobrem os ' + slots + ' looks da viagem';
+  else if (tripPecas.length) dica = 'eu monto os ' + faltam + ' que faltam com as suas peças';
+  else dica = faltam + ' look(s) sem nada — escolhe peças pra eu montar';
+
+  document.getElementById('tripShoeCount').innerHTML = carregando
+    ? 'Buscando o clima do destino…'
+    : (tripEsc(txt) + '<small>' + tripEsc(dica) + '</small>');
+
+  var btn = document.getElementById('tripBuildBtn');
+  btn.disabled = carregando || (!tripPecas.length && !looks);
+  btn.style.opacity = btn.disabled ? '.4' : '';
+}
+
 function tripGoToShoes() {
   var startVal = document.getElementById('tripStartDate').value;
   if (!startVal) { alert('Escolhe a data de início da viagem.'); return; }
@@ -10789,42 +11018,40 @@ function tripGoToShoes() {
   tripStartVal = startVal;
   tripName = (document.getElementById('tripNameInput').value || '').trim();
   tripViewOnly = false;
-  tripShoeIds = [];
   tripPacked = {};
   tripSavedIdx = null; // senão as marcações da mala nova iam parar na mala salva anterior
-  tripRecusadas = [];
+  tripLimparEscolha();
 
   document.getElementById('tripHeaderTitle').textContent = tripName || 'Mala de viagem';
   document.getElementById('tripShoeLead').textContent = 'Buscando o clima do destino…';
-  document.getElementById('tripShoeGrid').innerHTML = '';
+  document.getElementById('tripPickerGrid').innerHTML = '';
+  tripForecast = [];
   tripShowStep(2);
-  tripRenderShoeBar();
+  tripRenderEscolhaBar();
 
   loadTripForecast(new Date(startVal + 'T00:00:00'), tripNumDays).then(function(fc){
     tripForecast = fc;
     tripRenderShoeLead();
-    tripRenderShoeGrid();
+    tripRenderEscolha();
   });
 }
 
 function tripBackToShoes() {
   document.getElementById('tripHeaderTitle').textContent = tripName || 'Mala de viagem';
   tripShowStep(2);
-  tripRenderShoeBar();
+  tripRenderEscolhaBar();
   // Numa mala salva o clima não está carregado (só os dias já montados). Sem
   // rebuscar, "Montar mala" percorreria uma previsão vazia e devolveria 0 dias.
-  if (tripForecast.length === tripNumDays) { tripRenderShoeLead(); tripRenderShoeGrid(); return; }
+  if (tripForecast.length === tripNumDays) { tripRenderShoeLead(); tripRenderEscolha(); return; }
   document.getElementById('tripShoeLead').textContent = 'Buscando o clima do destino…';
-  document.getElementById('tripShoeGrid').innerHTML = '';
+  document.getElementById('tripPickerGrid').innerHTML = '';
+  tripForecast = []; // a de outra viagem não vale, e é ela que deixava montar cedo demais
+  tripRenderEscolhaBar();
   loadTripForecast(new Date(tripStartVal + 'T00:00:00'), tripNumDays).then(function(fc){
     tripForecast = fc;
     tripRenderShoeLead();
-    tripRenderShoeGrid();
+    tripRenderEscolha();
   });
-}
-
-function tripSugestaoDePares() {
-  return Math.max(2, Math.min(4, Math.ceil(tripNumDays / 3) + 1));
 }
 
 function tripRenderShoeLead() {
@@ -10837,48 +11064,9 @@ function tripRenderShoeLead() {
     : (perfil === 'ameno' ? 'clima de meia estação: um fechado e um aberto cobrem tudo'
                           : 'vai fazer calor, sandália rende');
   document.getElementById('tripShoeLead').innerHTML =
-    '<strong>' + tripEsc(onde) + '</strong> · ' + tripEsc(faixa) + ' · ' + tripFonteClimaTexto() + '.<br>'
-    + 'Escolhe os sapatos que vão na mala — ' + tripSugestaoDePares() + ' pares dão conta de ' + tripNumDays + ' dia(s), e '
-    + conselho + '. O resto da mala sai desses pares.';
-}
-
-function tripRenderShoeGrid() {
-  var grid = document.getElementById('tripShoeGrid');
-  var perfil = tripPerfilDominante();
-  var sapatos = piecesByCategory('Shoes').slice().sort(pecaNewestFirst);
-  grid.innerHTML = sapatos.map(function(p){
-    var nota = tripClimaScore(p, perfil);
-    var sel = tripShoeIds.indexOf(p.id) !== -1;
-    var aviso = '';
-    if (nota <= -2) aviso = tripFrio(perfil) ? 'frio demais pra esse' : 'quente demais pra esse';
-    return '<div class="trip-shoe-card' + (sel ? ' sel' : '') + (nota <= -2 && !sel ? ' fora' : '') + '" onclick="tripToggleShoe(\'' + p.id + '\')">'
-      + '<img src="' + tripEsc(p.img) + '" alt="' + tripEsc(p.name) + '" loading="lazy">'
-      + (sel ? '<div class="trip-shoe-check">✓</div>' : '')
-      + '<div class="trip-shoe-txt">'
-      + '<div class="trip-shoe-brand">' + tripEsc(p.brand) + '</div>'
-      + '<div class="trip-shoe-name">' + tripEsc(p.name) + '</div>'
-      + (aviso ? '<div class="trip-shoe-aviso">' + aviso + '</div>' : '')
-      + '</div></div>';
-  }).join('');
-}
-
-function tripToggleShoe(id) {
-  var i = tripShoeIds.indexOf(id);
-  if (i === -1) tripShoeIds.push(id); else tripShoeIds.splice(i, 1);
-  tripRenderShoeGrid();
-  tripRenderShoeBar();
-}
-
-function tripRenderShoeBar() {
-  var n = tripShoeIds.length;
-  var sugerido = tripSugestaoDePares();
-  var txt = n === 0 ? 'Nenhum par escolhido' : (n + (n === 1 ? ' par' : ' pares'));
-  var dica = n === 0 ? ('sugestão: ' + sugerido + ' pra ' + tripNumDays + ' dia(s)')
-    : (n > sugerido ? 'dá pra viajar com menos' : 'pros ' + tripNumDays + ' dia(s) da viagem');
-  document.getElementById('tripShoeCount').innerHTML = tripEsc(txt) + '<small>' + tripEsc(dica) + '</small>';
-  var btn = document.getElementById('tripBuildBtn');
-  btn.disabled = (n === 0);
-  btn.style.opacity = n === 0 ? '.4' : '';
+    '<strong>' + tripEsc(onde) + '</strong> · ' + tripEsc(faixa) + ' · ' + tripFonteClimaTexto() + ' · ' + conselho + '.<br>'
+    + 'Escolhe o que vai na mala: peças, looks que você salvou, fotos do catálogo — o que quiser, misturado. '
+    + 'São ' + (tripNumDays * 2) + ' looks (dia e noite dos ' + tripNumDays + ' dias); os que você não escolher, eu monto com as peças que você marcou.';
 }
 
 // Por que a cápsula é escolhida assim 
@@ -10987,26 +11175,27 @@ function tripNotaOcasiao(p) {
   return 0.3;
 }
 
-// A cápsula: o conjunto fechado de peças que vai na mala 
-// Aqui está a diferença pra versão antiga. Em vez de escolher um look por dia e
-// somar tudo o que apareceu, primeiro se fecha a lista de peças — dimensionada
-// pelos dias, não pelos looks — e só depois ela é distribuída pelos dias. É o
-// que faz a mala caber.
-function tripAlvosDaCapsula(perfil) {
-  var looks = tripNumDays * 2; // dia e noite
-  var frio = tripFrio(perfil);
-  return {
-    Bottoms: Math.max(3, Math.min(7, Math.ceil(tripNumDays * 0.8))),
-    Tops: Math.max(4, Math.min(11, Math.ceil(looks * 0.75))),
-    Outerwear: frio ? (tripNumDays > 3 ? 2 : 1) : (perfil === 'ameno' ? 1 : 0),
-    Bags: tripNumDays <= 2 ? 1 : 2,
-    Jewelry: 1,
-    Accessories: frio ? 1 : 0
-  };
+// Os looks dela vêm primeiro 
+// Três rodadas mexendo em quem escolhe as peças e ela continuou não gostando.
+// O que eu não tinha olhado: ela tem 21 looks salvos (fora os de casa), todos
+// completos, e a mala ignorava os 21 pra montar do zero. Em toda outra tela do
+// app ela vê look de verdade; só aqui via look montado por robô.
+// Agora a mala usa os looks dela que batem com os sapatos escolhidos, e só monta
+// do zero pra completar os dias que sobrarem.
+
+function tripPecasDoMontado(m) {
+  return (m.pieceIds || []).map(findPieceById).filter(Boolean);
 }
 
-// Duas peças quase iguais na mala é espaço jogado fora — e ela tem pares
-// repetidos no armário (duas sandálias Chanel de corrente, por exemplo).
+// Quanto o look tem cara de noite: média de quantas peças são "mais arrumadas".
+function tripDressyDoLook(pecas) {
+  if (!pecas.length) return 0;
+  return pecas.filter(function(p){ return inferOccasion(p) === 'dressy'; }).length / pecas.length;
+}
+
+// Serve para esta viagem: é dela, não é de casa, está completo, calça um dos
+// sapatos que ela escolheu — e nenhum outro, senão a mala ganharia um par que
+// ela não pediu — e não briga com o clima do destino.
 function tripQuaseIgual(a, b) {
   if (!a || !b || a.category !== b.category) return false;
   if ((a.color || '').toLowerCase() !== (b.color || '').toLowerCase()) return false;
@@ -11040,7 +11229,6 @@ function tripEscolherPraCapsula(cat, n, perfil, sapatos, jaNaCapsula) {
         + fatorDeRodizioDaPeca(p) * 0.6
         + Math.random() * 0.8;
       if (tripEhDeCasa(p)) nota -= 5;                                  // moletom não vai pra viagem
-      if (tripRecusadas.indexOf(p.id) !== -1) nota -= 20;              // "não gostei, faz outra"
       var tipo = tripTipoDaPeca(p);
       var repetidas = out.filter(function(q){ return tripTipoDaPeca(q) === tipo; }).length;
       nota -= repetidas * 2.5;                                         // não é pra levar 4 camisas
@@ -11051,26 +11239,6 @@ function tripEscolherPraCapsula(cat, n, perfil, sapatos, jaNaCapsula) {
     out.push(melhor);
   }
   return out;
-}
-
-function tripMontarCapsula() {
-  var perfil = tripPerfilDominante();
-  var sapatos = tripShoeIds.map(findPieceById).filter(Boolean);
-  var alvos = tripAlvosDaCapsula(perfil);
-  var escolhidas = sapatos.slice();
-  // Ordem importa: a calça/saia entra primeiro porque é a peça que mais amarra o
-  // resto do look, e as seguintes já são escolhidas pra fechar com ela.
-  ['Bottoms','Tops','Outerwear','Bags','Jewelry','Accessories'].forEach(function(cat){
-    var novas = tripEscolherPraCapsula(cat, alvos[cat] || 0, perfil, sapatos, escolhidas);
-    escolhidas = escolhidas.concat(novas);
-  });
-  tripCapsule = escolhidas.map(function(p){ return p.id; });
-  escolhidas.forEach(function(p){ contarPecaNoMontador(p.id); anotarPecaMostrada(p.id); });
-  salvarRodizioDePecas();
-}
-
-function tripCapsulaPorCategoria(cat) {
-  return tripCapsule.map(findPieceById).filter(function(p){ return p && p.category === cat; });
 }
 
 // Distribuir a cápsula pelos dias 
@@ -11136,80 +11304,181 @@ function tripMontarLook(f, turno, uso, evitarIds) {
 
 var tripUso = {};
 
-function tripDistribuirPelosDias() {
+// Montar a mala com o que ela escolheu 
+// A regra é uma só: nada entra na mala sem ela ter escolhido. Os looks que ela
+// marcou ocupam os dias; os dias que sobram eu monto combinando as peças que ela
+// marcou. Se faltar categoria pra fechar um look, eu digo o que falta em vez de
+// buscar no armário — e aí ela decide se manda completar.
+var tripAutoAdicionadas = [];  // peças que o app pôs por conta, quando ela pede pra completar
+
+function tripCapsulaPorCategoria(cat) {
+  return tripCapsule.map(findPieceById).filter(function(p){ return p && p.category === cat; });
+}
+
+function tripLookDoMontado(id) {
+  var m = montagens.find(function(x){ return x.id === id; });
+  return m ? (m.pieceIds || []).slice() : [];
+}
+
+// Espalha os looks escolhidos pelos dias: os mais arrumados ficam com as noites.
+function tripEncaixarEscolhidos(perfil) {
+  var noites = [], dias = [];
+  tripForecast.forEach(function(f, i){ dias.push(i + '|dia'); noites.push(i + '|noite'); });
+  noites = shuffledCopy(noites); dias = shuffledCopy(dias);
+
+  var meus = tripMeus.map(function(id){
+    var m = montagens.find(function(x){ return x.id === id; });
+    if (!m) return null;
+    var pecas = tripPecasDoMontado(m);
+    return { tipo: 'meu', id: id, pecas: pecas, dressy: tripDressyDoLook(pecas) };
+  }).filter(Boolean);
+
+  var doCatalogo = tripCatalogo.map(function(id){
+    var l = data.find(function(p){ return p.id === id; });
+    if (!l) return null;
+    var t = (l.tags || []).join(' ').toLowerCase();
+    return { tipo: 'catalogo', id: id, pecas: [], dressy: RE_LOOK_DE_NOITE.test(t) ? 1 : 0 };
+  }).filter(Boolean);
+
+  var todos = shuffledCopy(meus.concat(doCatalogo));
+  var paraNoite = todos.slice().sort(function(a,b){ return b.dressy - a.dressy; });
+  var porSlot = {}, pecas = [], usados = {};
+
+  function encaixar(lista, slots) {
+    lista.forEach(function(x){
+      if (!slots.length || usados[x.tipo + x.id]) return;
+      var slot = slots.shift();
+      porSlot[slot] = { tipo: x.tipo, id: x.id };
+      usados[x.tipo + x.id] = 1;
+      x.pecas.forEach(function(p){ if (pecas.indexOf(p) === -1) pecas.push(p); });
+    });
+  }
+  var metade = Math.ceil(todos.length / 2);
+  encaixar(paraNoite.slice(0, metade), noites);
+  encaixar(todos.slice().sort(function(a,b){ return a.dressy - b.dressy; }), dias);
+  encaixar(paraNoite, noites);
+  return { porSlot: porSlot, pecas: pecas };
+}
+
+// O que falta na cápsula pra conseguir fechar um look completo.
+function tripFaltaPraMontar() {
+  return ['Tops','Bottoms','Shoes'].filter(function(c){ return !tripCapsulaPorCategoria(c).length; });
+}
+
+function tripMontarPlano() {
+  var perfil = tripPerfilDominante();
+  var escolhidos = tripEncaixarEscolhidos(perfil);
+
+  // A cápsula é exatamente o que ela escolheu: as peças marcadas, as peças dos
+  // looks dela, e só o que ela mandou completar depois.
+  var ids = [];
+  tripPecas.forEach(function(id){ if (ids.indexOf(id) === -1) ids.push(id); });
+  escolhidos.pecas.forEach(function(p){ if (ids.indexOf(p.id) === -1) ids.push(p.id); });
+  tripAutoAdicionadas.forEach(function(id){ if (ids.indexOf(id) === -1) ids.push(id); });
+  tripCapsule = ids;
+  tripAtualizarSapatos();
+
+  tripDistribuirPelosDias(escolhidos.porSlot);
+
+  var usadas = {};
+  tripDays.forEach(function(d){ (d.dia||[]).concat(d.noite||[]).forEach(function(id){ usadas[id] = 1; }); });
+  tripCapsule.map(findPieceById).filter(Boolean).forEach(function(p){
+    if (usadas[p.id]) { contarPecaNoMontador(p.id); anotarPecaMostrada(p.id); }
+  });
+  salvarRodizioDePecas();
+}
+
+function tripDistribuirPelosDias(porSlot) {
+  porSlot = porSlot || {};
   tripUso = {};
-  var feitos = [];      // todos os looks já montados, pra nenhum sair repetido
-  var ultimoLook = [];  // o de antes, pra também não sair parecido em seguida
-  tripDays = tripForecast.map(function(f){
+  var feitos = [];
+  var ultimoLook = [];
+  var podeMontar = !tripFaltaPraMontar().length;
+
+  // Os looks escolhidos entram na lista de "já feitos" antes de tudo, senão o
+  // look que eu montar pode sair igual a um deles.
+  Object.keys(porSlot).forEach(function(k){
+    if (porSlot[k].tipo === 'meu') feitos.push(tripLookDoMontado(porSlot[k].id));
+  });
+
+  function doSlot(f, i, turno, evitar) {
+    var esc = porSlot[i + '|' + turno];
+    if (esc && esc.tipo === 'meu') {
+      var ids = tripLookDoMontado(esc.id);
+      ids.forEach(function(id){ tripUso[id] = (tripUso[id] || 0) + 1; });
+      return { ids: ids, tipo: 'meu', ref: esc.id };
+    }
+    if (esc && esc.tipo === 'catalogo') return { ids: [], tipo: 'catalogo', ref: esc.id };
+    if (!podeMontar) return { ids: [], tipo: 'vazio', ref: null };
+    return { ids: tripMontarLookDiferente(f, turno, tripUso, evitar, feitos), tipo: 'montado', ref: null };
+  }
+
+  tripDays = tripForecast.map(function(f, i){
     var d = {
       date: f.date, day: f.day, dateLabel: f.dateLabel,
       temp: f.temp, cond: f.cond, profile: f.profile, estimated: f.estimated
     };
-    d.dia = tripMontarLookDiferente(f, 'dia', tripUso, ultimoLook.slice(), feitos);
-    feitos.push(d.dia);
-    d.noite = tripMontarLookDiferente(f, 'noite', tripUso, d.dia.concat(ultimoLook), feitos);
-    feitos.push(d.noite);
-    ultimoLook = d.noite.slice();
+    var a = doSlot(f, i, 'dia', ultimoLook.slice());
+    d.dia = a.ids; d.diaTipo = a.tipo; d.diaRef = a.ref;
+    if (a.ids.length) feitos.push(a.ids);
+    var b = doSlot(f, i, 'noite', d.dia.concat(ultimoLook));
+    d.noite = b.ids; d.noiteTipo = b.tipo; d.noiteRef = b.ref;
+    if (b.ids.length) feitos.push(b.ids);
+    ultimoLook = b.ids.length ? b.ids.slice() : d.dia.slice();
     return d;
   });
 }
 
-// Ela olhou a mala e não gostou de nada. Sem isto, a única saída era voltar e
-// escolher outros sapatos — que não era o problema. Guarda tudo o que estava na
-// mala como recusado e monta de novo; a penalidade de -20 na nota garante que
-// venha outra seleção de verdade, não a mesma embaralhada.
-function tripNaoGostei() {
-  if (!tripCapsule.length || tripViewOnly) return;
-  tripCapsule.forEach(function(id){
-    if (tripShoeIds.indexOf(id) !== -1) return; // os sapatos são escolha dela, ficam
-    if (tripRecusadas.indexOf(id) === -1) tripRecusadas.push(id);
-  });
-  var antes = tripCapsule.slice();
-  tripMontarCapsula();
-  tripDistribuirPelosDias();
-  tripPacked = {};
-  tripRenderResultado();
-  var novas = tripCapsule.filter(function(id){ return antes.indexOf(id) === -1; }).length;
-  document.getElementById('tripModal').scrollTop = 0;
-  showSavedToast(novas ? ('Outra mala — ' + novas + ' peças novas.') : 'Já mostrei quase tudo o que serve pra esse clima.');
-}
-
-// Trocar uma peça só, sem mexer no resto: tira ela da mala, marca como recusada
-// e põe a melhor da mesma categoria no lugar. Os looks são redistribuídos.
-function tripTrocarPeca(id) {
-  if (tripViewOnly) return;
-  var p = findPieceById(id);
-  if (!p) return;
-  if (tripShoeIds.indexOf(id) !== -1) { tripBackToShoes(); return; } // sapato se troca no passo dos sapatos
-  if (tripRecusadas.indexOf(id) === -1) tripRecusadas.push(id);
-  var pos = tripCapsule.indexOf(id);
-  if (pos !== -1) tripCapsule.splice(pos, 1);
-  delete tripPacked[id];
+// Ela pediu pra completar: busca o mínimo pra fechar os looks que faltam, e o
+// que entrar fica marcado na lista como escolha minha, não dela.
+function tripCompletarDoArmario() {
   var perfil = tripPerfilDominante();
+  var falta = tripFaltaPraMontar();
+  if (!falta.length) return;
+  var jaEscolhidas = tripCapsule.map(findPieceById).filter(Boolean);
   var sapatos = tripShoeIds.map(findPieceById).filter(Boolean);
-  var resto = tripCapsule.map(findPieceById).filter(Boolean);
-  var nova = tripEscolherPraCapsula(p.category, 1, perfil, sapatos, resto)[0];
-  if (nova) tripCapsule.push(nova.id);
-  tripDistribuirPelosDias();
+  falta.forEach(function(cat){
+    var novas = tripEscolherPraCapsula(cat, 1, perfil, sapatos, jaEscolhidas);
+    novas.forEach(function(p){
+      if (tripAutoAdicionadas.indexOf(p.id) === -1) tripAutoAdicionadas.push(p.id);
+      jaEscolhidas.push(p);
+    });
+  });
+  tripMontarPlano();
   tripRenderResultado();
-  showSavedToast(nova ? ('Troquei por ' + tripNomeCurto(nova) + '.') : 'Sem outra peça dessa categoria que sirva.');
+  showSavedToast('Completei com ' + tripAutoAdicionadas.length + ' peça(s) — estão marcadas na lista.');
 }
 
 function tripBuild() {
-  if (!tripShoeIds.length) return;
+  if (!tripPecas.length && !tripMeus.length && !tripCatalogo.length) return;
+  // A previsão chega depois da tela da escolha. Sem esta guarda dava pra montar
+  // antes de ela chegar, e a mala saía com os dias da viagem anterior.
+  if (tripForecast.length !== tripNumDays) {
+    showSavedToast('Só um instante — ainda estou buscando o clima do destino.');
+    return;
+  }
   tripViewOnly = false;
   tripPacked = {};
   tripSavedIdx = null;
-  tripMontarCapsula();
-  tripDistribuirPelosDias();
+  tripAutoAdicionadas = [];
+  tripMontarPlano();
   tripRenderResultado();
   tripShowStep(3);
 }
-
 // Dois looks são "o mesmo look" quando as peças que o definem são as mesmas.
 // Bolsa, joia e cinto não contam: ela apontou como repetido um par de noites em
 // que a única diferença era o colar — e estava certa, é o mesmo look.
+var TRIP_CAT_ORDEM = ['Shoes','Bottoms','Tops','Outerwear','Bags','Jewelry','Accessories'];
+var TRIP_CAT_PT = { Shoes: 'sapatos', Bottoms: 'calças e saias', Tops: 'blusas', Outerwear: 'casacos',
+  Bags: 'bolsas', Jewelry: 'joias', Accessories: 'acessórios' };
 var TRIP_CATS_QUE_DEFINEM = ['Tops', 'Bottoms', 'Shoes', 'Outerwear'];
+// No aviso do que falta, o plural da lista fica torto ("falta calças e saias e
+// sapatos"). Aqui vale o singular.
+var TRIP_FALTA_PT = { Tops: 'blusa', Bottoms: 'calça ou saia', Shoes: 'sapato' };
+function tripTextoDoQueFalta() {
+  var f = tripFaltaPraMontar().map(function(c){ return TRIP_FALTA_PT[c] || c; });
+  return f.length > 1 ? (f.slice(0, -1).join(', ') + ' e ' + f[f.length - 1]) : (f[0] || '');
+}
 
 function tripAssinaturaDoLook(ids) {
   return (ids || []).map(findPieceById)
@@ -11228,12 +11497,20 @@ function tripLooksIguais(a, b) {
 // devolve a primeira tentativa em vez de travar.
 function tripMontarLookDiferente(f, turno, uso, evitar, proibidos) {
   var primeira = null;
+  var bloqueio = (evitar || []).slice();
   for (var t = 0; t < 10; t++) {
-    var ids = tripMontarLook(f, turno, uso, evitar);
+    var ids = tripMontarLook(f, turno, uso, bloqueio);
     if (!primeira) primeira = ids;
     var repetido = (proibidos || []).some(function(o){ return tripLooksIguais(ids, o); });
     if (!repetido) return ids;
     ids.forEach(function(id){ if (uso[id]) uso[id]--; }); // desfaz a contagem da tentativa descartada
+    // Repetir com a mesma proibição devolvia sempre o mesmo look: a nota é
+    // concentrada e o sorteio de desempate não vira o resultado. Cada tentativa
+    // frustrada tira mais uma peça de circulação, alternando blusa e calça.
+    var pecas = ids.map(findPieceById).filter(Boolean);
+    var alvo = pecas.filter(function(p){ return p.category === ((t % 2 === 0) ? 'Tops' : 'Bottoms'); })[0]
+            || pecas.filter(function(p){ return p.category === 'Tops' || p.category === 'Bottoms'; })[0];
+    if (alvo && bloqueio.indexOf(alvo.id) === -1) bloqueio.push(alvo.id);
   }
   primeira.forEach(function(id){ uso[id] = (uso[id] || 0) + 1; });
   return primeira;
@@ -11250,13 +11527,60 @@ function tripTodosOsLooks(exceto) {
   return lista;
 }
 
+// "Não gostei": remonta os dias que EU montei, sem tocar no que ela escolheu.
+// Os looks e as peças que ela marcou continuam na mala — recusá-los seria
+// desfazer justamente a escolha dela.
+function tripNaoGostei() {
+  if (!tripDays.length || tripViewOnly) return;
+  var montadosPorMim = tripDays.filter(function(d){
+    return d.diaTipo === 'montado' || d.noiteTipo === 'montado';
+  }).length;
+  if (!montadosPorMim) {
+    showSavedToast('Todos os looks são escolha sua — pra mudar, use "Mudar o que vai".');
+    return;
+  }
+  var antes = tripDays.map(function(d){ return tripAssinaturaDoLook(d.dia) + '/' + tripAssinaturaDoLook(d.noite); }).join('|');
+  tripMontarPlano();
+  tripRenderResultado();
+  document.getElementById('tripModal').scrollTop = 0;
+  var depois = tripDays.map(function(d){ return tripAssinaturaDoLook(d.dia) + '/' + tripAssinaturaDoLook(d.noite); }).join('|');
+  showSavedToast(antes !== depois
+    ? 'Remontei os looks que eram meus.'
+    : 'Com essas peças não sai combinação diferente — escolhe mais alguma em "Mudar o que vai".');
+}
+
+// Tirar uma peça da mala pela lista. Ela escolheu, ela desescolhe: some da mala
+// e os looks que eu montei são refeitos sem ela.
+function tripTrocarPeca(id) {
+  if (tripViewOnly) return;
+  var p = findPieceById(id);
+  if (!p) return;
+  var i = tripPecas.indexOf(id);
+  if (i !== -1) tripPecas.splice(i, 1);
+  var j = tripAutoAdicionadas.indexOf(id);
+  if (j !== -1) tripAutoAdicionadas.splice(j, 1);
+  delete tripPacked[id];
+  var deLook = tripMeus.some(function(mid){ return tripLookDoMontado(mid).indexOf(id) !== -1; });
+  if (deLook) {
+    showSavedToast('Essa peça faz parte de um look seu. Pra tirar, tire o look em "Mudar o que vai".');
+    return;
+  }
+  tripAtualizarSapatos();
+  tripMontarPlano();
+  tripRenderResultado();
+  showSavedToast('Tirei ' + tripNomeCurto(p) + ' da mala.');
+}
+
 // Trocar um look sem mexer no resto da mala: remonta só aquele turno, e só com
-// as peças que já estão na cápsula — a lista pra levar não muda.
-// Ela pediu pra trocar a noite do dia 2 e veio a noite do dia 1: o `evitar` só
-// olhava para o próprio dia, então nada impedia de cair num look de outro dia.
+// as peças que ela escolheu. A lista da mala não muda.
+// O botão só aparece nos turnos que eu montei — look escolhido por ela é dela,
+// e pra tirar existe "Mudar o que vai".
 function tripRerollTurno(diaIdx, turno) {
   var d = tripDays[diaIdx];
   if (!d || tripViewOnly) return;
+  var tipo = d[turno === 'dia' ? 'diaTipo' : 'noiteTipo'];
+  if (tipo !== 'montado') return;
+
   var anterior = (d[turno] || []).slice();
   anterior.forEach(function(id){ if (tripUso[id]) tripUso[id]--; });
 
@@ -11264,24 +11588,37 @@ function tripRerollTurno(diaIdx, turno) {
   var vizinho = (turno === 'noite') ? (d.dia || []) : (d.noite || []);
   // As peças do look que está saindo entram no `evitar`. Sem isso a escolha
   // devolvia exatamente ele de novo: a nota é quase a mesma toda vez, e o
-  // sorteio de desempate não dá conta de virar o resultado. "Trocar" tem que
-  // trocar; onde não houver alternativa, o próprio tripEscolherDoLook relaxa.
+  // sorteio de desempate não dá conta de virar o resultado.
   var evitar = vizinho.concat(anterior);
   d[turno] = tripMontarLookDiferente(d, turno, tripUso, evitar, outros.concat([anterior]));
 
   tripRenderDays();
   if (tripLooksIguais(d[turno], anterior)) {
-    showSavedToast('A mala é pequena demais pra outra combinação aqui — troque uma peça na lista, ou use "Não gostei, faz outra".');
+    showSavedToast('Com as peças que você escolheu não sai outra combinação aqui — escolhe mais alguma em "Mudar o que vai".');
   }
 }
-
 // Resultado 
 function tripRenderResultado() {
   document.getElementById('tripHeaderTitle').textContent = tripName || 'Mala de viagem';
   var onde = tripDest ? (' · ' + tripEsc(tripDest.nome)) : '';
+  var seus = 0, meus = 0, vazios = 0;
+  tripDays.forEach(function(d){
+    [d.diaTipo, d.noiteTipo].forEach(function(t){
+      if (t === 'meu' || t === 'catalogo') seus++;
+      else if (t === 'montado') meus++;
+      else vazios++;
+    });
+  });
+  var totalLooks = tripDays.length * 2;
+  var linha = '<strong>' + seus + ' dos ' + totalLooks + ' looks são escolha sua</strong>';
+  if (meus) linha += ' · ' + meus + ' eu montei com as suas peças';
+  if (vazios) linha += ' · <span style="color:var(--accent);">' + vazios + ' sem look, falta '
+    + tripEsc(tripTextoDoQueFalta()) + '</span>';
   document.getElementById('tripSubtitle').innerHTML =
     tripDays.length + ' dia(s)' + onde + ' · ' + TRIP_OCASIAO_LABEL[tripOcasiao] + ' · ' + tripFonteClimaTexto()
-    + (tripViewOnly ? ' · mala salva' : '');
+    + '<br>' + linha + (tripViewOnly ? ' · mala salva' : '');
+  var btnComp = document.getElementById('tripCompletarBtn');
+  if (btnComp) btnComp.style.display = (vazios && !tripViewOnly) ? 'inline-block' : 'none';
   document.getElementById('tripSaveBtn').style.display = tripViewOnly ? 'none' : 'inline-block';
   document.getElementById('tripShoesAgainBtn').style.display = tripViewOnly ? 'none' : 'inline-block';
   document.getElementById('tripNaoGosteiBtn').style.display = tripViewOnly ? 'none' : 'inline-block';
@@ -11294,9 +11631,14 @@ function tripNomeCurto(p) {
   return (p.name || '').replace(/\b(leather|suede|canvas|cotton|patterned)\b/gi, '').replace(/\s+/g, ' ').trim() || p.name;
 }
 
+// Cada dia tem dois turnos, e cada turno pode ser quatro coisas: um look que ela
+// salvou, uma foto do catálogo que ela escolheu, um look que eu montei com as
+// peças dela, ou nada — quando o que ela escolheu não fecha um look.
 function tripRenderDays() {
   var list = document.getElementById('tripDayList');
   list.innerHTML = '';
+  var falta = tripFaltaPraMontar();
+
   tripDays.forEach(function(d, idx){
     var card = document.createElement('div');
     card.className = 'trip-day';
@@ -11311,31 +11653,60 @@ function tripRenderDays() {
     turnos.className = 'trip-turnos';
     [['dia','Dia'], ['noite','Noite']].forEach(function(t){
       var chave = t[0];
+      var tipo = d[chave === 'dia' ? 'diaTipo' : 'noiteTipo'];
+      var ref  = d[chave === 'dia' ? 'diaRef'  : 'noiteRef'];
       var box = document.createElement('div');
       box.className = 'trip-turno';
 
+      var selo = '';
+      if (tipo === 'meu') {
+        var m = montagens.find(function(x){ return x.id === ref; });
+        selo = '<span class="trip-seu-look" title="' + tripEsc((m && m.name) || 'Look que você salvou') + '">seu look</span>';
+      } else if (tipo === 'catalogo') {
+        selo = '<span class="trip-seu-look">sua foto</span>';
+      }
+
       var th = document.createElement('div');
       th.className = 'trip-turno-hdr';
-      th.innerHTML = '<span class="trip-turno-label">' + t[1] + '</span>';
-      if (!tripViewOnly) {
+      th.innerHTML = '<span class="trip-turno-label">' + t[1] + selo + '</span>';
+      if (!tripViewOnly && tipo === 'montado') {
         var b = document.createElement('button');
         b.className = 'trip-turno-btn';
         b.textContent = 'trocar';
-        b.title = 'Monta outro look com as mesmas peças da mala';
+        b.title = 'Monta outro look com as peças que você escolheu';
         b.onclick = (function(i, k){ return function(){ tripRerollTurno(i, k); }; })(idx, chave);
         th.appendChild(b);
       }
       box.appendChild(th);
 
-      var canvas = document.createElement('div');
-      box.appendChild(canvas);
-      var pecas = (d[chave] || []).map(findPieceById).filter(Boolean);
-      renderFlatLay(canvas, pecas, { zoomable: true, emptyMessage: 'sem peça' });
-
-      var legenda = document.createElement('div');
-      legenda.className = 'trip-turno-list';
-      legenda.textContent = pecas.map(tripNomeCurto).join(' · ');
-      box.appendChild(legenda);
+      if (tipo === 'catalogo') {
+        var look = data.find(function(p){ return p.id === ref; });
+        var img = document.createElement('img');
+        img.className = 'trip-foto-look';
+        img.src = look ? lookThumb(look) : '';
+        img.loading = 'lazy';
+        if (look) { applyRotation(img, look); img.onclick = function(){ openZoom(lookThumb(look), look.tags||[], getRotation(look), look.id); }; }
+        box.appendChild(img);
+        var leg = document.createElement('div');
+        leg.className = 'trip-turno-list';
+        leg.textContent = look ? (look.tags||[]).filter(function(x){ return x.split(':')[0].trim().toLowerCase() !== 'marca'; })
+          .map(function(x){ return x.split(':').slice(1).join(':').trim(); }).join(' · ') : '';
+        box.appendChild(leg);
+      } else if (tipo === 'vazio') {
+        var vazio = document.createElement('div');
+        vazio.className = 'trip-turno-vazio';
+        vazio.innerHTML = 'Sem look aqui.<br><small>Falta ' + tripEsc(tripTextoDoQueFalta()) + ' entre o que você escolheu.</small>';
+        box.appendChild(vazio);
+      } else {
+        var canvas = document.createElement('div');
+        box.appendChild(canvas);
+        var pecas = (d[chave] || []).map(findPieceById).filter(Boolean);
+        renderFlatLay(canvas, pecas, { zoomable: true, emptyMessage: 'sem peça' });
+        var legenda = document.createElement('div');
+        legenda.className = 'trip-turno-list';
+        legenda.textContent = pecas.map(tripNomeCurto).join(' · ');
+        box.appendChild(legenda);
+      }
 
       turnos.appendChild(box);
     });
@@ -11344,17 +11715,15 @@ function tripRenderDays() {
   });
 }
 
-var TRIP_CAT_ORDEM = ['Shoes','Bottoms','Tops','Outerwear','Bags','Jewelry','Accessories'];
-var TRIP_CAT_PT = { Shoes: 'sapatos', Bottoms: 'calças e saias', Tops: 'blusas', Outerwear: 'casacos', Bags: 'bolsas', Jewelry: 'joias', Accessories: 'acessórios' };
-
 function tripRenderPackList() {
   var box = document.getElementById('tripPackList');
   var pecas = tripCapsule.map(findPieceById).filter(Boolean);
   var guardadas = pecas.filter(function(p){ return tripPacked[p.id]; }).length;
+  var fotos = tripCatalogo.map(function(id){ return data.find(function(p){ return p.id === id; }); }).filter(Boolean);
 
   var html = '<div class="trip-pack-title"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M9 7V4h6v3M3 13.5h18"/></svg> O que vai na mala</div>'
     + '<div class="trip-pack-sub">' + pecas.length + ' peças pros ' + tripDays.length + ' dia(s)'
-    + (guardadas ? ' · ' + guardadas + ' já na mala' : ' · toca na foto conforme for guardando, ou em "trocar" pra pedir outra') + '</div>';
+    + (guardadas ? ' · ' + guardadas + ' já na mala' : ' · toca na foto conforme for guardando') + '</div>';
 
   if (!pecas.length) {
     html += '<div class="trip-pack-sub">Nenhuma peça ainda.</div>';
@@ -11365,17 +11734,33 @@ function tripRenderPackList() {
       html += '<div class="trip-pack-cat">' + (TRIP_CAT_PT[cat] || cat) + ' (' + doCat.length + ')</div>'
         + '<div class="trip-pack-grid">'
         + doCat.map(function(p){
+            var minha = tripAutoAdicionadas.indexOf(p.id) !== -1;
+            var deLook = tripPecas.indexOf(p.id) === -1 && !minha;
             return '<div class="trip-pack-cell">'
               + '<div class="trip-pack-piece' + (tripPacked[p.id] ? ' packed' : '') + '" onclick="tripTogglePacked(\'' + p.id + '\')">'
               + '<img src="' + tripEsc(p.img) + '" alt="' + tripEsc(p.name) + '" loading="lazy">'
               + '<div class="trip-pack-piece-check">✓</div>'
+              + (minha ? '<div class="trip-pack-marca" title="Entrou por minha conta quando você mandou completar">eu pus</div>' : '')
+              + (deLook ? '<div class="trip-pack-marca clara" title="Faz parte de um look seu">do seu look</div>' : '')
               + '<div class="trip-pack-lbl">' + tripEsc(tripNomeCurto(p)) + '</div>'
               + '</div>'
-              + '<button class="trip-pack-trocar" onclick="event.stopPropagation();tripTrocarPeca(\'' + p.id + '\')">trocar</button>'
+              + (deLook ? '' : '<button class="trip-pack-trocar" onclick="event.stopPropagation();tripTrocarPeca(\'' + p.id + '\')">tirar</button>')
               + '</div>';
           }).join('')
         + '</div>';
     });
+  }
+
+  // Fotos do catálogo não têm peça por dentro: entram como lembrete de texto,
+  // separadas, pra não parecer que estão na conta das peças.
+  if (fotos.length) {
+    html += '<div class="trip-pack-cat">fotos do catálogo (' + fotos.length + ')</div>'
+      + '<div class="trip-pack-sub" style="margin-bottom:6px;">Essas são foto de look inteiro, sem peça por dentro — não dá pra listar nem marcar peça a peça.</div>'
+      + fotos.map(function(l){
+          var etq = (l.tags||[]).filter(function(t){ return t.split(':')[0].trim().toLowerCase() !== 'marca'; })
+            .map(function(t){ return t.split(':').slice(1).join(':').trim(); }).join(' · ');
+          return '<div class="trip-pack-foto-item">' + tripEsc(etq) + '</div>';
+        }).join('');
   }
   box.innerHTML = html;
 }
@@ -11401,12 +11786,17 @@ function tripEntradaAtual() {
     ocasiao: tripOcasiao,
     fonteClima: tripFonteClima,
     shoeIds: tripShoeIds.slice(),
+    pecas: tripPecas.slice(),
+    meus: tripMeus.slice(),
+    catalogo: tripCatalogo.slice(),
+    autoAdicionadas: tripAutoAdicionadas.slice(),
     capsule: tripCapsule.slice(),
     packed: Object.keys(tripPacked),
     savedAt: new Date().toISOString(),
     days: tripDays.map(function(d){
       return { day: d.day, dateLabel: d.dateLabel, temp: d.temp, cond: d.cond,
-        profile: d.profile, estimated: !!d.estimated, dia: (d.dia||[]).slice(), noite: (d.noite||[]).slice() };
+        profile: d.profile, estimated: !!d.estimated, dia: (d.dia||[]).slice(), noite: (d.noite||[]).slice(),
+        diaTipo: d.diaTipo, diaRef: d.diaRef || null, noiteTipo: d.noiteTipo, noiteRef: d.noiteRef || null };
     })
   };
 }
@@ -11481,12 +11871,18 @@ function viewSavedTrip(idx) {
   }
 
   tripShoeIds = (t.shoeIds || []).slice();
+  tripPecas = (t.pecas || []).slice();
+  tripMeus = (t.meus || []).slice();
+  tripCatalogo = (t.catalogo || []).slice();
+  tripAutoAdicionadas = (t.autoAdicionadas || []).slice();
   tripCapsule = (t.capsule || []).slice();
   tripPacked = {};
   (t.packed || []).forEach(function(id){ tripPacked[id] = true; });
   tripDays = (t.days || []).map(function(d){
     return { day: d.day, dateLabel: d.dateLabel, temp: d.temp, cond: d.cond,
-      profile: d.profile || 'ameno', estimated: d.estimated, dia: d.dia || [], noite: d.noite || [] };
+      profile: d.profile || 'ameno', estimated: d.estimated, dia: d.dia || [], noite: d.noite || [],
+      diaTipo: d.diaTipo || 'montado', diaRef: d.diaRef || null,
+      noiteTipo: d.noiteTipo || 'montado', noiteRef: d.noiteRef || null };
   });
   tripViewOnly = false;
   tripUso = {};
