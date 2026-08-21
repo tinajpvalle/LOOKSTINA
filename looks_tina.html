@@ -10956,10 +10956,10 @@ function tripRenderPickerCatalogo(grid) {
   grid.className = 'trip-picker-grid fotos';
   if (!lista.length) { grid.innerHTML = '<div class="trip-picker-vazio">Nada encontrado.</div>'; return; }
   grid.innerHTML = lista.map(function(p){
-    var sel = tripCatalogo.indexOf(p.id) !== -1;
+    var sel = tripCatalogo.indexOf(String(p.id)) !== -1;
     var etq = (p.tags||[]).filter(function(t){ return t.split(':')[0].trim().toLowerCase() !== 'marca'; })
       .map(function(t){ return t.split(':').slice(1).join(':').trim(); }).slice(0,3).join(' · ');
-    return '<div class="trip-shoe-card' + (sel ? ' sel' : '') + '" onclick="tripToggleCatalogo(' + p.id + ')">'
+    return '<div class="trip-shoe-card' + (sel ? ' sel' : '') + '" onclick="tripToggleCatalogo(&quot;' + tripEsc(String(p.id)) + '&quot;)">'
       + '<img src="' + tripEsc(lookThumb(p)) + '" alt="" loading="lazy" style="object-fit:cover;aspect-ratio:3/4">'
       + (sel ? '<div class="trip-shoe-check">✓</div>' : '')
       + '<div class="trip-shoe-txt"><div class="trip-shoe-name">' + tripEsc(etq) + '</div></div></div>';
@@ -10978,6 +10978,7 @@ function tripToggleMeu(id) {
   tripRenderPicker(); tripRenderEscolhaBar();
 }
 function tripToggleCatalogo(id) {
+  id = String(id);
   var i = tripCatalogo.indexOf(id);
   if (i === -1) tripCatalogo.push(id); else tripCatalogo.splice(i, 1);
   tripRenderPicker(); tripRenderEscolhaBar();
@@ -11315,6 +11316,10 @@ function tripCapsulaPorCategoria(cat) {
   return tripCapsule.map(findPieceById).filter(function(p){ return p && p.category === cat; });
 }
 
+function tripLookDoCatalogo(id) {
+  return data.find(function(p){ return String(p.id) === String(id); }) || null;
+}
+
 function tripLookDoMontado(id) {
   var m = montagens.find(function(x){ return x.id === id; });
   return m ? (m.pieceIds || []).slice() : [];
@@ -11334,7 +11339,7 @@ function tripEncaixarEscolhidos(perfil) {
   }).filter(Boolean);
 
   var doCatalogo = tripCatalogo.map(function(id){
-    var l = data.find(function(p){ return p.id === id; });
+    var l = tripLookDoCatalogo(id);
     if (!l) return null;
     var t = (l.tags || []).join(' ').toLowerCase();
     return { tipo: 'catalogo', id: id, pecas: [], dressy: RE_LOOK_DE_NOITE.test(t) ? 1 : 0 };
@@ -11680,7 +11685,7 @@ function tripRenderDays() {
       box.appendChild(th);
 
       if (tipo === 'catalogo') {
-        var look = data.find(function(p){ return p.id === ref; });
+        var look = tripLookDoCatalogo(ref);
         var img = document.createElement('img');
         img.className = 'trip-foto-look';
         img.src = look ? lookThumb(look) : '';
@@ -11719,7 +11724,7 @@ function tripRenderPackList() {
   var box = document.getElementById('tripPackList');
   var pecas = tripCapsule.map(findPieceById).filter(Boolean);
   var guardadas = pecas.filter(function(p){ return tripPacked[p.id]; }).length;
-  var fotos = tripCatalogo.map(function(id){ return data.find(function(p){ return p.id === id; }); }).filter(Boolean);
+  var fotos = tripCatalogo.map(tripLookDoCatalogo).filter(Boolean);
 
   var html = '<div class="trip-pack-title"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M9 7V4h6v3M3 13.5h18"/></svg> O que vai na mala</div>'
     + '<div class="trip-pack-sub">' + pecas.length + ' peças pros ' + tripDays.length + ' dia(s)'
@@ -11873,7 +11878,7 @@ function viewSavedTrip(idx) {
   tripShoeIds = (t.shoeIds || []).slice();
   tripPecas = (t.pecas || []).slice();
   tripMeus = (t.meus || []).slice();
-  tripCatalogo = (t.catalogo || []).slice();
+  tripCatalogo = (t.catalogo || []).map(String);
   tripAutoAdicionadas = (t.autoAdicionadas || []).slice();
   tripCapsule = (t.capsule || []).slice();
   tripPacked = {};
