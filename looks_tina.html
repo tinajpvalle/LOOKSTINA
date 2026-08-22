@@ -464,6 +464,12 @@ body.week-pick-mode .card-week-btn { display: block; }
 .trip-seu-look { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: var(--r-sm); background: var(--ink); color: var(--surface); letter-spacing: .06em; }
 .trip-turno-btn { border: 1px solid var(--line-input); background: transparent; color: var(--ink); border-radius: var(--r-sm); cursor: pointer; font-size: .68rem; padding: 2px 7px; font-family: inherit; }
 .trip-turno-btn:hover { border-color: var(--ink); }
+.trip-turno-btn.armado { background: var(--ink); border-color: var(--ink); color: var(--surface); }
+.trip-turno-acoes { display: flex; gap: 4px; }
+.trip-turno.destino { cursor: pointer; background: var(--bg); outline: 1px dashed var(--line-dash); outline-offset: -4px; }
+.trip-turno.destino:hover { outline-color: var(--ink); }
+.trip-turno.arrastando { opacity: .45; }
+.trip-turno.solta-aqui { outline: 1px solid var(--ink); outline-offset: -4px; }
 .trip-turno .flatlay-canvas { max-width: none; border-radius: var(--r-md); }
 .trip-turno-list { font-size: .64rem; color: var(--txt-2); margin-top: 5px; line-height: 1.4; }
 
@@ -11846,6 +11852,71 @@ function tripNomeCurto(p) {
   return (p.name || '').replace(/\b(leather|suede|canvas|cotton|patterned)\b/gi, '').replace(/\s+/g, ' ').trim() || p.name;
 }
 
+// Mover um look de um dia pro outro 
+// Ela pediu o que a semana já faz. A semana usa arrastar do HTML5, que não
+// funciona no Safari do iPhone — e é no iPhone que ela usa o app. Então valem os
+// dois: arrastar no computador, e "mover" + tocar no destino em qualquer lugar.
+// Os dois caem na mesma troca.
+var tripMovendo = null;   // {dia: índice, turno: 'dia'|'noite'} armado pelo toque
+var tripArrastando = null; // idem, pelo arrastar
+
+function tripMesmoSlot(a, b) {
+  return !!a && !!b && a.dia === b.dia && a.turno === b.turno;
+}
+
+// Troca o conteúdo de dois turnos: as peças, o tipo (meu/foto/montado/vazio) e a
+// referência. As peças continuam as mesmas na mala, só mudam de dia — por isso a
+// contagem de uso não precisa mexer.
+function tripTrocarSlots(a, b) {
+  if (!a || !b || tripViewOnly) return;
+  if (tripMesmoSlot(a, b)) { tripMovendo = null; tripRenderDays(); return; }
+  var da = tripDays[a.dia], db = tripDays[b.dia];
+  if (!da || !db) { tripMovendo = null; tripRenderDays(); return; }
+  ['', 'Tipo', 'Ref'].forEach(function(suf){
+    var ca = a.turno + suf, cb = b.turno + suf;
+    var tmp = da[ca]; da[ca] = db[cb]; db[cb] = tmp;
+  });
+  tripMovendo = null;
+  tripRenderResultado();
+  var nome = function(s){ return tripDays[s.dia].day + ' ' + (s.turno === 'dia' ? 'de dia' : 'à noite'); };
+  showSavedToast('Troquei: ' + nome(a) + ' ↔ ' + nome(b) + '.');
+}
+
+function tripMoverSlot(idx, turno) {
+  if (tripViewOnly) return;
+  var slot = { dia: idx, turno: turno };
+  if (tripMesmoSlot(tripMovendo, slot)) { tripMovendo = null; tripRenderDays(); return; }
+  if (tripMovendo) { tripTrocarSlots(tripMovendo, slot); return; }
+  tripMovendo = slot;
+  tripRenderDays();
+  showSavedToast('Agora toca no look com que ele troca de lugar.');
+}
+
+// Arrastar, pro computador. Cai na mesma troca do toque.
+function tripLigarArrastar(box, idx, turno) {
+  if (tripViewOnly) return;
+  box.draggable = true;
+  box.addEventListener('dragstart', function(e){
+    tripArrastando = { dia: idx, turno: turno };
+    box.classList.add('arrastando');
+    if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+  });
+  box.addEventListener('dragend', function(){
+    box.classList.remove('arrastando');
+    tripArrastando = null;
+    document.querySelectorAll('.trip-turno').forEach(function(t){ t.classList.remove('solta-aqui'); });
+  });
+  box.addEventListener('dragover', function(e){ e.preventDefault(); box.classList.add('solta-aqui'); });
+  box.addEventListener('dragleave', function(){ box.classList.remove('solta-aqui'); });
+  box.addEventListener('drop', function(e){
+    e.preventDefault();
+    box.classList.remove('solta-aqui');
+    var de = tripArrastando;
+    tripArrastando = null;
+    if (de) tripTrocarSlots(de, { dia: idx, turno: turno });
+  });
+}
+
 // Cada dia tem dois turnos, e cada turno pode ser quatro coisas: um look que ela
 // salvou, uma foto do catálogo que ela escolheu, um look que eu montei com as
 // peças dela, ou nada — quando o que ela escolheu não fecha um look.
@@ -11884,15 +11955,34 @@ function tripRenderDays() {
       var th = document.createElement('div');
       th.className = 'trip-turno-hdr';
       th.innerHTML = '<span class="trip-turno-label">' + t[1] + selo + '</span>';
+      var acoes = document.createElement('div');
+      acoes.className = 'trip-turno-acoes';
       if (!tripViewOnly && tipo === 'montado') {
         var b = document.createElement('button');
         b.className = 'trip-turno-btn';
         b.textContent = 'trocar';
         b.title = 'Monta outro look com as peças que você escolheu';
-        b.onclick = (function(i, k){ return function(){ tripRerollTurno(i, k); }; })(idx, chave);
-        th.appendChild(b);
+        b.onclick = (function(i, k){ return function(e){ e.stopPropagation(); tripRerollTurno(i, k); }; })(idx, chave);
+        acoes.appendChild(b);
       }
+      if (!tripViewOnly && tipo !== 'vazio') {
+        var mv = document.createElement('button');
+        var armado = tripMesmoSlot(tripMovendo, { dia: idx, turno: chave });
+        mv.className = 'trip-turno-btn' + (armado ? ' armado' : '');
+        mv.textContent = armado ? 'cancelar' : 'mover';
+        mv.title = 'Trocar este look de dia';
+        mv.onclick = (function(i, k){ return function(e){ e.stopPropagation(); tripMoverSlot(i, k); }; })(idx, chave);
+        acoes.appendChild(mv);
+      }
+      th.appendChild(acoes);
       box.appendChild(th);
+
+      // Com um look armado, qualquer outro turno é destino: um toque troca os dois.
+      if (!tripViewOnly && tripMovendo && !tripMesmoSlot(tripMovendo, { dia: idx, turno: chave })) {
+        box.classList.add('destino');
+        box.onclick = (function(i, k){ return function(){ tripTrocarSlots(tripMovendo, { dia: i, turno: k }); }; })(idx, chave);
+      }
+      if (!tripViewOnly && tipo !== 'vazio') tripLigarArrastar(box, idx, chave);
 
       if (tipo === 'catalogo') {
         var look = tripLookDoCatalogo(ref);
