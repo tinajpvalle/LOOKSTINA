@@ -11983,6 +11983,28 @@ function tripTrocarSlots(a, b) {
   showSavedToast('Troquei: ' + nome(a) + ' ↔ ' + nome(b) + '.');
 }
 
+// Ver um look da mala em tela cheia. Reusa o overlay de "Ampliar look" dos Looks
+// Montados, então é a mesma tela e o mesmo fechar em todo o app. Foto do
+// catálogo não é flat lay: essa abre no zoom de foto que o catálogo já usa.
+function tripAmpliarLook(idx, turno) {
+  var d = tripDays[idx];
+  if (!d) return;
+  var tipo = d[turno === 'dia' ? 'diaTipo' : 'noiteTipo'];
+  var ref = d[turno === 'dia' ? 'diaRef' : 'noiteRef'];
+  var titulo = d.day + ' · ' + d.dateLabel + ' · ' + (turno === 'dia' ? 'de dia' : 'à noite');
+
+  if (tipo === 'catalogo') {
+    var look = tripLookDoCatalogo(ref);
+    if (look) openZoom(lookThumb(look), look.tags || [], getRotation(look), look.id);
+    return;
+  }
+  var pecas = (d[turno] || []).map(findPieceById).filter(Boolean);
+  if (!pecas.length) return;
+  renderFlatLay(document.getElementById('lookZoomFlatlay'), pecas, { zoomable: true });
+  document.getElementById('lookZoomName').textContent = titulo;
+  document.getElementById('lookZoomOverlay').classList.add('open');
+}
+
 function tripMoverSlot(idx, turno) {
   if (tripViewOnly) return;
   var slot = { dia: idx, turno: turno };
@@ -12066,6 +12088,14 @@ function tripRenderDays() {
         b.onclick = (function(i, k){ return function(e){ e.stopPropagation(); tripRerollTurno(i, k); }; })(idx, chave);
         acoes.appendChild(b);
       }
+      if (tipo !== 'vazio') {
+        var amp = document.createElement('button');
+        amp.className = 'trip-turno-btn';
+        amp.textContent = 'ver';
+        amp.title = 'Ver este look em tela cheia';
+        amp.onclick = (function(i, k){ return function(e){ e.stopPropagation(); tripAmpliarLook(i, k); }; })(idx, chave);
+        acoes.appendChild(amp);
+      }
       if (!tripViewOnly && tipo !== 'vazio') {
         var mv = document.createElement('button');
         var armado = tripMesmoSlot(tripMovendo, { dia: idx, turno: chave });
@@ -12105,6 +12135,13 @@ function tripRenderDays() {
         box.appendChild(vazio);
       } else {
         var canvas = document.createElement('div');
+        canvas.style.cursor = 'zoom-in';
+        canvas.title = 'Ver em tela cheia';
+        canvas.onclick = (function(i, k){ return function(e){
+          if (tripMovendo) return;           // com um look armado, o toque é pra mover
+          if (e.target && e.target.tagName === 'IMG') return; // clique na peça amplia a peça
+          tripAmpliarLook(i, k);
+        }; })(idx, chave);
         box.appendChild(canvas);
         var pecas = (d[chave] || []).map(findPieceById).filter(Boolean);
         renderFlatLay(canvas, pecas, { zoomable: true, emptyMessage: 'sem peça' });
