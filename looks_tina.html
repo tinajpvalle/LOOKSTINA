@@ -11019,6 +11019,7 @@ function tripAvisoDeRepeticao(quantosVouMontar) {
   if (quantosVouMontar < 2) return '';
   var unicas = [];
   TRIP_ESSENCIAIS.forEach(function(e){
+    if (e[0] === 'Tops') return; // blusa eu completo sozinho, não é aviso
     if (tripQuantasEscolhidas(e[0]) === 1) unicas.push('1 ' + e[1]);
   });
   if (unicas.length) {
@@ -11028,8 +11029,10 @@ function tripAvisoDeRepeticao(quantosVouMontar) {
   // serve. A blusa é a que se troca, então só ela vira aviso, e só quando cada
   // uma teria que sair três vezes ou mais.
   var n = tripQuantasEscolhidas('Tops');
-  if (n > 1 && n < quantosVouMontar) {
-    return n + ' blusas pros ' + quantosVouMontar + ' looks: ' + (quantosVouMontar - n) + ' vão repetir blusa';
+  if (n < quantosVouMontar) {
+    var faltam = quantosVouMontar - n;
+    return n ? ('eu completo com ' + faltam + ' blusa(s) do armário, pra não repetir')
+             : ('eu escolho as ' + quantosVouMontar + ' blusas, uma por look');
   }
   return '';
 }
@@ -11066,6 +11069,7 @@ function tripRenderEscolhaBar() {
   else if (!partes.length) dica = 'escolhe peças, looks seus, ou os dois';
   else if (faltam === 0) dica = 'seus looks já cobrem os ' + slots + ' looks da viagem';
   else if (tripPecas.length) dica = tripAvisoDeRepeticao(faltam) || ('eu monto os ' + faltam + ' que faltam com as suas peças');
+  // (o aviso de blusa saiu daqui: agora eu busco sozinho em vez de avisar)
   else dica = faltam + ' look(s) sem nada — escolhe peças pra eu montar';
 
   document.getElementById('tripShoeCount').innerHTML = carregando
@@ -11088,6 +11092,8 @@ function tripGoToShoes() {
   tripPacked = {};
   tripSavedIdx = null; // senão as marcações da mala nova iam parar na mala salva anterior
   tripLimparEscolha();
+  tripAutoAdicionadas = [];
+  tripDispensadas = [];
 
   document.getElementById('tripHeaderTitle').textContent = tripName || 'Mala de viagem';
   document.getElementById('tripShoeLead').textContent = 'Buscando o clima do destino…';
@@ -11282,6 +11288,7 @@ function tripEscolherPraCapsula(cat, n, perfil, sapatos, jaNaCapsula) {
   // ela já tinha escolhido, marcada como "eu pus", e a conta de blusas novas não
   // fechava.
   var jaTem = {};
+  (tripDispensadas || []).forEach(function(id){ jaTem[id] = 1; }); // o que ela tirou não volta
   (jaNaCapsula || []).forEach(function(p){ if (p) jaTem[p.id] = 1; });
   tripShoeIds.forEach(function(id){ jaTem[id] = 1; });
   (tripCapsule || []).forEach(function(id){ jaTem[id] = 1; });
@@ -11357,10 +11364,15 @@ function tripMontarLook(f, turno, uso, evitarIds) {
   // looks a conta ficava 4x contra 2x, porque as outras notas atropelavam o
   // desconto de uso. Assim fica 3x e 3x.
   var todasAsBlusas = tripCapsulaPorCategoria('Tops');
-  var menorUso = todasAsBlusas.length
-    ? Math.min.apply(null, todasAsBlusas.map(function(p){ return uso[p.id] || 0; })) : 0;
-  var pool = todasAsBlusas.filter(function(p){ return (uso[p.id] || 0) === menorUso; });
-  if (!pool.length) pool = todasAsBlusas;
+  // O que está saindo (evitar) sai do páreo antes da conta de uso. Sem isto, ao
+  // trocar um look a blusa que saiu tinha o uso descontado, virava "a menos
+  // usada" e voltava na hora: o botão trocar não mudava a blusa nunca.
+  var candidatas = todasAsBlusas.filter(function(p){ return evitar.indexOf(p.id) === -1; });
+  if (!candidatas.length) candidatas = todasAsBlusas;
+  var menorUso = candidatas.length
+    ? Math.min.apply(null, candidatas.map(function(p){ return uso[p.id] || 0; })) : 0;
+  var pool = candidatas.filter(function(p){ return (uso[p.id] || 0) === menorUso; });
+  if (!pool.length) pool = candidatas;
   var top = tripEscolherDoLook(pool, uso, escolhidas, perfil, evitar, noite)
          || tripEscolherDoLook(pool, uso, escolhidas, perfil, null, noite)
          || tripEscolherDoLook(todasAsBlusas, uso, escolhidas, perfil, null, noite);
@@ -11395,7 +11407,8 @@ var tripUso = {};
 // marcou ocupam os dias; os dias que sobram eu monto combinando as peças que ela
 // marcou. Se faltar categoria pra fechar um look, eu digo o que falta em vez de
 // buscar no armário — e aí ela decide se manda completar.
-var tripAutoAdicionadas = [];  // peças que o app pôs por conta, quando ela pede pra completar
+var tripAutoAdicionadas = [];  // peças que o app pôs por conta
+var tripDispensadas = [];      // o que ela tirou da mala — não volta sozinho
 
 function tripCapsulaPorCategoria(cat) {
   return tripCapsule.map(findPieceById).filter(function(p){ return p && p.category === cat; });
@@ -11514,6 +11527,22 @@ function tripMontarPlano() {
   tripAutoAdicionadas.forEach(function(id){ if (ids.indexOf(id) === -1) ids.push(id); });
   tripCapsule = ids;
   tripAtualizarSapatos();
+
+  // Uma blusa por look, sem ela precisar pedir. Ela disse duas vezes que camiseta
+  // repetida não serve; enquanto isso era um botão, a mala saía repetida e
+  // esperando um clique. Agora, se as blusas dela não cobrem os looks que eu vou
+  // montar, eu completo — marcado "eu pus", e o que ela tirou não volta.
+  var slotsDela = Object.keys(escolhidos.porSlot).length;
+  var vouMontar = Math.max(0, tripForecast.length * 2 - slotsDela);
+  var faltamBlusas = Math.min(vouMontar, 10) - tripCapsulaPorCategoria('Tops').length;
+  if (vouMontar > 0 && faltamBlusas > 0) {
+    var naMala = tripCapsule.map(findPieceById).filter(Boolean);
+    var sapatosPra = tripShoeIds.map(findPieceById).filter(Boolean);
+    tripEscolherPraCapsula('Tops', faltamBlusas, perfil, sapatosPra, naMala).forEach(function(p){
+      if (tripAutoAdicionadas.indexOf(p.id) === -1) tripAutoAdicionadas.push(p.id);
+      if (tripCapsule.indexOf(p.id) === -1) tripCapsule.push(p.id);
+    });
+  }
 
   tripDistribuirPelosDias(escolhidos.porSlot);
 
@@ -11703,6 +11732,7 @@ function tripTrocarPeca(id) {
   if (i !== -1) tripPecas.splice(i, 1);
   var j = tripAutoAdicionadas.indexOf(id);
   if (j !== -1) tripAutoAdicionadas.splice(j, 1);
+  if (tripDispensadas.indexOf(id) === -1) tripDispensadas.push(id);
   delete tripPacked[id];
   var deLook = tripMeus.some(function(mid){ return tripLookDoMontado(mid).indexOf(id) !== -1; });
   if (deLook) {
@@ -11758,12 +11788,16 @@ function tripRenderResultado() {
   if (meus) linha += ' · ' + meus + ' eu montei com as suas peças';
   if (vazios) linha += ' · <span style="color:var(--accent);">' + vazios + ' sem look, falta '
     + tripEsc(tripTextoDoQueFalta()) + '</span>';
+  var blusasMinhas = tripAutoAdicionadas.map(findPieceById).filter(function(p){ return p && p.category === 'Tops'; });
+  if (blusasMinhas.length && !tripViewOnly) {
+    linha += '<br><span style="color:var(--accent);">Pra não repetir camiseta, trouxe '
+      + blusasMinhas.length + ' blusa(s) do armário — marcadas "eu pus" na lista, é só tirar as que não quiser.</span>';
+  }
   var repetidas = tripPecasEmTodosOsLooks();
   if (repetidas.length && !tripViewOnly) {
     linha += '<br><span style="color:var(--accent);">'
       + tripEsc(repetidas.map(tripNomeCurto).join(' e ')) + ' ' + (repetidas.length > 1 ? 'estão' : 'está')
-      + ' em todos os ' + meus + ' looks que eu montei — foi o que você escolheu nessa categoria. '
-      + 'Use o botão abaixo pra eu buscar mais, ou escolha você em "Mudar o que vai".</span>';
+      + ' em todos os ' + meus + ' looks — não achei mais nada que sirva pro clima.</span>';
   }
   document.getElementById('tripSubtitle').innerHTML =
     tripDays.length + ' dia(s)' + onde + ' · ' + TRIP_OCASIAO_LABEL[tripOcasiao] + ' · ' + tripFonteClimaTexto()
