@@ -429,6 +429,8 @@ body.week-pick-mode .card-week-btn { display: block; }
 .trip-picker-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding-bottom: 96px; }
 .trip-picker-grid.looks { grid-template-columns: repeat(2, 1fr); }
 .trip-picker-vazio { grid-column: 1/-1; font-size: .8rem; color: var(--txt-3); padding: 18px 4px; }
+.montado-peca-x { position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--line-input); background: var(--surface); color: var(--txt-2); cursor: pointer; font-size: .7rem; line-height: 1; display: flex; align-items: center; justify-content: center; font-family: inherit; }
+.montado-peca-x:hover { background: var(--ink); border-color: var(--ink); color: var(--surface); }
 .trip-shoe-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding-bottom: 96px; }
 .trip-shoe-card { position: relative; border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; cursor: pointer; background: var(--surface); }
 .trip-shoe-card img { width: 100%; aspect-ratio: 1; object-fit: contain; display: block; background: var(--bg); }
@@ -3835,6 +3837,95 @@ function deleteMontagem(id) {
 var montadoDetailId = null;
 var montadoWeekTarget = 'atual'; // qual semana os dias do detalhe estão mirando
 
+// Mexer nas peças de um look já salvo 
+// O look salvo era congelado: dava pra pôr num dia da semana, ampliar e excluir,
+// e mais nada. Pra acrescentar um casaco ela teria que montar tudo de novo do
+// zero. Aqui entram o "+ peça" e o ✕ em cada peça.
+var montadoPickerAberto = false;
+var montadoPickerCat = '__all__';
+var montadoPickerBusca = '';
+
+function montadoAtual() {
+  return montagens.find(function(x){ return x.id === montadoDetailId; }) || null;
+}
+
+function alternarEscolherPecaNoMontado() {
+  montadoPickerAberto = !montadoPickerAberto;
+  if (montadoPickerAberto) { montadoPickerCat = '__all__'; montadoPickerBusca = ''; }
+  renderMontadoPicker();
+}
+
+function setMontadoPickerCat(c) { montadoPickerCat = c; renderMontadoPicker(); }
+
+function montadoPickerBuscou() {
+  montadoPickerBusca = (document.getElementById('montadoPickerBusca').value || '').trim().toLowerCase();
+  renderMontadoPickerGrid();
+}
+
+function renderMontadoPicker() {
+  var caixa = document.getElementById('montadoPicker');
+  var btn = document.getElementById('montadoAddBtn');
+  if (!caixa) return;
+  caixa.style.display = montadoPickerAberto ? 'block' : 'none';
+  if (btn) btn.textContent = montadoPickerAberto ? 'Fechar' : '+ Peça';
+  if (!montadoPickerAberto) return;
+
+  var barra = document.getElementById('montadoPickerCats');
+  barra.innerHTML = ['__all__'].concat(TRIP_CATS_PICKER).map(function(c){
+    var n = (c === '__all__') ? allPecas().length : piecesByCategory(c).length;
+    return '<button class="trip-cat-pill' + (montadoPickerCat === c ? ' active' : '') + '" onclick="setMontadoPickerCat(\'' + c + '\')">'
+      + (c === '__all__' ? 'Tudo' : tripEsc(TRIP_CAT_LABEL[c] || c)) + ' <small>' + n + '</small></button>';
+  }).join('');
+  renderMontadoPickerGrid();
+}
+
+function renderMontadoPickerGrid() {
+  var grid = document.getElementById('montadoPickerGrid');
+  var m = montadoAtual();
+  if (!grid || !m) return;
+  var lista = (montadoPickerCat === '__all__' ? allPecas() : piecesByCategory(montadoPickerCat)).slice().sort(pecaNewestFirst);
+  if (montadoPickerBusca) {
+    lista = lista.filter(function(p){
+      return ((p.name||'') + ' ' + (p.brand||'') + ' ' + (p.color||'')).toLowerCase().indexOf(montadoPickerBusca) !== -1;
+    });
+  }
+  if (!lista.length) { grid.innerHTML = '<div class="trip-picker-vazio">Nada encontrado.</div>'; return; }
+  grid.innerHTML = lista.map(function(p){
+    var jaTem = (m.pieceIds || []).indexOf(p.id) !== -1;
+    return '<div class="trip-shoe-card' + (jaTem ? ' sel' : '') + '"'
+      + (jaTem ? '' : ' onclick="adicionarPecaAoMontado(\'' + p.id + '\')"') + '>'
+      + '<img src="' + tripEsc(p.img) + '" alt="' + tripEsc(p.name) + '" loading="lazy">'
+      + (jaTem ? '<div class="trip-shoe-check">✓</div>' : '')
+      + '<div class="trip-shoe-txt"><div class="trip-shoe-brand">' + tripEsc(p.brand) + '</div>'
+      + '<div class="trip-shoe-name">' + tripEsc(p.name) + '</div>'
+      + (jaTem ? '<div class="trip-shoe-aviso">já está no look</div>' : '') + '</div></div>';
+  }).join('');
+}
+
+function adicionarPecaAoMontado(pieceId) {
+  var m = montadoAtual();
+  var p = findPieceById(pieceId);
+  if (!m || !p) return;
+  if ((m.pieceIds || []).indexOf(pieceId) !== -1) return;
+  m.pieceIds = (m.pieceIds || []).concat([pieceId]);
+  saveMontagens();
+  openMontadoDetail(m.id);   // redesenha o flat lay, a contagem e a grade
+  renderLooksMontados();     // e o cartão na listagem
+  showSavedToast(tripNomeCurto(p) + ' entrou no look.');
+}
+
+function removerPecaDoMontado(pieceId) {
+  var m = montadoAtual();
+  var p = findPieceById(pieceId);
+  if (!m) return;
+  if ((m.pieceIds || []).length <= 1) { showSavedToast('O look precisa de pelo menos uma peça.'); return; }
+  m.pieceIds = (m.pieceIds || []).filter(function(id){ return id !== pieceId; });
+  saveMontagens();
+  openMontadoDetail(m.id);
+  renderLooksMontados();
+  showSavedToast((p ? tripNomeCurto(p) : 'Peça') + ' saiu do look.');
+}
+
 function openMontadoDetail(id) {
   var m = montagens.find(function(x) { return x.id === id; });
   if (!m) return;
@@ -3919,6 +4010,7 @@ function openMontadoDetail(id) {
     acoes.appendChild(excluir);
   }
 
+  renderMontadoPicker();
   var pieces = m.pieceIds.map(findPieceById).filter(Boolean);
   var flatlay = document.getElementById('montadoDetailFlatlay');
   if (flatlay) renderFlatLay(flatlay, pieces, { zoomable: true });
@@ -3937,6 +4029,14 @@ function openMontadoDetail(id) {
         '</div>';
       card.style.cursor = 'zoom-in';
       card.onclick = function() { openPieceZoom(p.id); };
+      if (pieces.length > 1) {
+        var x = document.createElement('button');
+        x.className = 'montado-peca-x';
+        x.textContent = '✕';
+        x.title = 'Tirar esta peça do look';
+        x.onclick = (function(pid){ return function(e){ e.stopPropagation(); removerPecaDoMontado(pid); }; })(p.id);
+        card.appendChild(x);
+      }
       grid.appendChild(card);
     });
   }
@@ -3959,6 +4059,7 @@ function fecharZoomDoLook() {
 }
 
 function closeMontadoDetail() {
+  montadoPickerAberto = false;
   document.getElementById('montadoDetailOverlay').style.display = 'none';
   montadoDetailId = null;
 }
@@ -14707,6 +14808,15 @@ function applySuggestions() {
     <div id="montadoDetailFlatlay" style="max-width:280px;margin:0 auto 8px;"></div>
     <div style="text-align:center;margin-bottom:20px;">
       <button class="btn btn-ghost" onclick="ampliarLookMontado()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><circle cx="10.6" cy="10.6" r="6.6"/><path d="M15.4 15.4 20.5 20.5M10.6 7.8v5.6M7.8 10.6h5.6"/></svg> Ampliar look</button>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;">
+      <div style="font-size:.72rem;color:#A8A8A4;">Peças do look — toca no ✕ pra tirar</div>
+      <button class="btn btn-ghost" id="montadoAddBtn" onclick="alternarEscolherPecaNoMontado()">+ Peça</button>
+    </div>
+    <div id="montadoPicker" style="display:none;margin-bottom:16px;">
+      <div class="trip-cat-bar" id="montadoPickerCats"></div>
+      <input type="text" id="montadoPickerBusca" class="trip-busca" placeholder="Buscar por nome ou marca…" autocomplete="off" oninput="montadoPickerBuscou()">
+      <div class="trip-picker-grid" id="montadoPickerGrid" style="padding-bottom:0;max-height:46vh;overflow-y:auto;"></div>
     </div>
     <div id="montadoDetailPieces" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;"></div>
   </div>
