@@ -1252,7 +1252,7 @@ body.compare-mode .card-compare-btn { display: flex; }
 
       <!-- Passo 1: para onde e por quanto tempo -->
       <div id="tripStep1">
-        <p class="trip-lead">Diz o nome, o destino e as datas. No passo seguinte você escolhe os sapatos que vão — e eu monto a mala inteira em cima deles, dia e noite.</p>
+        <p class="trip-lead">Diz o nome, o destino e as datas. No passo seguinte você escolhe o que vai na mala — peças, looks que você salvou, fotos do catálogo — e eu monto com isso os dias que sobrarem, de dia e de noite.</p>
         <div class="trip-field">
           <label for="tripNameInput">Nome da viagem (opcional)</label>
           <input type="text" id="tripNameInput" placeholder="Ex: Praia em Floripa">
@@ -1281,7 +1281,7 @@ body.compare-mode .card-compare-btn { display: flex; }
             <input type="number" id="tripDays" min="1" max="14" value="4" style="width:70px;">
           </div>
         </div>
-        <button class="btn-next" onclick="tripGoToShoes()">Escolher os sapatos →</button>
+        <button class="btn-next" onclick="tripGoToShoes()">Escolher o que vai →</button>
         <div id="savedTripsSection" style="margin-top:22px;padding-top:16px;border-top:1px solid var(--line-soft);">
           <div style="font-size:.78rem;font-weight:700;color:var(--txt-2);margin-bottom:8px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M3 7.2A2 2 0 0 1 5 5.2h3.8l2.1 2.6H19a2 2 0 0 1 2 2v8.4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7.2z"/></svg> Malas salvas</div>
           <div id="savedTripsList"></div>
@@ -3424,6 +3424,11 @@ var FLATLAY_POSITIONS = {
   Accessories: { top: 3,  left: 18, width: 10 }
 };
 var FLATLAY_Z = { Outerwear: 1, Tops: 3, Bottoms: 2, Shoes: 2, Bags: 4, Jewelry: 5, Accessories: 5 };
+// Usado só quando o look tem casaco E blusa: os dois dividem a linha de cima.
+var FLATLAY_LADO_A_LADO = {
+  Outerwear: { top: 6,  left: 30, width: 36 },
+  Tops:      { top: 11, left: 69, width: 28 }
+};
 
 // renderiza um conjunto de peças num container em estilo "flat lay" (still de moda).
 // opts.emptyMessage: texto quando não há peças. opts.renderExtra(wrap, piece, category): callback pra adicionar botões/ações sobre cada peça.
@@ -3444,8 +3449,14 @@ function renderFlatLay(container, pieces, opts) {
     if (!byCat[cat]) byCat[cat] = [];
     byCat[cat].push(p);
   });
+  // Casaco atrás da blusa dava um halo: ele é mais largo (46% contra 34%) e
+  // começa mais acima, então sobravam só os ombros em volta da camisa, que de
+  // longe parecem uma gola estranha. Quando os dois estão no look, ficam lado a
+  // lado, como num flat lay de verdade.
+  var comCasacoEBlusa = byCat.Outerwear && byCat.Tops;
   Object.keys(byCat).forEach(function(cat) {
     var pos = FLATLAY_POSITIONS[cat];
+    if (comCasacoEBlusa && FLATLAY_LADO_A_LADO[cat]) pos = FLATLAY_LADO_A_LADO[cat];
     var items = byCat[cat];
     var n = items.length;
     items.forEach(function(p, i) {
@@ -10639,7 +10650,7 @@ function tripGeocode(q) {
       }).join('');
     })
     .catch(function(){
-      box.innerHTML = '<div class="trip-dest-row" style="color:var(--txt-3);cursor:default;">sem internet pra buscar a cidade agora</div>';
+      box.innerHTML = '<div class="trip-dest-row" style="color:var(--txt-3);cursor:default;">não consegui buscar agora — confere o nome da cidade ou tenta de novo</div>';
     });
 }
 
@@ -12010,7 +12021,7 @@ function viewSavedTrip(idx) {
   if (t.v !== 2) {
     // Mala do formato antigo (foto de look inteiro, sem peças). Não dá pra
     // remontar: mostra o que dá e avisa que é de antes.
-    alert('Essa mala é do formato antigo, de antes da mala ser montada por peça. Vale refazer: nome, destino, datas e os sapatos.');
+    alert('Essa mala é do formato antigo, de antes da mala ser montada por peça. Vale refazer: nome, destino, datas e o que vai.');
     return;
   }
 
