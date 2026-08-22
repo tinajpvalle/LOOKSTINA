@@ -11019,22 +11019,26 @@ function tripAvisoDeRepeticao(quantosVouMontar) {
   if (quantosVouMontar < 2) return '';
   var unicas = [];
   TRIP_ESSENCIAIS.forEach(function(e){
-    if (e[0] === 'Tops') return; // blusa eu completo sozinho, não é aviso
+    if (e[0] === 'Tops' || e[0] === 'Bottoms') return; // essas eu completo sozinho, não é aviso
     if (tripQuantasEscolhidas(e[0]) === 1) unicas.push('1 ' + e[1]);
   });
-  if (unicas.length) {
-    return 'você escolheu ' + unicas.join(' e ') + ' — vai aparecer nos ' + quantosVouMontar + ' looks';
-  }
+  var avisoUnicas = unicas.length
+    ? ('você escolheu ' + unicas.join(' e ') + ' — vai aparecer nos ' + quantosVouMontar + ' looks')
+    : '';
   // Sapato e calça repetirem numa viagem é o normal — é pra isso que a mala
   // serve. A blusa é a que se troca, então só ela vira aviso, e só quando cada
   // uma teria que sair três vezes ou mais.
-  var n = tripQuantasEscolhidas('Tops');
-  if (n < quantosVouMontar) {
-    var faltam = quantosVouMontar - n;
-    return n ? ('eu completo com ' + faltam + ' blusa(s) do armário, pra não repetir')
-             : ('eu escolho as ' + quantosVouMontar + ' blusas, uma por look');
-  }
-  return '';
+  var partes = [];
+  [['Tops','blusa(s)'], ['Bottoms','calça(s)']].forEach(function(e){
+    var falta = tripAlvoDaCategoria(e[0], quantosVouMontar) - tripQuantasEscolhidas(e[0]);
+    if (falta > 0) partes.push(falta + ' ' + e[1]);
+  });
+  var avisoCompleto = partes.length
+    ? ('eu completo com ' + partes.join(' e ') + ' do armário, pra não repetir') : '';
+  // Os dois juntos: o de sapato é escolha dela, o de completar é o que eu vou
+  // fazer. Mostrar só um deixava a barra dizendo "1 peça" numa mala que vai ter
+  // treze.
+  return [avisoUnicas, avisoCompleto].filter(Boolean).join(' · ');
 }
 
 // Na tela do resultado, dizer quais peças estão em todos os looks que eu montei.
@@ -11342,6 +11346,19 @@ function tripEscolherDoLook(lista, uso, refs, perfil, evitar, dressy) {
   return melhor;
 }
 
+// As menos usadas até aqui, tirando o que está saindo do look. O "tirando" é
+// essencial: sem ele, a peça que sai tem o uso descontado, vira a menos usada e
+// volta na mesma hora — foi o que travou o botão "trocar" quando a regra valia
+// só pra blusa.
+function tripMenosUsadas(lista, uso, evitar) {
+  if (!lista.length) return lista;
+  var candidatas = lista.filter(function(p){ return (evitar || []).indexOf(p.id) === -1; });
+  if (!candidatas.length) candidatas = lista;
+  var menor = Math.min.apply(null, candidatas.map(function(p){ return uso[p.id] || 0; }));
+  var pool = candidatas.filter(function(p){ return (uso[p.id] || 0) === menor; });
+  return pool.length ? pool : candidatas;
+}
+
 function tripMontarLook(f, turno, uso, evitarIds) {
   var noite = (turno === 'noite');
   var perfil = f.profile;
@@ -11353,8 +11370,14 @@ function tripMontarLook(f, turno, uso, evitarIds) {
             || tripEscolherDoLook(sapatos, uso, [], perfil, null, noite);
   if (sapato) escolhidas.push(sapato);
 
-  var bottom = tripEscolherDoLook(tripCapsulaPorCategoria('Bottoms'), uso, escolhidas, perfil, evitar, noite)
-            || tripEscolherDoLook(tripCapsulaPorCategoria('Bottoms'), uso, escolhidas, perfil, null, noite);
+  // Calça segue a mesma regra de rodízio da blusa: a menos usada até aqui, e
+  // nunca a que está saindo. A diferença está em quantas se leva — ver
+  // tripAlvoDaCategoria.
+  var todasAsCalcas = tripCapsulaPorCategoria('Bottoms');
+  var poolCalca = tripMenosUsadas(todasAsCalcas, uso, evitar);
+  var bottom = tripEscolherDoLook(poolCalca, uso, escolhidas, perfil, evitar, noite)
+            || tripEscolherDoLook(poolCalca, uso, escolhidas, perfil, null, noite)
+            || tripEscolherDoLook(todasAsCalcas, uso, escolhidas, perfil, null, noite);
   if (bottom) escolhidas.push(bottom);
 
   // Blusa diferente a cada look — pedido dela, e é a peça que não se repete numa
@@ -11364,15 +11387,7 @@ function tripMontarLook(f, turno, uso, evitarIds) {
   // looks a conta ficava 4x contra 2x, porque as outras notas atropelavam o
   // desconto de uso. Assim fica 3x e 3x.
   var todasAsBlusas = tripCapsulaPorCategoria('Tops');
-  // O que está saindo (evitar) sai do páreo antes da conta de uso. Sem isto, ao
-  // trocar um look a blusa que saiu tinha o uso descontado, virava "a menos
-  // usada" e voltava na hora: o botão trocar não mudava a blusa nunca.
-  var candidatas = todasAsBlusas.filter(function(p){ return evitar.indexOf(p.id) === -1; });
-  if (!candidatas.length) candidatas = todasAsBlusas;
-  var menorUso = candidatas.length
-    ? Math.min.apply(null, candidatas.map(function(p){ return uso[p.id] || 0; })) : 0;
-  var pool = candidatas.filter(function(p){ return (uso[p.id] || 0) === menorUso; });
-  if (!pool.length) pool = candidatas;
+  var pool = tripMenosUsadas(todasAsBlusas, uso, evitar);
   var top = tripEscolherDoLook(pool, uso, escolhidas, perfil, evitar, noite)
          || tripEscolherDoLook(pool, uso, escolhidas, perfil, null, noite)
          || tripEscolherDoLook(todasAsBlusas, uso, escolhidas, perfil, null, noite);
@@ -11482,7 +11497,10 @@ function tripAlvoDaCategoria(cat, nMontar) {
   // Uma blusa por look: ela pediu que nunca se repita. Com teto, pra uma viagem
   // longa não virar a mala inteira de blusa.
   if (cat === 'Tops') return Math.max(2, Math.min(nMontar, 10));
-  if (cat === 'Bottoms') return Math.max(2, Math.ceil(nMontar / 3));
+  // (Tops e Bottoms são preenchidos sozinhos em tripMontarPlano; o resto só pelo botão.)
+  // Uma calça por dia: repetir de dia e à noite do mesmo dia é normal numa
+  // viagem, três dias seguidos com a mesma não é.
+  if (cat === 'Bottoms') return Math.max(2, Math.min(Math.ceil(nMontar / 2), 7));
   if (cat === 'Shoes') return nMontar >= 4 ? 2 : 1;
   return 0;
 }
@@ -11534,13 +11552,16 @@ function tripMontarPlano() {
   // montar, eu completo — marcado "eu pus", e o que ela tirou não volta.
   var slotsDela = Object.keys(escolhidos.porSlot).length;
   var vouMontar = Math.max(0, tripForecast.length * 2 - slotsDela);
-  var faltamBlusas = Math.min(vouMontar, 10) - tripCapsulaPorCategoria('Tops').length;
-  if (vouMontar > 0 && faltamBlusas > 0) {
-    var naMala = tripCapsule.map(findPieceById).filter(Boolean);
-    var sapatosPra = tripShoeIds.map(findPieceById).filter(Boolean);
-    tripEscolherPraCapsula('Tops', faltamBlusas, perfil, sapatosPra, naMala).forEach(function(p){
-      if (tripAutoAdicionadas.indexOf(p.id) === -1) tripAutoAdicionadas.push(p.id);
-      if (tripCapsule.indexOf(p.id) === -1) tripCapsule.push(p.id);
+  if (vouMontar > 0) {
+    ['Tops','Bottoms'].forEach(function(cat){
+      var falta = tripAlvoDaCategoria(cat, vouMontar) - tripCapsulaPorCategoria(cat).length;
+      if (falta <= 0) return;
+      var naMala = tripCapsule.map(findPieceById).filter(Boolean);
+      var sapatosPra = tripShoeIds.map(findPieceById).filter(Boolean);
+      tripEscolherPraCapsula(cat, falta, perfil, sapatosPra, naMala).forEach(function(p){
+        if (tripAutoAdicionadas.indexOf(p.id) === -1) tripAutoAdicionadas.push(p.id);
+        if (tripCapsule.indexOf(p.id) === -1) tripCapsule.push(p.id);
+      });
     });
   }
 
@@ -11788,10 +11809,15 @@ function tripRenderResultado() {
   if (meus) linha += ' · ' + meus + ' eu montei com as suas peças';
   if (vazios) linha += ' · <span style="color:var(--accent);">' + vazios + ' sem look, falta '
     + tripEsc(tripTextoDoQueFalta()) + '</span>';
-  var blusasMinhas = tripAutoAdicionadas.map(findPieceById).filter(function(p){ return p && p.category === 'Tops'; });
-  if (blusasMinhas.length && !tripViewOnly) {
-    linha += '<br><span style="color:var(--accent);">Pra não repetir camiseta, trouxe '
-      + blusasMinhas.length + ' blusa(s) do armário — marcadas "eu pus" na lista, é só tirar as que não quiser.</span>';
+  var minhas = tripAutoAdicionadas.map(findPieceById).filter(Boolean);
+  var nBlusas = minhas.filter(function(p){ return p.category === 'Tops'; }).length;
+  var nCalcas = minhas.filter(function(p){ return p.category === 'Bottoms'; }).length;
+  if ((nBlusas || nCalcas) && !tripViewOnly) {
+    var partes = [];
+    if (nBlusas) partes.push(nBlusas + ' blusa(s)');
+    if (nCalcas) partes.push(nCalcas + ' calça(s)');
+    linha += '<br><span style="color:var(--accent);">Pra não repetir, trouxe ' + partes.join(' e ')
+      + ' do armário — marcadas "eu pus" na lista, é só tirar as que não quiser.</span>';
   }
   var repetidas = tripPecasEmTodosOsLooks();
   if (repetidas.length && !tripViewOnly) {
