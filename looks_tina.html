@@ -649,6 +649,18 @@ body.week-pick-mode .card-week-btn { display: block; }
 #lookZoomBox { display: flex; flex-direction: column; align-items: center; }
 #lookZoomFlatlay { height: 78vh; width: auto; max-width: 92vw; aspect-ratio: 3/4; background: #FAFAF8; border-radius: 12px; }
 #lookZoomName { color: #fff; text-align: center; margin-top: 12px; font-size: .9rem; }
+/* Lista de peças do look, só na mala: é onde ela troca uma peça sem refazer o
+   look inteiro. O flat lay encolhe pra caber os dois na tela. */
+#lookZoomPecas:empty { display: none; }
+#lookZoomPecas { margin-top: 10px; width: 100%; max-width: 460px; display: flex; flex-direction: column; gap: 4px; }
+.zoom-peca { display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,.10); border-radius: 7px; padding: 5px 10px; }
+.zoom-peca-cat { font-size: 8.5px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: rgba(255,255,255,.55); flex-shrink: 0; }
+.zoom-peca-nome { font-size: .76rem; color: #fff; flex: 1; min-width: 0; }
+.zoom-peca-btn { flex-shrink: 0; background: transparent; border: 1px solid rgba(255,255,255,.4); color: #fff; border-radius: 5px; font-size: .68rem; padding: 3px 9px; cursor: pointer; font-family: inherit; }
+.zoom-peca-btn:hover { background: #fff; color: #1A1A1A; border-color: #fff; }
+/* Com a lista embaixo, o flat lay encolhe pra caber os dois. Classe em vez de
+   :has() — o app roda no Safari do iPhone dela e não quero depender disso. */
+#lookZoomBox.com-lista #lookZoomFlatlay { height: 52vh; }
 .insp-card img { width: 100%; display: block; }
 .insp-palette { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-bottom: 6px; }
 .insp-dot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(0,0,0,.12); display: inline-block; }
@@ -4051,11 +4063,14 @@ function ampliarLookMontado() {
   var box = document.getElementById('lookZoomFlatlay');
   renderFlatLay(box, m.pieceIds.map(findPieceById).filter(Boolean), { zoomable: true });
   document.getElementById('lookZoomName').textContent = m.name || 'Look sem nome';
+  tripZoomSlot = null;
+  tripRenderZoomPecas(null, false); // a lista com "sugerir outra" é só da mala
   document.getElementById('lookZoomOverlay').classList.add('open');
 }
 
 function fecharZoomDoLook() {
   document.getElementById('lookZoomOverlay').classList.remove('open');
+  tripZoomSlot = null;
 }
 
 function closeMontadoDetail() {
@@ -11762,6 +11777,7 @@ function tripBuild() {
   tripPacked = {};
   tripSavedIdx = null;
   tripAutoAdicionadas = [];
+  tripJaSugeridas = {};
   tripMontarPlano();
   tripRenderResultado();
   tripShowStep(3);
@@ -11983,6 +11999,121 @@ function tripTrocarSlots(a, b) {
   showSavedToast('Troquei: ' + nome(a) + ' ↔ ' + nome(b) + '.');
 }
 
+// Trocar uma peça só, dentro de um look da mala 
+// "Trocar" refazia o look inteiro. Quando é uma peça só que não agrada — a
+// camiseta laranja — refazer tudo joga fora o que estava bom. Aqui a troca é da
+// peça: tenta primeiro outra da mesma categoria que já está na mala e, se não
+// houver, busca uma no armário e marca "eu pus".
+var tripZoomSlot = null; // {dia, turno} do look aberto no "ver"
+// O que já foi oferecido em cada lugar. Sem isto o "sugerir outra" ficava
+// alternando entre as duas mesmas peças: a que sai vai pro outro look, e na
+// próxima vez a nota volta a escolhê-la. Quando acaba a lista, recomeça.
+var tripJaSugeridas = {};
+
+function tripTrocarPecaDoLook(pieceId) {
+  if (!tripZoomSlot || tripViewOnly) return;
+  var d = tripDays[tripZoomSlot.dia];
+  var turno = tripZoomSlot.turno;
+  if (!d || d[turno + 'Tipo'] !== 'montado') {
+    showSavedToast('Esse look é escolha sua — pra mudar, use "Mudar o que vai".');
+    return;
+  }
+  var atual = findPieceById(pieceId);
+  if (!atual) return;
+
+  var noLook = (d[turno] || []).slice();
+  var outras = noLook.filter(function(id){ return id !== pieceId; }).map(findPieceById).filter(Boolean);
+  var perfil = d.profile || tripPerfilDominante();
+
+  // Candidatas: as da mesma categoria que já estão na mala e não estão neste look.
+  var chave = tripZoomSlot.dia + '|' + turno + '|' + atual.category;
+  var jaVistas = tripJaSugeridas[chave] || [];
+  var naMala = tripCapsulaPorCategoria(atual.category)
+    .filter(function(p){ return p.id !== pieceId && noLook.indexOf(p.id) === -1; });
+  var frescas = naMala.filter(function(p){ return jaVistas.indexOf(p.id) === -1; });
+  if (!frescas.length) { jaVistas = []; frescas = naMala; } // deu a volta: recomeça
+  var nova = tripEscolherDoLook(tripMenosUsadas(frescas, tripUso, [pieceId]), tripUso, outras, perfil, null, turno === 'noite');
+  if (nova) tripJaSugeridas[chave] = jaVistas.concat([nova.id]);
+
+  // Não tem outra na mala: busca no armário e marca como minha.
+  var veioDoArmario = false;
+  if (!nova) {
+    var jaEscolhidas = tripCapsule.map(findPieceById).filter(Boolean);
+    var sapatos = tripShoeIds.map(findPieceById).filter(Boolean);
+    nova = tripEscolherPraCapsula(atual.category, 1, perfil, sapatos, jaEscolhidas)[0];
+    if (nova) {
+      veioDoArmario = true;
+      if (tripAutoAdicionadas.indexOf(nova.id) === -1) tripAutoAdicionadas.push(nova.id);
+      if (tripCapsule.indexOf(nova.id) === -1) tripCapsule.push(nova.id);
+      tripAtualizarSapatos();
+    }
+  }
+  if (!nova) { showSavedToast('Não achei outra ' + (TRIP_FALTA_PT[atual.category] || 'peça') + ' que sirva pro clima.'); return; }
+
+  // Se a nova já está em outro look, as duas trocam de lugar. Assim nenhuma peça
+  // entra nem sai da mala, a lista não muda, e não nasce repetição nova — antes
+  // a peça que saía ia embora, a mala encolhia e sobrava blusa de menos pros
+  // looks, o que forçava justamente a repetição que ela não quer.
+  var trocouComOutroLook = null;
+  if (!veioDoArmario) {
+    tripDays.forEach(function(x, i){
+      ['dia','noite'].forEach(function(t){
+        if (trocouComOutroLook) return;
+        if (i === tripZoomSlot.dia && t === turno) return;
+        if (x[t + 'Tipo'] !== 'montado') return;
+        var pos = (x[t] || []).indexOf(nova.id);
+        if (pos === -1) return;
+        x[t] = x[t].map(function(id){ return id === nova.id ? pieceId : id; });
+        trocouComOutroLook = x.day + ' ' + (t === 'dia' ? 'de dia' : 'à noite');
+      });
+    });
+  }
+
+  d[turno] = noLook.map(function(id){ return id === pieceId ? nova.id : id; });
+
+  // A peça que saiu só deixa a mala se ninguém mais a usa e se fui eu que a
+  // trouxe. O que ela escolheu fica na lista, mesmo sem sair em look.
+  var aindaUsada = tripDays.some(function(x){
+    return (x.dia || []).indexOf(pieceId) !== -1 || (x.noite || []).indexOf(pieceId) !== -1;
+  });
+  if (!aindaUsada && tripAutoAdicionadas.indexOf(pieceId) !== -1) {
+    tripCapsule = tripCapsule.filter(function(id){ return id !== pieceId; });
+    tripAutoAdicionadas = tripAutoAdicionadas.filter(function(id){ return id !== pieceId; });
+    delete tripPacked[pieceId];
+    tripAtualizarSapatos();
+  }
+
+  // Recontar o uso do zero: com a troca entre looks, ajustar na mão erra fácil.
+  tripUso = {};
+  tripDays.forEach(function(x){
+    (x.dia || []).concat(x.noite || []).forEach(function(id){ tripUso[id] = (tripUso[id] || 0) + 1; });
+  });
+
+  tripRenderResultado();
+  tripAmpliarLook(tripZoomSlot.dia, tripZoomSlot.turno); // redesenha o zoom aberto
+  showSavedToast('Troquei por ' + tripNomeCurto(nova)
+    + (veioDoArmario ? ' — vim buscar no armário, está marcada "eu pus".'
+       : (trocouComOutroLook ? ' — a outra foi pro look de ' + trocouComOutroLook + '.' : '.')));
+}
+function tripRenderZoomPecas(pecas, editavel) {
+  var box = document.getElementById('lookZoomPecas');
+  if (!box) return;
+  var caixa = document.getElementById('lookZoomBox');
+  if (!pecas || !pecas.length) {
+    box.innerHTML = '';
+    if (caixa) caixa.classList.remove('com-lista');
+    return;
+  }
+  if (caixa) caixa.classList.add('com-lista');
+  box.innerHTML = pecas.map(function(p){
+    return '<div class="zoom-peca">'
+      + '<span class="zoom-peca-cat">' + tripEsc((p.category === 'Bottoms') ? 'Calça / Saia' : (CATEGORIA_EM_PT[p.category] || p.category)) + '</span>'
+      + '<span class="zoom-peca-nome">' + tripEsc(p.name) + '</span>'
+      + (editavel ? '<button class="zoom-peca-btn" onclick="tripTrocarPecaDoLook(\'' + p.id + '\')">sugerir outra</button>' : '')
+      + '</div>';
+  }).join('');
+}
+
 // Ver um look da mala em tela cheia. Reusa o overlay de "Ampliar look" dos Looks
 // Montados, então é a mesma tela e o mesmo fechar em todo o app. Foto do
 // catálogo não é flat lay: essa abre no zoom de foto que o catálogo já usa.
@@ -12000,8 +12131,10 @@ function tripAmpliarLook(idx, turno) {
   }
   var pecas = (d[turno] || []).map(findPieceById).filter(Boolean);
   if (!pecas.length) return;
+  tripZoomSlot = { dia: idx, turno: turno };
   renderFlatLay(document.getElementById('lookZoomFlatlay'), pecas, { zoomable: true });
   document.getElementById('lookZoomName').textContent = titulo;
+  tripRenderZoomPecas(pecas, !tripViewOnly && tipo === 'montado');
   document.getElementById('lookZoomOverlay').classList.add('open');
 }
 
@@ -14637,7 +14770,7 @@ function applySuggestions() {
 <!-- Ver o look montado inteiro, grande -->
 <div id="lookZoomOverlay" onclick="if(event.target===this)fecharZoomDoLook()">
   <button onclick="fecharZoomDoLook()" title="Fechar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"/></svg></button>
-  <div id="lookZoomBox"><div id="lookZoomFlatlay" class="flatlay-canvas"></div><div id="lookZoomName"></div></div>
+  <div id="lookZoomBox"><div id="lookZoomFlatlay" class="flatlay-canvas"></div><div id="lookZoomName"></div><div id="lookZoomPecas"></div></div>
 </div>
 
 <!-- Escolher uma peça específica pra sugestão de look -->
