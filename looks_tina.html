@@ -659,6 +659,7 @@ body.week-pick-mode .card-week-btn { display: block; }
 .zoom-peca-btn { flex-shrink: 0; background: transparent; border: 1px solid rgba(255,255,255,.4); color: #fff; border-radius: 5px; font-size: .68rem; padding: 3px 9px; cursor: pointer; font-family: inherit; }
 .zoom-peca-btn:hover { background: #fff; color: #1A1A1A; border-color: #fff; }
 .zoom-peca-btn.forte { border-color: rgba(255,255,255,.85); font-weight: 500; }
+.zoom-peca-btn.voltar { margin-left: auto; }
 .zoom-peca-add { flex-wrap: wrap; }
 .zoom-peca-add .zoom-peca-nome { flex: 1 0 100%; margin-bottom: 2px; }
 /* Com a lista embaixo, o flat lay encolhe pra caber os dois. Classe em vez de
@@ -1348,6 +1349,7 @@ body.compare-mode .card-compare-btn { display: flex; }
         <div class="trip-pack-list" id="tripPackList"></div>
         <div class="trip-actions">
           <button class="btn-next" id="tripCompletarBtn" onclick="tripCompletarDoArmario()" style="display:none;">Completar do armário</button>
+          <button class="btn-back" id="tripDesfazerBtn" onclick="tripDesfazer()" style="display:none;">↺ Voltar</button>
           <button class="btn-back" id="tripNaoGosteiBtn" onclick="tripNaoGostei()">Remontar os meus</button>
           <button class="btn-back" onclick="tripBackToStep1()">← Nova mala</button>
           <button class="btn-back" id="tripShoesAgainBtn" onclick="tripBackToShoes()">Mudar o que vai</button>
@@ -11799,6 +11801,7 @@ function tripBuild() {
   tripSavedIdx = null;
   tripAutoAdicionadas = [];
   tripJaSugeridas = {};
+  tripHistorico = [];
   tripMontarPlano();
   tripRenderResultado();
   tripShowStep(3);
@@ -11870,6 +11873,7 @@ function tripTodosOsLooks(exceto) {
 // desfazer justamente a escolha dela.
 function tripNaoGostei() {
   if (!tripDays.length || tripViewOnly) return;
+  tripGuardarEstado();
   var montadosPorMim = tripDays.filter(function(d){
     return d.diaTipo === 'montado' || d.noiteTipo === 'montado';
   }).length;
@@ -11893,6 +11897,7 @@ function tripTrocarPeca(id) {
   if (tripViewOnly) return;
   var p = findPieceById(id);
   if (!p) return;
+  tripGuardarEstado();
   var i = tripPecas.indexOf(id);
   if (i !== -1) tripPecas.splice(i, 1);
   var j = tripAutoAdicionadas.indexOf(id);
@@ -11919,6 +11924,7 @@ function tripRerollTurno(diaIdx, turno) {
   if (!d || tripViewOnly) return;
   var tipo = d[turno === 'dia' ? 'diaTipo' : 'noiteTipo'];
   if (tipo !== 'montado') return;
+  tripGuardarEstado();
 
   var anterior = (d[turno] || []).slice();
   anterior.forEach(function(id){ if (tripUso[id]) tripUso[id]--; });
@@ -11972,6 +11978,8 @@ function tripRenderResultado() {
   document.getElementById('tripSubtitle').innerHTML =
     tripDays.length + ' dia(s)' + onde + ' · ' + TRIP_OCASIAO_LABEL[tripOcasiao] + ' · ' + tripFonteClimaTexto()
     + '<br>' + linha + (tripViewOnly ? ' · mala salva' : '');
+  var btnDesf = document.getElementById('tripDesfazerBtn');
+  if (btnDesf) btnDesf.style.display = (tripHistorico.length && !tripViewOnly) ? 'inline-block' : 'none';
   var btnComp = document.getElementById('tripCompletarBtn');
   if (btnComp) {
     var rotulo = tripViewOnly ? '' : tripRotuloDoBotaoCompletar();
@@ -12010,6 +12018,7 @@ function tripTrocarSlots(a, b) {
   if (tripMesmoSlot(a, b)) { tripMovendo = null; tripRenderDays(); return; }
   var da = tripDays[a.dia], db = tripDays[b.dia];
   if (!da || !db) { tripMovendo = null; tripRenderDays(); return; }
+  tripGuardarEstado();
   ['', 'Tipo', 'Ref'].forEach(function(suf){
     var ca = a.turno + suf, cb = b.turno + suf;
     var tmp = da[ca]; da[ca] = db[cb]; db[cb] = tmp;
@@ -12033,6 +12042,7 @@ var tripJaSugeridas = {};
 
 function tripTrocarPecaDoLook(pieceId) {
   if (!tripZoomSlot || tripViewOnly) return;
+  tripGuardarEstado();
   var d = tripDays[tripZoomSlot.dia];
   var turno = tripZoomSlot.turno;
   if (!d || d[turno + 'Tipo'] !== 'montado') {
@@ -12116,6 +12126,58 @@ function tripTrocarPecaDoLook(pieceId) {
     + (veioDoArmario ? ' — vim buscar no armário, está marcada "eu pus".'
        : (trocouComOutroLook ? ' — a outra foi pro look de ' + trocouComOutroLook + '.' : '.')));
 }
+// Voltar atrás 
+// Ela clicou em "sugerir nova", não gostou, e queria a anterior de volta. Em vez
+// de um desfazer só pra esse botão, guarda-se o estado inteiro da mala antes de
+// cada mudança: assim "voltar" serve pra tudo — sugerir, acrescentar, trocar o
+// look, mover de dia, tirar da lista.
+var tripHistorico = [];
+var TRIP_HISTORICO_MAX = 20;
+
+function tripEstadoAtual() {
+  return JSON.stringify({
+    days: tripDays.map(function(d){
+      return { dia: d.dia, noite: d.noite, diaTipo: d.diaTipo, diaRef: d.diaRef,
+               noiteTipo: d.noiteTipo, noiteRef: d.noiteRef };
+    }),
+    capsule: tripCapsule, auto: tripAutoAdicionadas, disp: tripDispensadas,
+    packed: Object.keys(tripPacked)
+  });
+}
+
+function tripGuardarEstado() {
+  if (tripViewOnly) return;
+  tripHistorico.push(tripEstadoAtual());
+  if (tripHistorico.length > TRIP_HISTORICO_MAX) tripHistorico.shift();
+}
+
+function tripDesfazer() {
+  var s = tripHistorico.pop();
+  if (!s) return;
+  var o = JSON.parse(s);
+  (o.days || []).forEach(function(d, i){
+    if (!tripDays[i]) return;
+    tripDays[i].dia = d.dia; tripDays[i].noite = d.noite;
+    tripDays[i].diaTipo = d.diaTipo; tripDays[i].diaRef = d.diaRef;
+    tripDays[i].noiteTipo = d.noiteTipo; tripDays[i].noiteRef = d.noiteRef;
+  });
+  tripCapsule = o.capsule || [];
+  tripAutoAdicionadas = o.auto || [];
+  tripDispensadas = o.disp || [];
+  tripPacked = {};
+  (o.packed || []).forEach(function(id){ tripPacked[id] = true; });
+  tripAtualizarSapatos();
+  tripUso = {};
+  tripDays.forEach(function(x){
+    (x.dia || []).concat(x.noite || []).forEach(function(id){ tripUso[id] = (tripUso[id] || 0) + 1; });
+  });
+  tripRenderResultado();
+  if (tripZoomSlot && document.getElementById('lookZoomOverlay').classList.contains('open')) {
+    tripAmpliarLook(tripZoomSlot.dia, tripZoomSlot.turno);
+  }
+  showSavedToast('Voltei ao que estava antes.');
+}
+
 // "Sugerir nova": peça que ainda não está na mala 
 // "Sugerir outra" reveza o que já está na mala. Ela quer as duas coisas lado a
 // lado: outra das que já vão, ou uma nova do armário escolhida por mim — sem ela
@@ -12123,6 +12185,7 @@ function tripTrocarPecaDoLook(pieceId) {
 // dispensou, e pontua por voto dela, paleta, clima e ocasião.
 function tripSugerirNovaPeca(pieceId) {
   if (!tripZoomSlot || tripViewOnly) return;
+  tripGuardarEstado();
   var d = tripDays[tripZoomSlot.dia];
   var turno = tripZoomSlot.turno;
   if (!d || d[turno + 'Tipo'] !== 'montado') {
@@ -12140,6 +12203,7 @@ function tripSugerirNovaPeca(pieceId) {
 // Acrescentar uma categoria que falta no look, com a peça escolhida por mim.
 function tripAcrescentarSugerida(cat) {
   if (!tripZoomSlot || tripViewOnly) return;
+  tripGuardarEstado();
   var d = tripDays[tripZoomSlot.dia];
   var turno = tripZoomSlot.turno;
   if (!d || d[turno + 'Tipo'] !== 'montado') return;
@@ -12272,6 +12336,7 @@ function tripRenderLookPickerGrid() {
 // Põe a peça escolhida no look: substitui a da mesma categoria, ou acrescenta.
 function tripPorPecaNoLook(pieceId) {
   if (!tripZoomSlot || tripViewOnly) return;
+  tripGuardarEstado();
   var d = tripDays[tripZoomSlot.dia];
   var turno = tripZoomSlot.turno;
   if (!d || d[turno + 'Tipo'] !== 'montado') {
@@ -12368,6 +12433,7 @@ function tripRenderZoomPecas(pecas, editavel) {
         + '<span class="zoom-peca-nome">' + (add ? 'Acrescentar ao look — eu escolho:' : 'Acrescentar ao look:') + '</span>'
         + add
         + '<button class="zoom-peca-btn" id="tripLookPickerBtn" onclick="tripAlternarPickerNoLook()">escolher eu</button>'
+        + (tripHistorico.length ? '<button class="zoom-peca-btn voltar" title="Desfaz a última mudança" onclick="tripDesfazer()">↺ voltar</button>' : '')
         + '</div>';
     })()
       + '<div id="tripLookPicker" style="display:none;">'
