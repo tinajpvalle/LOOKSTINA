@@ -658,6 +658,9 @@ body.week-pick-mode .card-week-btn { display: block; }
 .zoom-peca-nome { font-size: .76rem; color: #fff; flex: 1; min-width: 0; }
 .zoom-peca-btn { flex-shrink: 0; background: transparent; border: 1px solid rgba(255,255,255,.4); color: #fff; border-radius: 5px; font-size: .68rem; padding: 3px 9px; cursor: pointer; font-family: inherit; }
 .zoom-peca-btn:hover { background: #fff; color: #1A1A1A; border-color: #fff; }
+.zoom-peca-btn.forte { border-color: rgba(255,255,255,.85); font-weight: 500; }
+.zoom-peca-add { flex-wrap: wrap; }
+.zoom-peca-add .zoom-peca-nome { flex: 1 0 100%; margin-bottom: 2px; }
 /* Com a lista embaixo, o flat lay encolhe pra caber os dois. Classe em vez de
    :has() — o app roda no Safari do iPhone dela e não quero depender disso. */
 #lookZoomBox.com-lista #lookZoomFlatlay { height: 52vh; }
@@ -12113,6 +12116,87 @@ function tripTrocarPecaDoLook(pieceId) {
     + (veioDoArmario ? ' — vim buscar no armário, está marcada "eu pus".'
        : (trocouComOutroLook ? ' — a outra foi pro look de ' + trocouComOutroLook + '.' : '.')));
 }
+// "Sugerir nova": peça que ainda não está na mala 
+// "Sugerir outra" reveza o que já está na mala. Ela quer as duas coisas lado a
+// lado: outra das que já vão, ou uma nova do armário escolhida por mim — sem ela
+// ter que procurar. tripEscolherPraCapsula já exclui a cápsula e o que ela
+// dispensou, e pontua por voto dela, paleta, clima e ocasião.
+function tripSugerirNovaPeca(pieceId) {
+  if (!tripZoomSlot || tripViewOnly) return;
+  var d = tripDays[tripZoomSlot.dia];
+  var turno = tripZoomSlot.turno;
+  if (!d || d[turno + 'Tipo'] !== 'montado') {
+    showSavedToast('Esse look é escolha sua — pra mudar, use "Mudar o que vai".');
+    return;
+  }
+  var atual = findPieceById(pieceId);
+  if (!atual) return;
+  var nova = tripBuscarNovaDoArmario(atual.category, d, turno);
+  if (!nova) { showSavedToast('Já trouxe tudo o que serve pro clima nessa categoria.'); return; }
+  tripPorNoLook(pieceId, nova, d, turno);
+  showSavedToast('Trouxe ' + tripNomeCurto(nova) + ' do armário — marcada "eu pus" na lista.');
+}
+
+// Acrescentar uma categoria que falta no look, com a peça escolhida por mim.
+function tripAcrescentarSugerida(cat) {
+  if (!tripZoomSlot || tripViewOnly) return;
+  var d = tripDays[tripZoomSlot.dia];
+  var turno = tripZoomSlot.turno;
+  if (!d || d[turno + 'Tipo'] !== 'montado') return;
+  var nova = tripBuscarNovaDoArmario(cat, d, turno);
+  if (!nova) { showSavedToast('Não achei ' + (TRIP_CAT_LABEL[cat] || cat).toLowerCase() + ' que sirva pro clima do dia.'); return; }
+  tripPorNoLook(null, nova, d, turno);
+  showSavedToast(tripNomeCurto(nova) + ' entrou no look — marcada "eu pus" na lista.');
+}
+
+// A busca em si, com memória do que já ofereceu naquele lugar pra não repetir
+// sugestão a cada clique.
+function tripBuscarNovaDoArmario(cat, d, turno) {
+  var perfil = d.profile || tripPerfilDominante();
+  var chave = tripZoomSlot.dia + '|' + turno + '|' + cat + '|nova';
+  var jaVistas = tripJaSugeridas[chave] || [];
+  var naMala = tripCapsule.map(findPieceById).filter(Boolean);
+  var sapatos = tripShoeIds.map(findPieceById).filter(Boolean);
+  var candidatas = tripEscolherPraCapsula(cat, jaVistas.length + 1, perfil, sapatos, naMala);
+  var nova = candidatas.filter(function(p){ return jaVistas.indexOf(p.id) === -1; })[0];
+  if (!nova && candidatas.length) { jaVistas = []; nova = candidatas[0]; } // deu a volta
+  if (nova) tripJaSugeridas[chave] = jaVistas.concat([nova.id]);
+  return nova || null;
+}
+
+// Põe `nova` no lugar de `saindoId` (ou acrescenta, se saindoId for nulo),
+// mantendo a mala arrumada — mesmas regras do resto da tela.
+function tripPorNoLook(saindoId, nova, d, turno) {
+  var noLook = (d[turno] || []).slice();
+  if (tripCapsule.indexOf(nova.id) === -1) {
+    tripCapsule.push(nova.id);
+    if (tripAutoAdicionadas.indexOf(nova.id) === -1) tripAutoAdicionadas.push(nova.id);
+  }
+  var i = tripDispensadas.indexOf(nova.id);
+  if (i !== -1) tripDispensadas.splice(i, 1);
+
+  d[turno] = saindoId ? noLook.map(function(id){ return id === saindoId ? nova.id : id; })
+                      : noLook.concat([nova.id]);
+
+  if (saindoId) {
+    var aindaUsada = tripDays.some(function(x){
+      return (x.dia || []).indexOf(saindoId) !== -1 || (x.noite || []).indexOf(saindoId) !== -1;
+    });
+    if (!aindaUsada && tripAutoAdicionadas.indexOf(saindoId) !== -1) {
+      tripCapsule = tripCapsule.filter(function(id){ return id !== saindoId; });
+      tripAutoAdicionadas = tripAutoAdicionadas.filter(function(id){ return id !== saindoId; });
+      delete tripPacked[saindoId];
+    }
+  }
+  tripAtualizarSapatos();
+  tripUso = {};
+  tripDays.forEach(function(x){
+    (x.dia || []).concat(x.noite || []).forEach(function(id){ tripUso[id] = (tripUso[id] || 0) + 1; });
+  });
+  tripRenderResultado();
+  tripAmpliarLook(tripZoomSlot.dia, tripZoomSlot.turno);
+}
+
 // Escolher a peça na mão, dentro de um look da mala 
 // O "sugerir outra" só embaralha o que já está na mala, e não havia como
 // acrescentar uma categoria que o look não tem — um casaco, por exemplo. Este
@@ -12142,7 +12226,7 @@ function tripRenderLookPicker() {
   if (!caixa) return;
   caixa.style.display = tripLookPickerAberto ? 'block' : 'none';
   if (box) box.classList.toggle('com-picker', tripLookPickerAberto);
-  if (btn) btn.textContent = tripLookPickerAberto ? 'fechar' : '+ peça do armário';
+  if (btn) btn.textContent = tripLookPickerAberto ? 'fechar' : 'escolher eu';
   if (!tripLookPickerAberto) return;
   document.getElementById('tripLookPickerCats').innerHTML =
     ['__all__'].concat(TRIP_CATS_PICKER).map(function(c){
@@ -12268,13 +12352,24 @@ function tripRenderZoomPecas(pecas, editavel) {
     return '<div class="zoom-peca">'
       + '<span class="zoom-peca-cat">' + tripEsc((p.category === 'Bottoms') ? 'Calça / Saia' : (CATEGORIA_EM_PT[p.category] || p.category)) + '</span>'
       + '<span class="zoom-peca-nome">' + tripEsc(p.name) + '</span>'
-      + (editavel ? '<button class="zoom-peca-btn" onclick="tripTrocarPecaDoLook(\'' + p.id + '\')">sugerir outra</button>' : '')
+      + (editavel ? '<button class="zoom-peca-btn" title="Outra que já está na mala" onclick="tripTrocarPecaDoLook(\'' + p.id + '\')">sugerir outra</button>'
+                  + '<button class="zoom-peca-btn forte" title="Uma que ainda não está na mala" onclick="tripSugerirNovaPeca(\'' + p.id + '\')">sugerir nova</button>' : '')
       + '</div>';
   }).join('')
-  + (editavel ? '<div class="zoom-peca zoom-peca-add">'
-      + '<span class="zoom-peca-nome">Quer outra peça, ou acrescentar um casaco?</span>'
-      + '<button class="zoom-peca-btn" id="tripLookPickerBtn" onclick="tripAlternarPickerNoLook()">+ peça do armário</button>'
-      + '</div>'
+  + (editavel ? (function(){
+      var tem = {};
+      pecas.forEach(function(p){ tem[p.category] = 1; });
+      var faltando = ['Outerwear','Bags','Jewelry','Accessories'].filter(function(c){ return !tem[c]; });
+      var add = faltando.map(function(c){
+        var nome = { Outerwear: 'casaco', Bags: 'bolsa', Jewelry: 'joia', Accessories: 'acessório' }[c] || c;
+        return '<button class="zoom-peca-btn" onclick="tripAcrescentarSugerida(\'' + c + '\')">+ ' + nome + '</button>';
+      }).join('');
+      return '<div class="zoom-peca zoom-peca-add">'
+        + '<span class="zoom-peca-nome">' + (add ? 'Acrescentar ao look — eu escolho:' : 'Acrescentar ao look:') + '</span>'
+        + add
+        + '<button class="zoom-peca-btn" id="tripLookPickerBtn" onclick="tripAlternarPickerNoLook()">escolher eu</button>'
+        + '</div>';
+    })()
       + '<div id="tripLookPicker" style="display:none;">'
       + '<div class="trip-cat-bar" id="tripLookPickerCats"></div>'
       + '<input type="text" id="tripLookPickerBusca" class="trip-busca" placeholder="Buscar por nome ou marca…" autocomplete="off" oninput="tripLookPickerBuscou()">'
