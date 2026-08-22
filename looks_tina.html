@@ -661,6 +661,22 @@ body.week-pick-mode .card-week-btn { display: block; }
 /* Com a lista embaixo, o flat lay encolhe pra caber os dois. Classe em vez de
    :has() — o app roda no Safari do iPhone dela e não quero depender disso. */
 #lookZoomBox.com-lista #lookZoomFlatlay { height: 52vh; }
+/* Com o seletor aberto o look encolhe, mas tem que continuar dando pra ver o
+   que se está mudando — a 26vh virava miniatura. */
+#lookZoomBox.com-picker #lookZoomFlatlay { height: 34vh; }
+#lookZoomBox.com-picker #lookZoomName { margin-top: 6px; font-size: .8rem; }
+#lookZoomBox { max-height: 92vh; overflow-y: auto; width: 100%; }
+.zoom-peca-add { background: transparent; padding-left: 0; padding-right: 0; }
+.zoom-peca-add .zoom-peca-nome { color: rgba(255,255,255,.6); font-size: .72rem; }
+#tripLookPicker { width: 100%; margin-top: 8px; background: rgba(255,255,255,.06); border-radius: 8px; padding: 10px; }
+#tripLookPicker .trip-cat-pill { border-color: rgba(255,255,255,.3); color: rgba(255,255,255,.8); }
+#tripLookPicker .trip-cat-pill.active { background: #fff; color: #1A1A1A; border-color: #fff; }
+#tripLookPicker .trip-cat-pill small { color: rgba(255,255,255,.5); }
+#tripLookPicker .trip-cat-pill.active small { color: #1A1A1A; opacity: .6; }
+#tripLookPicker .trip-busca { border-color: rgba(255,255,255,.3); color: #fff; background: rgba(0,0,0,.2); }
+#tripLookPicker .trip-picker-grid { padding-bottom: 0; max-height: 34vh; overflow-y: auto; }
+#tripLookPicker .trip-shoe-card { background: rgba(255,255,255,.9); border-color: transparent; }
+#tripLookPicker .trip-picker-vazio { color: rgba(255,255,255,.6); }
 .insp-card img { width: 100%; display: block; }
 .insp-palette { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-bottom: 6px; }
 .insp-dot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(0,0,0,.12); display: inline-block; }
@@ -4064,6 +4080,7 @@ function ampliarLookMontado() {
   renderFlatLay(box, m.pieceIds.map(findPieceById).filter(Boolean), { zoomable: true });
   document.getElementById('lookZoomName').textContent = m.name || 'Look sem nome';
   tripZoomSlot = null;
+  tripLookPickerAberto = false;
   tripRenderZoomPecas(null, false); // a lista com "sugerir outra" é só da mala
   document.getElementById('lookZoomOverlay').classList.add('open');
 }
@@ -4071,6 +4088,7 @@ function ampliarLookMontado() {
 function fecharZoomDoLook() {
   document.getElementById('lookZoomOverlay').classList.remove('open');
   tripZoomSlot = null;
+  tripLookPickerAberto = false;
 }
 
 function closeMontadoDetail() {
@@ -12095,6 +12113,147 @@ function tripTrocarPecaDoLook(pieceId) {
     + (veioDoArmario ? ' — vim buscar no armário, está marcada "eu pus".'
        : (trocouComOutroLook ? ' — a outra foi pro look de ' + trocouComOutroLook + '.' : '.')));
 }
+// Escolher a peça na mão, dentro de um look da mala 
+// O "sugerir outra" só embaralha o que já está na mala, e não havia como
+// acrescentar uma categoria que o look não tem — um casaco, por exemplo. Este
+// seletor resolve os dois: se o look já tem peça daquela categoria, a nova
+// entra no lugar; se não tem, é acréscimo.
+var tripLookPickerAberto = false;
+var tripLookPickerCat = '__all__';
+var tripLookPickerBusca = '';
+
+function tripAlternarPickerNoLook() {
+  tripLookPickerAberto = !tripLookPickerAberto;
+  if (tripLookPickerAberto) { tripLookPickerCat = '__all__'; tripLookPickerBusca = ''; }
+  tripRenderLookPicker();
+}
+
+function tripSetLookPickerCat(c) { tripLookPickerCat = c; tripRenderLookPicker(); }
+
+function tripLookPickerBuscou() {
+  tripLookPickerBusca = (document.getElementById('tripLookPickerBusca').value || '').trim().toLowerCase();
+  tripRenderLookPickerGrid();
+}
+
+function tripRenderLookPicker() {
+  var caixa = document.getElementById('tripLookPicker');
+  var btn = document.getElementById('tripLookPickerBtn');
+  var box = document.getElementById('lookZoomBox');
+  if (!caixa) return;
+  caixa.style.display = tripLookPickerAberto ? 'block' : 'none';
+  if (box) box.classList.toggle('com-picker', tripLookPickerAberto);
+  if (btn) btn.textContent = tripLookPickerAberto ? 'fechar' : '+ peça do armário';
+  if (!tripLookPickerAberto) return;
+  document.getElementById('tripLookPickerCats').innerHTML =
+    ['__all__'].concat(TRIP_CATS_PICKER).map(function(c){
+      var n = (c === '__all__') ? allPecas().length : piecesByCategory(c).length;
+      return '<button class="trip-cat-pill' + (tripLookPickerCat === c ? ' active' : '') + '" onclick="tripSetLookPickerCat(\'' + c + '\')">'
+        + (c === '__all__' ? 'Tudo' : tripEsc(TRIP_CAT_LABEL[c] || c)) + ' <small>' + n + '</small></button>';
+    }).join('');
+  tripRenderLookPickerGrid();
+}
+
+function tripRenderLookPickerGrid() {
+  var grid = document.getElementById('tripLookPickerGrid');
+  if (!grid || !tripZoomSlot) return;
+  var d = tripDays[tripZoomSlot.dia];
+  var noLook = d ? (d[tripZoomSlot.turno] || []) : [];
+  var perfil = (d && d.profile) || tripPerfilDominante();
+  var lista = (tripLookPickerCat === '__all__' ? allPecas() : piecesByCategory(tripLookPickerCat)).slice();
+  if (tripLookPickerBusca) {
+    lista = lista.filter(function(p){
+      return ((p.name||'') + ' ' + (p.brand||'') + ' ' + (p.color||'')).toLowerCase().indexOf(tripLookPickerBusca) !== -1;
+    });
+  }
+  // Quem serve pro clima do dia primeiro; o resto continua na lista, com aviso.
+  lista.sort(function(a,b){ return tripClimaScore(b, perfil) - tripClimaScore(a, perfil); });
+  if (!lista.length) { grid.innerHTML = '<div class="trip-picker-vazio">Nada encontrado.</div>'; return; }
+  grid.innerHTML = lista.slice(0, 120).map(function(p){
+    var jaEsta = noLook.indexOf(p.id) !== -1;
+    var naMala = tripCapsule.indexOf(p.id) !== -1;
+    var ruim = tripClimaScore(p, perfil) <= -2;
+    return '<div class="trip-shoe-card' + (jaEsta ? ' sel' : '') + (ruim && !jaEsta ? ' fora' : '') + '"'
+      + (jaEsta ? '' : ' onclick="tripPorPecaNoLook(\'' + p.id + '\')"') + '>'
+      + '<img src="' + tripEsc(p.img) + '" alt="' + tripEsc(p.name) + '" loading="lazy">'
+      + (jaEsta ? '<div class="trip-shoe-check">✓</div>' : '')
+      + '<div class="trip-shoe-txt"><div class="trip-shoe-brand">' + tripEsc(p.brand) + '</div>'
+      + '<div class="trip-shoe-name">' + tripEsc(p.name) + '</div>'
+      + (jaEsta ? '<div class="trip-shoe-aviso">já está neste look</div>'
+         : (ruim ? '<div class="trip-shoe-aviso">não combina com o clima do dia</div>'
+            : (naMala ? '<div class="trip-shoe-aviso">já está na mala</div>' : '')))
+      + '</div></div>';
+  }).join('');
+}
+
+// Põe a peça escolhida no look: substitui a da mesma categoria, ou acrescenta.
+function tripPorPecaNoLook(pieceId) {
+  if (!tripZoomSlot || tripViewOnly) return;
+  var d = tripDays[tripZoomSlot.dia];
+  var turno = tripZoomSlot.turno;
+  if (!d || d[turno + 'Tipo'] !== 'montado') {
+    showSavedToast('Esse look é escolha sua — pra mudar, use "Mudar o que vai".');
+    return;
+  }
+  var nova = findPieceById(pieceId);
+  if (!nova) return;
+  var noLook = (d[turno] || []).slice();
+  if (noLook.indexOf(pieceId) !== -1) return;
+
+  var saindo = noLook.map(findPieceById).filter(Boolean)
+    .filter(function(p){ return p.category === nova.category; })[0];
+
+  // Se a nova já está em outro look, as duas trocam de lugar — nada entra nem
+  // sai da mala. É a mesma regra do "sugerir outra".
+  var trocouCom = null;
+  if (saindo) {
+    tripDays.forEach(function(x, i){
+      ['dia','noite'].forEach(function(t){
+        if (trocouCom) return;
+        if (i === tripZoomSlot.dia && t === turno) return;
+        if (x[t + 'Tipo'] !== 'montado') return;
+        if ((x[t] || []).indexOf(pieceId) === -1) return;
+        x[t] = x[t].map(function(id){ return id === pieceId ? saindo.id : id; });
+        trocouCom = x.day + ' ' + (t === 'dia' ? 'de dia' : 'à noite');
+      });
+    });
+  }
+
+  d[turno] = saindo ? noLook.map(function(id){ return id === saindo.id ? pieceId : id; })
+                    : noLook.concat([pieceId]);
+
+  var novaNaMala = tripCapsule.indexOf(pieceId) !== -1;
+  if (!novaNaMala) {
+    tripCapsule.push(pieceId);
+    if (tripAutoAdicionadas.indexOf(pieceId) === -1) tripAutoAdicionadas.push(pieceId);
+  }
+  var i = tripDispensadas.indexOf(pieceId);
+  if (i !== -1) tripDispensadas.splice(i, 1); // ela pediu de volta
+
+  // A que saiu deixa a mala só se ninguém mais usa e se fui eu que trouxe.
+  if (saindo) {
+    var aindaUsada = tripDays.some(function(x){
+      return (x.dia || []).indexOf(saindo.id) !== -1 || (x.noite || []).indexOf(saindo.id) !== -1;
+    });
+    if (!aindaUsada && tripAutoAdicionadas.indexOf(saindo.id) !== -1) {
+      tripCapsule = tripCapsule.filter(function(id){ return id !== saindo.id; });
+      tripAutoAdicionadas = tripAutoAdicionadas.filter(function(id){ return id !== saindo.id; });
+      delete tripPacked[saindo.id];
+    }
+  }
+  tripAtualizarSapatos();
+
+  tripUso = {};
+  tripDays.forEach(function(x){
+    (x.dia || []).concat(x.noite || []).forEach(function(id){ tripUso[id] = (tripUso[id] || 0) + 1; });
+  });
+
+  tripRenderResultado();
+  tripAmpliarLook(tripZoomSlot.dia, tripZoomSlot.turno);
+  showSavedToast(saindo
+    ? ('Troquei por ' + tripNomeCurto(nova) + (trocouCom ? ' — a outra foi pro look de ' + trocouCom + '.' : '.'))
+    : (tripNomeCurto(nova) + ' entrou no look' + (novaNaMala ? '.' : ' e na lista da mala.')));
+}
+
 function tripRenderZoomPecas(pecas, editavel) {
   var box = document.getElementById('lookZoomPecas');
   if (!box) return;
@@ -12111,7 +12270,17 @@ function tripRenderZoomPecas(pecas, editavel) {
       + '<span class="zoom-peca-nome">' + tripEsc(p.name) + '</span>'
       + (editavel ? '<button class="zoom-peca-btn" onclick="tripTrocarPecaDoLook(\'' + p.id + '\')">sugerir outra</button>' : '')
       + '</div>';
-  }).join('');
+  }).join('')
+  + (editavel ? '<div class="zoom-peca zoom-peca-add">'
+      + '<span class="zoom-peca-nome">Quer outra peça, ou acrescentar um casaco?</span>'
+      + '<button class="zoom-peca-btn" id="tripLookPickerBtn" onclick="tripAlternarPickerNoLook()">+ peça do armário</button>'
+      + '</div>'
+      + '<div id="tripLookPicker" style="display:none;">'
+      + '<div class="trip-cat-bar" id="tripLookPickerCats"></div>'
+      + '<input type="text" id="tripLookPickerBusca" class="trip-busca" placeholder="Buscar por nome ou marca…" autocomplete="off" oninput="tripLookPickerBuscou()">'
+      + '<div class="trip-picker-grid" id="tripLookPickerGrid"></div>'
+      + '</div>' : '');
+  tripRenderLookPicker();
 }
 
 // Ver um look da mala em tela cheia. Reusa o overlay de "Ampliar look" dos Looks
@@ -12131,6 +12300,7 @@ function tripAmpliarLook(idx, turno) {
   }
   var pecas = (d[turno] || []).map(findPieceById).filter(Boolean);
   if (!pecas.length) return;
+  if (!tripZoomSlot || tripZoomSlot.dia !== idx || tripZoomSlot.turno !== turno) tripLookPickerAberto = false;
   tripZoomSlot = { dia: idx, turno: turno };
   renderFlatLay(document.getElementById('lookZoomFlatlay'), pecas, { zoomable: true });
   document.getElementById('lookZoomName').textContent = titulo;
