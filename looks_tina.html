@@ -561,7 +561,7 @@ body.week-pick-mode .card-week-btn { display: block; }
 .day-noite-acoes .day-noite-add { width: auto; flex: 1; margin: 6px 0 0; }
 .day-noite-acoes .day-noite-add:first-child { margin-left: 6px; }
 .day-noite-acoes .day-noite-add:last-child { margin-right: 6px; flex: 0 0 auto; }
-.day-noite-outra { position: absolute; top: 4px; right: 4px; z-index: 3; font-size: .6rem; background: rgba(255,255,255,.92); border: 1px solid var(--line-input); border-radius: 5px; padding: 1px 6px; cursor: pointer; font-family: inherit; color: var(--txt-2); }
+.day-noite-outra { position: absolute; top: 4px; left: 4px; z-index: 3; font-size: .6rem; background: rgba(255,255,255,.92); border: 1px solid var(--line-input); border-radius: 5px; padding: 1px 6px; cursor: pointer; font-family: inherit; color: var(--txt-2); }
 .day-noite-outra:hover { border-color: var(--ink); color: var(--ink); }
 /* mesma proporção e largura do look do dia — a foto da noite estava achatada */
 .day-noite { position: relative; margin: 6px 0 0; }
@@ -569,7 +569,7 @@ body.week-pick-mode .card-week-btn { display: block; }
 .day-noite-label { position: absolute; left: 4px; bottom: 4px; background: rgba(0,0,0,.6); color: #fff; font-size: .58rem; border-radius: 5px; padding: 1px 5px; }
 .day-turno-btn { position: absolute; bottom: 4px; right: 4px; background: rgba(0,0,0,.55); color: #fff; border: none; border-radius: 50%; width: 22px; height: 22px; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 5; }
 .day-turno-btn:hover { background: #1A1A1A; }
-.day-noite-rm { position: absolute; top: 3px; right: 3px; background: rgba(0,0,0,.55); color: #fff; border: none; border-radius: 50%; width: 18px; height: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.day-noite-rm { position: absolute; top: 3px; right: 3px; z-index: 4; background: rgba(0,0,0,.55); color: #fff; border: none; border-radius: 50%; width: 18px; height: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 .day-suggest-btn { font-size: .68rem; color: #1A1A1A; background: #fff; border: 1px solid #E0E0DB; border-radius: 6px; padding: 3px 10px; cursor: pointer; margin-top: 5px; font-family: inherit; }
 .day-suggest-btn:hover { border-color: #1A1A1A; }
 #nextWeekSection { margin-top: 34px; padding-top: 26px; border-top: 1px solid #EAEAE7; }
@@ -6403,7 +6403,7 @@ function blocoDaNoite(col, day, alvo) {
   lb.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.6 8.6 0 1 0 11.1 11.1z"/></svg> noite';
   wrap.appendChild(lb);
   var rm = document.createElement('button'); rm.className = 'day-noite-rm';
-  rm.title = 'Tirar o look da noite';
+  rm.title = 'Tirar o look da noite de ' + day;
   rm.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"/></svg>';
   rm.onclick = (function(d,a){ return function(e){ e.stopPropagation(); limparNoiteDoDia(d, a); saveMontagens(); saveToStorage(); renderGrid(); renderWeek(); }; })(day, alvo);
   wrap.appendChild(rm);
