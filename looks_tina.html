@@ -431,6 +431,7 @@ body.week-pick-mode .card-week-btn { display: block; }
 .trip-picker-vazio { grid-column: 1/-1; font-size: .8rem; color: var(--txt-3); padding: 18px 4px; }
 .montado-peca-x { position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--line-input); background: var(--surface); color: var(--txt-2); cursor: pointer; font-size: .7rem; line-height: 1; display: flex; align-items: center; justify-content: center; font-family: inherit; }
 .montado-peca-x:hover { background: var(--ink); border-color: var(--ink); color: var(--surface); }
+.montado-add-cat { font-size: .72rem; padding: 4px 10px; }
 .trip-shoe-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding-bottom: 96px; }
 .trip-shoe-card { position: relative; border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; cursor: pointer; background: var(--surface); }
 .trip-shoe-card img { width: 100%; aspect-ratio: 1; object-fit: contain; display: block; background: var(--bg); }
@@ -3882,6 +3883,41 @@ function montadoAtual() {
   return montagens.find(function(x){ return x.id === montadoDetailId; }) || null;
 }
 
+// Acrescentar peça a um look salvo, escolhida por mim 
+// O "+ Peça" abre o armário pra ela procurar. Aqui é o mesmo da mala: um botão
+// por categoria que falta, e quem escolhe sou eu. Look montado não tem clima de
+// destino, então a nota olha o que já está no look — o voto dela naquele par, a
+// paleta e a compatibilidade — mais o rodízio, pra não vir sempre a mesma.
+function sugerirPecaParaMontado(cat) {
+  var m = montadoAtual();
+  if (!m) return;
+  var noLook = (m.pieceIds || []).map(findPieceById).filter(Boolean);
+  var pool = piecesByCategory(cat).filter(function(p){
+    return (m.pieceIds || []).indexOf(p.id) === -1 && !tripEhDeCasa(p);
+  });
+  if (!pool.length) { showSavedToast('Não tenho ' + (TRIP_CAT_LABEL[cat] || cat).toLowerCase() + ' pra acrescentar.'); return; }
+
+  var melhor = null, melhorNota = -Infinity;
+  pool.forEach(function(p){
+    if (pecaProibidaComAsOutras(p, noLook)) return;
+    var nota = tripNotaAprendida(p, noLook) * 3.5
+      + tripNotaPaleta(p, noLook) * 2.5
+      + tripMediaCompat(p, noLook) * 2
+      + fatorDeRodizioDaPeca(p) * 0.8
+      + Math.random() * 1.2;
+    if (noLook.some(function(q){ return tripQuaseIgual(q, p); })) nota -= 4;
+    if (nota > melhorNota) { melhorNota = nota; melhor = p; }
+  });
+  if (!melhor) { showSavedToast('Tudo dessa categoria briga com alguma regra sua neste look.'); return; }
+
+  m.pieceIds = (m.pieceIds || []).concat([melhor.id]);
+  contarPecaNoMontador(melhor.id); anotarPecaMostrada(melhor.id); salvarRodizioDePecas();
+  saveMontagens();
+  openMontadoDetail(m.id);
+  renderLooksMontados();
+  showSavedToast(tripNomeCurto(melhor) + ' entrou no look. Não gostou? Toca no ✕ dela, ou peça outra.');
+}
+
 function alternarEscolherPecaNoMontado() {
   montadoPickerAberto = !montadoPickerAberto;
   if (montadoPickerAberto) { montadoPickerCat = '__all__'; montadoPickerBusca = ''; }
@@ -3900,7 +3936,7 @@ function renderMontadoPicker() {
   var btn = document.getElementById('montadoAddBtn');
   if (!caixa) return;
   caixa.style.display = montadoPickerAberto ? 'block' : 'none';
-  if (btn) btn.textContent = montadoPickerAberto ? 'Fechar' : '+ Peça';
+  if (btn) btn.textContent = montadoPickerAberto ? 'fechar' : 'escolher eu';
   if (!montadoPickerAberto) return;
 
   var barra = document.getElementById('montadoPickerCats');
@@ -4043,8 +4079,21 @@ function openMontadoDetail(id) {
     acoes.appendChild(excluir);
   }
 
-  renderMontadoPicker();
   var pieces = m.pieceIds.map(findPieceById).filter(Boolean);
+  var barra = document.getElementById('montadoAddBar');
+  if (barra) {
+    var tem = {};
+    pieces.forEach(function(p){ tem[p.category] = 1; });
+    var faltando = ['Outerwear','Bags','Jewelry','Accessories','Shoes','Tops','Bottoms'].filter(function(c){ return !tem[c]; });
+    var nomes = { Outerwear: 'casaco', Bags: 'bolsa', Jewelry: 'joia', Accessories: 'acessório',
+                  Shoes: 'sapato', Tops: 'blusa', Bottoms: 'calça' };
+    barra.innerHTML = (faltando.length ? '<span style="font-size:.72rem;color:#A8A8A4;">Acrescentar — eu escolho:</span>' : '')
+      + faltando.map(function(c){
+          return '<button class="btn btn-ghost montado-add-cat" onclick="sugerirPecaParaMontado(\'' + c + '\')">+ ' + nomes[c] + '</button>';
+        }).join('')
+      + '<button class="btn btn-ghost" id="montadoAddBtn" style="margin-left:auto;" onclick="alternarEscolherPecaNoMontado()">escolher eu</button>';
+  }
+  renderMontadoPicker();
   var flatlay = document.getElementById('montadoDetailFlatlay');
   if (flatlay) renderFlatLay(flatlay, pieces, { zoomable: true });
   var grid = document.getElementById('montadoDetailPieces');
@@ -15453,10 +15502,8 @@ function applySuggestions() {
     <div style="text-align:center;margin-bottom:20px;">
       <button class="btn btn-ghost" onclick="ampliarLookMontado()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><circle cx="10.6" cy="10.6" r="6.6"/><path d="M15.4 15.4 20.5 20.5M10.6 7.8v5.6M7.8 10.6h5.6"/></svg> Ampliar look</button>
     </div>
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;">
-      <div style="font-size:.72rem;color:#A8A8A4;">Peças do look — toca no ✕ pra tirar</div>
-      <button class="btn btn-ghost" id="montadoAddBtn" onclick="alternarEscolherPecaNoMontado()">+ Peça</button>
-    </div>
+    <div style="font-size:.72rem;color:#A8A8A4;margin-bottom:6px;">Peças do look — toca no ✕ pra tirar</div>
+    <div id="montadoAddBar" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px;"></div>
     <div id="montadoPicker" style="display:none;margin-bottom:16px;">
       <div class="trip-cat-bar" id="montadoPickerCats"></div>
       <input type="text" id="montadoPickerBusca" class="trip-busca" placeholder="Buscar por nome ou marca…" autocomplete="off" oninput="montadoPickerBuscou()">
