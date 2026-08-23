@@ -10758,6 +10758,8 @@ function tripShowStep(n) {
 }
 
 function tripBackToStep1() {
+  tripDays = [];   // senão a próxima mala seria tratada como atualização desta
+  tripHistorico = [];
   document.getElementById('tripHeaderTitle').textContent = 'Mala de viagem';
   tripShowStep(1);
   renderSavedTripsList();
@@ -11036,7 +11038,10 @@ function tripRenderEscolha() {
     barra.style.display = 'none';
   }
   var busca = document.getElementById('tripBusca');
-  busca.placeholder = tripFonte === 'catalogo' ? 'Buscar por etiqueta, marca…' : 'Buscar por nome ou marca…';
+  var quantos = tripFonte === 'catalogo' ? data.filter(function(p){ return !p.archived && (p.tags||[]).length; }).length
+    : (tripFonte === 'meus' ? montagens.filter(function(m){ return (m.pieceIds||[]).length; }).length : allPecas().length);
+  busca.placeholder = (tripFonte === 'catalogo' ? 'Buscar entre os ' + quantos + ' looks do catálogo…'
+    : (tripFonte === 'meus' ? 'Buscar entre os seus ' + quantos + ' looks…' : 'Buscar entre as ' + quantos + ' peças…'));
   tripRenderPicker();
   tripRenderEscolhaBar();
 }
@@ -11117,7 +11122,10 @@ function tripRenderPickerCatalogo(grid) {
   if (tripBusca) {
     lista = lista.filter(function(p){ return (p.tags||[]).join(' ').toLowerCase().indexOf(tripBusca) !== -1; });
   }
-  lista = lista.slice().sort(byNewestFirst).slice(0, 120); // a grade não precisa dos 877 de uma vez
+  // Mostrava só 120 dos 877 e ela não achava o look que queria. A aba Catálogo
+  // do app já desenha os 877 de uma vez, então aqui também dá: as fotos são
+  // lazy e só carregam quando entram na tela.
+  lista = lista.slice().sort(byNewestFirst);
   grid.className = 'trip-picker-grid fotos';
   if (!lista.length) { grid.innerHTML = '<div class="trip-picker-vazio">Nada encontrado.</div>'; return; }
   grid.innerHTML = lista.map(function(p){
@@ -11678,6 +11686,131 @@ function tripRotuloDoBotaoCompletar() {
 // blusa?" Pode — e é o certo. Antes eu só buscava quando a categoria estava
 // vazia, e buscava uma peça, o que só empurrava o problema. Agora completo até o
 // alvo da categoria, e tudo o que entra fica marcado "eu pus" para ela tirar.
+// Voltar em "Mudar o que vai" numa mala que já existe 
+// Antes isso remontava tudo do zero, e as mudanças que ela fez look a look —
+// um casaco acrescentado, uma blusa trocada na mão — iam junto. Agora só muda o
+// que precisa: os looks que ela escolheu entram nos dias ainda montados por mim,
+// os que ela desmarcou saem, e todo look que continua válido fica como está.
+function tripPlanoJaExiste() {
+  return tripDays.length === tripForecast.length && tripDays.length > 0;
+}
+
+function tripAtualizarPlano() {
+  var perfil = tripPerfilDominante();
+
+  // 1. Cápsula nova: as peças dela, as dos looks que ela escolheu, e o que eu
+  //    tinha trazido que ainda está em uso.
+  var escolhidosPecas = [];
+  tripMeus.forEach(function(mid){
+    tripLookDoMontado(mid).forEach(function(id){ if (escolhidosPecas.indexOf(id) === -1) escolhidosPecas.push(id); });
+  });
+  var base = tripPecas.concat(escolhidosPecas);
+  var usadasAgora = {};
+  tripDays.forEach(function(d){
+    (d.dia || []).concat(d.noite || []).forEach(function(id){ usadasAgora[id] = 1; });
+  });
+  var manter = tripAutoAdicionadas.filter(function(id){ return usadasAgora[id]; });
+  tripCapsule = base.concat(manter).filter(function(id, i, arr){ return arr.indexOf(id) === i; });
+  tripAtualizarSapatos();
+
+  // 2. Solta os dias cujo look escolhido deixou de estar escolhido.
+  tripDays.forEach(function(d){
+    ['dia','noite'].forEach(function(t){
+      var tipo = d[t + 'Tipo'], ref = d[t + 'Ref'];
+      if (tipo === 'meu' && tripMeus.indexOf(ref) === -1) { d[t] = []; d[t + 'Tipo'] = 'livre'; d[t + 'Ref'] = null; }
+      if (tipo === 'catalogo' && tripCatalogo.indexOf(String(ref)) === -1) { d[t] = []; d[t + 'Tipo'] = 'livre'; d[t + 'Ref'] = null; }
+    });
+  });
+
+  // 3. Os looks escolhidos que ainda não estão em dia nenhum entram nos dias
+  //    livres — e, se não houver, nos que eu montei (a escolha dela ganha).
+  var jaColocados = {};
+  tripDays.forEach(function(d){
+    ['dia','noite'].forEach(function(t){ if (d[t + 'Ref']) jaColocados[d[t + 'Tipo'] + ':' + d[t + 'Ref']] = 1; });
+  });
+  var novos = [];
+  tripMeus.forEach(function(id){ if (!jaColocados['meu:' + id]) novos.push({ tipo: 'meu', id: id }); });
+  tripCatalogo.forEach(function(id){ if (!jaColocados['catalogo:' + id]) novos.push({ tipo: 'catalogo', id: String(id) }); });
+
+  function slotsPor(tipos) {
+    var out = [];
+    tripDays.forEach(function(d, i){
+      ['dia','noite'].forEach(function(t){ if (tipos.indexOf(d[t + 'Tipo']) !== -1) out.push({ i: i, t: t }); });
+    });
+    return shuffledCopy(out);
+  }
+  var vagos = slotsPor(['livre']).concat(slotsPor(['montado']));
+  novos.forEach(function(n){
+    var s = vagos.shift();
+    if (!s) return;
+    var d = tripDays[s.i];
+    d[s.t] = (n.tipo === 'meu') ? tripLookDoMontado(n.id) : [];
+    d[s.t + 'Tipo'] = n.tipo;
+    d[s.t + 'Ref'] = n.id;
+  });
+
+  // 4. Uso recontado antes de mexer nos dias que eu monto.
+  tripUso = {};
+  tripDays.forEach(function(d){
+    (d.dia || []).concat(d.noite || []).forEach(function(id){ tripUso[id] = (tripUso[id] || 0) + 1; });
+  });
+
+  // 5. Completar blusa e calça pro que eu ainda vou montar.
+  var vouMontar = 0;
+  tripDays.forEach(function(d){
+    ['dia','noite'].forEach(function(t){ if (d[t + 'Tipo'] === 'livre' || d[t + 'Tipo'] === 'montado') vouMontar++; });
+  });
+  if (vouMontar > 0) {
+    ['Tops','Bottoms'].forEach(function(cat){
+      var falta = tripAlvoDaCategoria(cat, vouMontar) - tripCapsulaPorCategoria(cat).length;
+      if (falta <= 0) return;
+      var naMala = tripCapsule.map(findPieceById).filter(Boolean);
+      var sapatos = tripShoeIds.map(findPieceById).filter(Boolean);
+      tripEscolherPraCapsula(cat, falta, perfil, sapatos, naMala).forEach(function(p){
+        if (tripAutoAdicionadas.indexOf(p.id) === -1) tripAutoAdicionadas.push(p.id);
+        if (tripCapsule.indexOf(p.id) === -1) tripCapsule.push(p.id);
+      });
+    });
+    tripAtualizarSapatos();
+  }
+
+  // 6. Só os dias vagos, e os meus que ficaram com peça fora da mala, são
+  //    refeitos. O que ela mexeu à mão continua de pé.
+  var podeMontar = !tripFaltaPraMontar().length;
+  var feitos = [];
+  tripDays.forEach(function(d){
+    ['dia','noite'].forEach(function(t){ if (d[t] && d[t].length) feitos.push(d[t]); });
+  });
+  tripDays.forEach(function(d, i){
+    ['dia','noite'].forEach(function(t){
+      var tipo = d[t + 'Tipo'];
+      if (tipo === 'meu' || tipo === 'catalogo') return;
+      var valido = (d[t] || []).length && (d[t] || []).every(function(id){ return tripCapsule.indexOf(id) !== -1; });
+      if (tipo === 'montado' && valido) return;   // look que ela pode ter ajustado: fica
+      if (!podeMontar) { d[t] = []; d[t + 'Tipo'] = 'vazio'; d[t + 'Ref'] = null; return; }
+      (d[t] || []).forEach(function(id){ if (tripUso[id]) tripUso[id]--; });
+      d[t] = tripMontarLookDiferente(tripForecast[i], t, tripUso, [], feitos);
+      d[t + 'Tipo'] = 'montado'; d[t + 'Ref'] = null;
+      feitos.push(d[t]);
+    });
+  });
+
+  // 7. E o que ficou na lista sem aparecer em look nenhum, se fui eu que trouxe, sai.
+  var usadas = {};
+  tripDays.forEach(function(d){
+    (d.dia || []).concat(d.noite || []).forEach(function(id){ usadas[id] = 1; });
+  });
+  tripAutoAdicionadas = tripAutoAdicionadas.filter(function(id){ return usadas[id]; });
+  tripCapsule = tripCapsule.filter(function(id){
+    return usadas[id] || tripPecas.indexOf(id) !== -1 || escolhidosPecas.indexOf(id) !== -1;
+  });
+  tripAtualizarSapatos();
+  tripUso = {};
+  tripDays.forEach(function(d){
+    (d.dia || []).concat(d.noite || []).forEach(function(id){ tripUso[id] = (tripUso[id] || 0) + 1; });
+  });
+}
+
 function tripMontarPlano() {
   var perfil = tripPerfilDominante();
   var escolhidos = tripEncaixarEscolhidos(perfil);
@@ -11797,6 +11930,16 @@ function tripBuild() {
     return;
   }
   tripViewOnly = false;
+  // Mala que já existe (ela voltou em "Mudar o que vai") não é remontada do
+  // zero: as mudanças que ela fez look a look ficam de pé.
+  if (tripPlanoJaExiste()) {
+    tripGuardarEstado();
+    tripJaSugeridas = {};
+    tripAtualizarPlano();
+    tripRenderResultado();
+    tripShowStep(3);
+    return;
+  }
   tripPacked = {};
   tripSavedIdx = null;
   tripAutoAdicionadas = [];
@@ -12316,7 +12459,7 @@ function tripRenderLookPickerGrid() {
   // Quem serve pro clima do dia primeiro; o resto continua na lista, com aviso.
   lista.sort(function(a,b){ return tripClimaScore(b, perfil) - tripClimaScore(a, perfil); });
   if (!lista.length) { grid.innerHTML = '<div class="trip-picker-vazio">Nada encontrado.</div>'; return; }
-  grid.innerHTML = lista.slice(0, 120).map(function(p){
+  grid.innerHTML = lista.map(function(p){
     var jaEsta = noLook.indexOf(p.id) !== -1;
     var naMala = tripCapsule.indexOf(p.id) !== -1;
     var ruim = tripClimaScore(p, perfil) <= -2;
@@ -12592,7 +12735,7 @@ function tripRenderDays() {
         leg.textContent = look ? (look.tags||[]).filter(function(x){ return x.split(':')[0].trim().toLowerCase() !== 'marca'; })
           .map(function(x){ return x.split(':').slice(1).join(':').trim(); }).join(' · ') : '';
         box.appendChild(leg);
-      } else if (tipo === 'vazio') {
+      } else if (tipo === 'vazio' || tipo === 'livre') {
         var vazio = document.createElement('div');
         vazio.className = 'trip-turno-vazio';
         vazio.innerHTML = 'Sem look aqui.<br><small>Falta ' + tripEsc(tripTextoDoQueFalta()) + ' entre o que você escolheu.</small>';
