@@ -623,12 +623,13 @@ body.week-pick-mode .card-week-btn { display: block; }
 .drag-hint { font-size: .62rem; color: #A8A8A4; text-align: center; padding: 4px 0 2px; }
 .day-look-remove { position: absolute; top: 5px; right: 5px; background: rgba(0,0,0,.55); color: #fff; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; font-size: .85rem; display: flex; align-items: center; justify-content: center; }
 .day-look-resuggest {
-  position:absolute; top:4px; left:4px;
-  background:rgba(0,0,0,.55); color:#fff; border:none;
-  border-radius:50%; width:26px; height:26px; font-size:.85rem;
-  cursor:pointer; display:flex; align-items:center; justify-content:center;
-  line-height:1;
+  position:absolute; top:4px; left:4px; z-index:3;
+  background:rgba(255,255,255,.92); color:var(--txt-2);
+  border:1px solid var(--line-input); border-radius:5px;
+  padding:1px 6px; font-size:.6rem; font-family:inherit;
+  cursor:pointer; line-height:1.5;
 }
+.day-look-resuggest:hover { border-color:var(--ink); color:var(--ink); }
 #dayPickerOverlay, #suggestPiecePickerOverlay {
   position:fixed; inset:0; z-index:10050; background:rgba(0,0,0,.6);
   display:none; align-items:center; justify-content:center;
@@ -5917,10 +5918,13 @@ function renderWeek() {
       img.loading = 'lazy'; img.onerror = function(){ this.style.background='#F0F0EC'; };
       applyRotation(img, look);
       img.onclick = (function(pid){ return function(){ openView(pid); }; })(look.id);
-      var rm = document.createElement('button'); rm.className = 'day-look-remove'; rm.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"/></svg>';
+      var rm = document.createElement('button'); rm.className = 'day-look-remove';
+      rm.title = 'Tirar o look de ' + day;
+      rm.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"/></svg>';
       rm.onclick = (function(d){ return function(e){ e.stopPropagation(); removeFromWeek(d); }; })(day);
-      var resugg = document.createElement('button'); resugg.className = 'day-look-resuggest'; resugg.title = 'Sugerir outro look pra este dia';
-      resugg.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M20.3 12a8.3 8.3 0 1 1-2.7-6.1"/><path d="M20.3 3.6v4.7h-4.7"/></svg>';
+      var resugg = document.createElement('button'); resugg.className = 'day-look-resuggest';
+      resugg.title = 'Sugerir outro look pra ' + day;
+      resugg.textContent = 'outra';
       resugg.onclick = (function(d){ return function(e){ e.stopPropagation(); sugerirLookParaDia(d, 'atual'); }; })(day);
       dl.appendChild(img); dl.appendChild(rm); dl.appendChild(resugg);
       botaoTrocarTurno(dl, day, 'atual', 'dia');
@@ -5953,8 +5957,8 @@ function renderWeek() {
       mrm.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"/></svg>';
       mrm.onclick = (function(mid, k, alvo){ return function(e){ e.stopPropagation(); setMontadoWeekday(mid, k, alvo); renderWeek(); }; })(montado.id, dayKey, weekView);
       var mrs = document.createElement('button'); mrs.className = 'day-look-resuggest';
-      mrs.title = 'Sugerir outro look pra este dia';
-      mrs.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.3 12a8.3 8.3 0 1 1-2.7-6.1"/><path d="M20.3 3.6v4.7h-4.7"/></svg>';
+      mrs.title = 'Sugerir outro look pra ' + day;
+      mrs.textContent = 'outra';
       mrs.onclick = (function(dd){ return function(e){ e.stopPropagation(); sugerirLookParaDia(dd, 'atual'); }; })(day);
       dm.appendChild(mrs);
       dm.appendChild(mrm);
@@ -6264,8 +6268,8 @@ function renderNextWeekGrid() {
       rm.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"/></svg>';
       rm.onclick = (function(dd){ return function(e){ e.stopPropagation(); clearWeekLookFor(dd, 'proxima'); renderWeek(); }; })(day);
       var rs = document.createElement('button'); rs.className = 'day-look-resuggest';
-      rs.title = 'Sugerir outro look pra este dia';
-      rs.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.3 12a8.3 8.3 0 1 1-2.7-6.1"/><path d="M20.3 3.6v4.7h-4.7"/></svg>';
+      rs.title = 'Sugerir outro look pra ' + day;
+      rs.textContent = 'outra';
       rs.onclick = (function(dd){ return function(e){ e.stopPropagation(); sugerirLookParaDia(dd, 'proxima'); }; })(day);
       dl.appendChild(img); dl.appendChild(rm); dl.appendChild(rs);
       botaoTrocarTurno(dl, day, 'proxima', 'dia');
@@ -6285,8 +6289,8 @@ function renderNextWeekGrid() {
       mrm.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"/></svg>';
       mrm.onclick = (function(mid, k){ return function(e){ e.stopPropagation(); setMontadoWeekday(mid, k, 'proxima'); renderWeek(); }; })(montado.id, dayKey);
       var mrs = document.createElement('button'); mrs.className = 'day-look-resuggest';
-      mrs.title = 'Sugerir outro look pra este dia';
-      mrs.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.3 12a8.3 8.3 0 1 1-2.7-6.1"/><path d="M20.3 3.6v4.7h-4.7"/></svg>';
+      mrs.title = 'Sugerir outro look pra ' + day;
+      mrs.textContent = 'outra';
       mrs.onclick = (function(dd){ return function(e){ e.stopPropagation(); sugerirLookParaDia(dd, 'proxima'); }; })(day);
       dm.appendChild(mrs);
       dm.appendChild(mrm);
