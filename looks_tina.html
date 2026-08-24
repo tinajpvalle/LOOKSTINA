@@ -460,6 +460,8 @@ body.week-pick-mode .card-week-btn { display: block; }
 .trip-turno-label { font-size: 9.5px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: var(--txt-3); }
 .trip-turno-vazio { border: 1px dashed var(--line-dash); border-radius: var(--r-md); padding: 22px 10px; text-align: center; font-size: .74rem; color: var(--txt-3); line-height: 1.5; }
 .trip-turno-vazio small { font-size: .68rem; }
+.trip-semlook-acoes { display: flex; gap: 6px; justify-content: center; margin-top: 10px; }
+#tripEscolhaOverlay { z-index: 10005; }
 .trip-foto-look { width: 100%; aspect-ratio: 3/4; object-fit: cover; border-radius: var(--r-md); display: block; cursor: zoom-in; }
 .trip-pack-marca { position: absolute; left: 3px; bottom: 22px; font-size: .52rem; background: var(--ink); color: var(--surface); border-radius: var(--r-xs); padding: 1px 4px; letter-spacing: .02em; }
 .trip-pack-marca.clara { background: var(--surface); color: var(--txt-3); border: 1px solid var(--line); }
@@ -1378,6 +1380,23 @@ body.compare-mode .card-compare-btn { display: flex; }
     <div style="display:flex;gap:6px;flex-shrink:0;">
       <button class="btn-back" onclick="tripBackToStep1()">←</button>
       <button class="btn-next" id="tripBuildBtn" onclick="tripBuild()">Montar mala →</button>
+    </div>
+  </div>
+</div>
+
+<!-- Escolher o look de um turno vazio da mala -->
+<div class="overlay" id="tripEscolhaOverlay" onclick="if(event.target===this) tripFecharEscolhaDeLook()">
+  <div class="modal trip-modal" id="tripEscolhaModal">
+    <button class="close-btn" onclick="tripFecharEscolhaDeLook()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"/></svg></button>
+    <div class="modal-body">
+      <h3 style="margin-bottom:4px;">Escolher o look</h3>
+      <div id="tripEscolhaTitulo" style="font-size:.82rem;color:var(--txt-2);margin-bottom:12px;"></div>
+      <div class="trip-fonte-bar" id="tripEscolhaFontes">
+        <button type="button" class="trip-fonte-pill active" data-f="meus" onclick="tripSetEscolhaFonte('meus')">Meus looks</button>
+        <button type="button" class="trip-fonte-pill" data-f="catalogo" onclick="tripSetEscolhaFonte('catalogo')">Catálogo</button>
+      </div>
+      <input type="text" id="tripEscolhaBusca" class="trip-busca" autocomplete="off" oninput="tripEscolhaBuscou()">
+      <div class="trip-picker-grid" id="tripEscolhaGrid" style="padding-bottom:0;"></div>
     </div>
   </div>
 </div>
@@ -11916,7 +11935,7 @@ function tripAtualizarPlano() {
       if (tipo === 'montado' && valido) return;   // look que ela pode ter ajustado: fica
       if (!podeMontar) { d[t] = []; d[t + 'Tipo'] = 'vazio'; d[t + 'Ref'] = null; return; }
       (d[t] || []).forEach(function(id){ if (tripUso[id]) tripUso[id]--; });
-      d[t] = tripMontarLookDiferente(tripForecast[i], t, tripUso, [], feitos);
+      d[t] = tripMontarLookDiferente(tripClimaDoDia(i), t, tripUso, [], feitos);
       d[t + 'Tipo'] = 'montado'; d[t + 'Ref'] = null;
       feitos.push(d[t]);
     });
@@ -12279,6 +12298,142 @@ function tripNomeCurto(p) {
   return (p.name || '').replace(/\b(leather|suede|canvas|cotton|patterned)\b/gi, '').replace(/\s+/g, ' ').trim() || p.name;
 }
 
+// Escolher o look de um turno vazio 
+// O "montar aqui" monta com as peças da mala — quem escolhe sou eu. Faltava o
+// outro lado: pegar um look salvo dela ou uma foto do catálogo e pôr naquele
+// dia. Mesmas duas fontes do passo 2, num seletor próprio.
+var tripEscolhaSlot = null;      // {dia, turno} do turno sendo preenchido
+var tripEscolhaFonte = 'meus';   // 'meus' | 'catalogo'
+var tripEscolhaBusca = '';
+
+function tripAbrirEscolhaDeLook(idx, turno) {
+  if (tripViewOnly) return;
+  tripEscolhaSlot = { dia: idx, turno: turno };
+  tripEscolhaFonte = 'meus';
+  tripEscolhaBusca = '';
+  var d = tripDays[idx];
+  document.getElementById('tripEscolhaTitulo').textContent =
+    d.day + ' · ' + d.dateLabel + ' · ' + (turno === 'dia' ? 'de dia' : 'à noite');
+  document.getElementById('tripEscolhaBusca').value = '';
+  document.getElementById('tripEscolhaOverlay').classList.add('open');
+  tripRenderEscolhaDeLook();
+}
+
+function tripFecharEscolhaDeLook() {
+  document.getElementById('tripEscolhaOverlay').classList.remove('open');
+  tripEscolhaSlot = null;
+}
+
+function tripSetEscolhaFonte(f) {
+  tripEscolhaFonte = f;
+  tripEscolhaBusca = '';
+  document.getElementById('tripEscolhaBusca').value = '';
+  tripRenderEscolhaDeLook();
+}
+
+function tripEscolhaBuscou() {
+  tripEscolhaBusca = (document.getElementById('tripEscolhaBusca').value || '').trim().toLowerCase();
+  tripRenderEscolhaDeLookGrid();
+}
+
+function tripRenderEscolhaDeLook() {
+  [].forEach.call(document.querySelectorAll('#tripEscolhaFontes .trip-fonte-pill'), function(b){
+    b.classList.toggle('active', b.getAttribute('data-f') === tripEscolhaFonte);
+  });
+  var busca = document.getElementById('tripEscolhaBusca');
+  busca.placeholder = tripEscolhaFonte === 'meus'
+    ? ('Buscar entre os seus ' + montagens.filter(function(m){ return (m.pieceIds||[]).length; }).length + ' looks…')
+    : ('Buscar entre os ' + data.filter(function(p){ return !p.archived && (p.tags||[]).length; }).length + ' looks do catálogo…');
+  tripRenderEscolhaDeLookGrid();
+}
+
+function tripRenderEscolhaDeLookGrid() {
+  var grid = document.getElementById('tripEscolhaGrid');
+  if (!grid || !tripEscolhaSlot) return;
+  var d = tripDays[tripEscolhaSlot.dia];
+  var perfil = (d && d.profile) || tripPerfilDominante();
+
+  if (tripEscolhaFonte === 'meus') {
+    var lista = montagens.filter(function(m){ return (m.pieceIds||[]).length; });
+    if (tripEscolhaBusca) {
+      lista = lista.filter(function(m){
+        var txt = (m.name || '') + ' ' + tripPecasDoMontado(m).map(function(p){ return p.name + ' ' + p.brand; }).join(' ');
+        return txt.toLowerCase().indexOf(tripEscolhaBusca) !== -1;
+      });
+    }
+    grid.className = 'trip-picker-grid looks';
+    if (!lista.length) { grid.innerHTML = '<div class="trip-picker-vazio">Nada encontrado.</div>'; return; }
+    grid.innerHTML = '';
+    lista.forEach(function(m){
+      var pecas = tripPecasDoMontado(m);
+      var pior = pecas.length ? Math.min.apply(null, pecas.map(function(p){
+        if (p.category === 'Outerwear' && !TRIP_RE_QUENTE.test(p.name || '')) return 0;
+        return tripClimaScore(p, perfil);
+      })) : 0;
+      var card = document.createElement('div');
+      card.className = 'trip-shoe-card' + (pior <= -3 ? ' fora' : '');
+      card.onclick = (function(id){ return function(){ tripPorLookNoTurno('meu', id); }; })(m.id);
+      var fl = document.createElement('div'); fl.style.cssText = 'pointer-events:none';
+      card.appendChild(fl); renderFlatLay(fl, pecas); fl.style.maxWidth = 'none';
+      var txt = document.createElement('div'); txt.className = 'trip-shoe-txt';
+      txt.innerHTML = '<div class="trip-shoe-brand">' + tripEsc(m.name || 'Look sem nome') + '</div>'
+        + '<div class="trip-shoe-name">' + pecas.length + ' peças</div>'
+        + (m.casa ? '<div class="trip-shoe-aviso">look de casa</div>' : '')
+        + (pior <= -3 ? '<div class="trip-shoe-aviso">não combina com o clima do dia</div>' : '');
+      card.appendChild(txt);
+      grid.appendChild(card);
+    });
+    return;
+  }
+
+  var looks = data.filter(function(p){ return !p.archived && (p.tags||[]).length; });
+  if (tripEscolhaBusca) {
+    looks = looks.filter(function(p){ return (p.tags||[]).join(' ').toLowerCase().indexOf(tripEscolhaBusca) !== -1; });
+  }
+  looks = looks.slice().sort(byNewestFirst);
+  grid.className = 'trip-picker-grid fotos';
+  if (!looks.length) { grid.innerHTML = '<div class="trip-picker-vazio">Nada encontrado.</div>'; return; }
+  grid.innerHTML = looks.map(function(p){
+    var etq = (p.tags||[]).filter(function(t){ return t.split(':')[0].trim().toLowerCase() !== 'marca'; })
+      .map(function(t){ return t.split(':').slice(1).join(':').trim(); }).slice(0,3).join(' · ');
+    return '<div class="trip-shoe-card" onclick="tripPorLookNoTurno(&quot;catalogo&quot;,&quot;' + tripEsc(String(p.id)) + '&quot;)">'
+      + '<img src="' + tripEsc(lookThumb(p)) + '" alt="" loading="lazy" style="object-fit:cover;aspect-ratio:3/4">'
+      + '<div class="trip-shoe-txt"><div class="trip-shoe-name">' + tripEsc(etq) + '</div></div></div>';
+  }).join('');
+}
+
+// Põe o look escolhido no turno e cuida da mala: as peças de um look salvo
+// entram na lista, e ele passa a contar como escolha dela.
+function tripPorLookNoTurno(tipo, id) {
+  if (!tripEscolhaSlot || tripViewOnly) return;
+  var d = tripDays[tripEscolhaSlot.dia];
+  var turno = tripEscolhaSlot.turno;
+  if (!d) return;
+  tripGuardarEstado();
+
+  if (tipo === 'meu') {
+    if (tripMeus.indexOf(id) === -1) tripMeus.push(id);
+    var ids = tripLookDoMontado(id);
+    ids.forEach(function(pid){ if (tripCapsule.indexOf(pid) === -1) tripCapsule.push(pid); });
+    d[turno] = ids;
+  } else {
+    id = String(id);
+    if (tripCatalogo.indexOf(id) === -1) tripCatalogo.push(id);
+    d[turno] = [];
+  }
+  d[turno + 'Tipo'] = (tipo === 'meu') ? 'meu' : 'catalogo';
+  d[turno + 'Ref'] = id;
+
+  tripAtualizarSapatos();
+  tripUso = {};
+  tripDays.forEach(function(x){
+    (x.dia || []).concat(x.noite || []).forEach(function(pid){ tripUso[pid] = (tripUso[pid] || 0) + 1; });
+  });
+  tripFecharEscolhaDeLook();
+  tripRenderResultado();
+  showSavedToast('Look escolhido em ' + d.day + (turno === 'dia' ? ' de dia' : ' à noite') + '.');
+}
+
 // Deixar um turno sem look 
 // "Na sexta só preciso de look para a tarde." Não havia como esvaziar um turno:
 // o que eu montei podia ser trocado, mas não tirado. O estado 'semLook' diz que
@@ -12325,6 +12480,11 @@ function tripTirarLookDoTurno(idx, turno) {
 }
 
 // Devolver um look a um turno que ela esvaziou.
+// O clima do dia idx, venha da previsão ou do que ficou salvo no próprio dia.
+function tripClimaDoDia(idx) {
+  return tripForecast[idx] || tripDays[idx] || { profile: 'ameno' };
+}
+
 function tripMontarNoTurno(idx, turno) {
   var d = tripDays[idx];
   if (!d || tripViewOnly) return;
@@ -12338,7 +12498,7 @@ function tripMontarNoTurno(idx, turno) {
     ['dia','noite'].forEach(function(t){ if (x[t] && x[t].length) feitos.push(x[t]); });
   });
   var vizinho = (turno === 'noite') ? (d.dia || []) : (d.noite || []);
-  d[turno] = tripMontarLookDiferente(tripForecast[idx], turno, tripUso, vizinho.slice(), feitos);
+  d[turno] = tripMontarLookDiferente(tripClimaDoDia(idx), turno, tripUso, vizinho.slice(), feitos);
   d[turno + 'Tipo'] = 'montado';
   d[turno + 'Ref'] = null;
   tripUso = {};
@@ -12955,13 +13115,20 @@ function tripRenderDays() {
         semLook.className = 'trip-turno-vazio';
         semLook.innerHTML = 'Sem look — você tirou.';
         if (!tripViewOnly) {
+          var linhaAcoes = document.createElement('div');
+          linhaAcoes.className = 'trip-semlook-acoes';
           var volta = document.createElement('button');
           volta.className = 'trip-turno-btn';
-          volta.style.marginTop = '8px';
           volta.textContent = 'montar aqui';
+          volta.title = 'Eu monto um look com as peças da mala';
           volta.onclick = (function(i, k){ return function(e){ e.stopPropagation(); tripMontarNoTurno(i, k); }; })(idx, chave);
-          semLook.appendChild(document.createElement('br'));
-          semLook.appendChild(volta);
+          var esc = document.createElement('button');
+          esc.className = 'trip-turno-btn';
+          esc.textContent = 'escolher';
+          esc.title = 'Escolher um look salvo ou uma foto do catálogo';
+          esc.onclick = (function(i, k){ return function(e){ e.stopPropagation(); tripAbrirEscolhaDeLook(i, k); }; })(idx, chave);
+          linhaAcoes.appendChild(volta); linhaAcoes.appendChild(esc);
+          semLook.appendChild(linhaAcoes);
         }
         box.appendChild(semLook);
       } else if (tipo === 'vazio' || tipo === 'livre') {
@@ -13164,6 +13331,14 @@ function viewSavedTrip(idx) {
       noiteTipo: d.noiteTipo || 'montado', noiteRef: d.noiteRef || null };
   });
   tripViewOnly = false;
+  // Sem isso o "montar aqui" e o "remontar" não funcionavam em mala salva: eles
+  // pedem o clima do dia ao tripForecast, que só era preenchido ao criar a mala.
+  // O clima de cada dia vai salvo junto, então dá pra refazer daqui mesmo.
+  tripForecast = tripDays.map(function(d){
+    return { date: d.date || null, day: d.day, dateLabel: d.dateLabel, temp: d.temp,
+             cond: d.cond, profile: d.profile || 'ameno', estimated: !!d.estimated };
+  });
+  tripDispensadas = []; tripJaSugeridas = {}; tripHistorico = [];
   tripUso = {};
   tripDays.forEach(function(d){
     (d.dia || []).concat(d.noite || []).forEach(function(id){ tripUso[id] = (tripUso[id] || 0) + 1; });
