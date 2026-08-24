@@ -11765,10 +11765,8 @@ function tripQuantosVouMontar() {
   if (!tripDays.length) {
     return Math.max(0, tripNumDays * 2 - (tripMeus.length + tripCatalogo.length));
   }
-  return tripDays.reduce(function(n, d){
-    return n + (d.diaTipo !== 'meu' && d.diaTipo !== 'catalogo' ? 1 : 0)
-             + (d.noiteTipo !== 'meu' && d.noiteTipo !== 'catalogo' ? 1 : 0);
-  }, 0);
+  function conta(t){ return (t !== 'meu' && t !== 'catalogo' && t !== 'semLook') ? 1 : 0; }
+  return tripDays.reduce(function(n, d){ return n + conta(d.diaTipo) + conta(d.noiteTipo); }, 0);
 }
 
 // Quantas peças de cada categoria dão conta de N looks sem ficar repetitivo.
@@ -11867,7 +11865,7 @@ function tripAtualizarPlano() {
     });
     return shuffledCopy(out);
   }
-  var vagos = slotsPor(['livre']).concat(slotsPor(['montado']));
+  var vagos = slotsPor(['livre']).concat(slotsPor(['montado'])); // 'semLook' fica de fora: ela tirou de propósito
   novos.forEach(function(n){
     var s = vagos.shift();
     if (!s) return;
@@ -11887,6 +11885,7 @@ function tripAtualizarPlano() {
   var vouMontar = 0;
   tripDays.forEach(function(d){
     ['dia','noite'].forEach(function(t){ if (d[t + 'Tipo'] === 'livre' || d[t + 'Tipo'] === 'montado') vouMontar++; });
+    // 'semLook' não entra na conta nem é remontado
   });
   if (vouMontar > 0) {
     ['Tops','Bottoms'].forEach(function(cat){
@@ -11912,7 +11911,7 @@ function tripAtualizarPlano() {
   tripDays.forEach(function(d, i){
     ['dia','noite'].forEach(function(t){
       var tipo = d[t + 'Tipo'];
-      if (tipo === 'meu' || tipo === 'catalogo') return;
+      if (tipo === 'meu' || tipo === 'catalogo' || tipo === 'semLook') return;
       var valido = (d[t] || []).length && (d[t] || []).every(function(id){ return tripCapsule.indexOf(id) !== -1; });
       if (tipo === 'montado' && valido) return;   // look que ela pode ter ajustado: fica
       if (!podeMontar) { d[t] = []; d[t + 'Tipo'] = 'vazio'; d[t + 'Ref'] = null; return; }
@@ -11983,6 +11982,13 @@ function tripMontarPlano() {
 
 function tripDistribuirPelosDias(porSlot) {
   porSlot = porSlot || {};
+  // Turno que ela esvaziou continua vazio depois de remontar: este map refaz os
+  // dias do zero, e sem guardar isso o "Remontar os meus" devolvia o look que
+  // ela tinha acabado de tirar.
+  var tirados = {};
+  tripDays.forEach(function(d, i){
+    ['dia','noite'].forEach(function(t){ if (d[t + 'Tipo'] === 'semLook') tirados[i + '|' + t] = 1; });
+  });
   tripUso = {};
   var feitos = [];
   var ultimoLook = [];
@@ -11995,6 +12001,7 @@ function tripDistribuirPelosDias(porSlot) {
   });
 
   function doSlot(f, i, turno, evitar) {
+    if (tirados[i + '|' + turno]) return { ids: [], tipo: 'semLook', ref: null };
     var esc = porSlot[i + '|' + turno];
     if (esc && esc.tipo === 'meu') {
       var ids = tripLookDoMontado(esc.id);
@@ -12148,6 +12155,7 @@ function tripNaoGostei() {
   var montadosPorMim = tripDays.filter(function(d){
     return d.diaTipo === 'montado' || d.noiteTipo === 'montado';
   }).length;
+  // o que ela tirou não volta: tripMontarPlano só preenche o que não é 'semLook'
   if (!montadosPorMim) {
     showSavedToast('Todos os looks são escolha sua — pra mudar, use "Mudar o que vai".');
     return;
@@ -12217,17 +12225,19 @@ function tripRerollTurno(diaIdx, turno) {
 function tripRenderResultado() {
   document.getElementById('tripHeaderTitle').textContent = tripName || 'Mala de viagem';
   var onde = tripDest ? (' · ' + tripEsc(tripDest.nome)) : '';
-  var seus = 0, meus = 0, vazios = 0;
+  var seus = 0, meus = 0, vazios = 0, tirados = 0;
   tripDays.forEach(function(d){
     [d.diaTipo, d.noiteTipo].forEach(function(t){
       if (t === 'meu' || t === 'catalogo') seus++;
       else if (t === 'montado') meus++;
+      else if (t === 'semLook') tirados++;
       else vazios++;
     });
   });
   var totalLooks = tripDays.length * 2;
   var linha = '<strong>' + seus + ' dos ' + totalLooks + ' looks são escolha sua</strong>';
   if (meus) linha += ' · ' + meus + ' eu montei com as suas peças';
+  if (tirados) linha += ' · ' + tirados + ' que você tirou';
   if (vazios) linha += ' · <span style="color:var(--accent);">' + vazios + ' sem look, falta '
     + tripEsc(tripTextoDoQueFalta()) + '</span>';
   var minhas = tripAutoAdicionadas.map(findPieceById).filter(Boolean);
@@ -12267,6 +12277,75 @@ function tripRenderResultado() {
 function tripNomeCurto(p) {
   if (!p) return '';
   return (p.name || '').replace(/\b(leather|suede|canvas|cotton|patterned)\b/gi, '').replace(/\s+/g, ' ').trim() || p.name;
+}
+
+// Deixar um turno sem look 
+// "Na sexta só preciso de look para a tarde." Não havia como esvaziar um turno:
+// o que eu montei podia ser trocado, mas não tirado. O estado 'semLook' diz que
+// foi ela quem tirou — diferente de 'vazio', que é eu não ter conseguido montar
+// por falta de peça. O que ela tirou não volta sozinho em remontagem nenhuma.
+function tripTirarLookDoTurno(idx, turno) {
+  var d = tripDays[idx];
+  if (!d || tripViewOnly) return;
+  var tipo = d[turno + 'Tipo'];
+  if (tipo === 'semLook' || tipo === 'vazio') return;
+  tripGuardarEstado();
+
+  var saindo = (d[turno] || []).slice();
+  var ref = d[turno + 'Ref'];
+  d[turno] = [];
+  d[turno + 'Tipo'] = 'semLook';
+  d[turno + 'Ref'] = null;
+
+  // Look que era escolha dela deixa de estar escolhido, senão voltaria no
+  // próximo "Mudar o que vai".
+  if (tipo === 'meu') tripMeus = tripMeus.filter(function(id){ return id !== ref; });
+  if (tipo === 'catalogo') tripCatalogo = tripCatalogo.filter(function(id){ return String(id) !== String(ref); });
+
+  // Peça que ficou sem uso e que fui eu que trouxe sai da mala.
+  var usadas = {};
+  tripDays.forEach(function(x){
+    (x.dia || []).concat(x.noite || []).forEach(function(id){ usadas[id] = 1; });
+  });
+  saindo.forEach(function(id){
+    if (usadas[id]) return;
+    if (tripAutoAdicionadas.indexOf(id) === -1) return;
+    tripCapsule = tripCapsule.filter(function(x){ return x !== id; });
+    tripAutoAdicionadas = tripAutoAdicionadas.filter(function(x){ return x !== id; });
+    delete tripPacked[id];
+  });
+  tripAtualizarSapatos();
+  tripUso = {};
+  tripDays.forEach(function(x){
+    (x.dia || []).concat(x.noite || []).forEach(function(id){ tripUso[id] = (tripUso[id] || 0) + 1; });
+  });
+
+  tripRenderResultado();
+  showSavedToast(d.day + (turno === 'dia' ? ' de dia' : ' à noite') + ' ficou sem look. Pra ter de volta, use "montar" no lugar dele.');
+}
+
+// Devolver um look a um turno que ela esvaziou.
+function tripMontarNoTurno(idx, turno) {
+  var d = tripDays[idx];
+  if (!d || tripViewOnly) return;
+  if (tripFaltaPraMontar().length) {
+    showSavedToast('Falta ' + tripTextoDoQueFalta() + ' entre o que você escolheu.');
+    return;
+  }
+  tripGuardarEstado();
+  var feitos = [];
+  tripDays.forEach(function(x){
+    ['dia','noite'].forEach(function(t){ if (x[t] && x[t].length) feitos.push(x[t]); });
+  });
+  var vizinho = (turno === 'noite') ? (d.dia || []) : (d.noite || []);
+  d[turno] = tripMontarLookDiferente(tripForecast[idx], turno, tripUso, vizinho.slice(), feitos);
+  d[turno + 'Tipo'] = 'montado';
+  d[turno + 'Ref'] = null;
+  tripUso = {};
+  tripDays.forEach(function(x){
+    (x.dia || []).concat(x.noite || []).forEach(function(id){ tripUso[id] = (tripUso[id] || 0) + 1; });
+  });
+  tripRenderResultado();
 }
 
 // Mover um look de um dia pro outro 
@@ -12823,7 +12902,7 @@ function tripRenderDays() {
         b.onclick = (function(i, k){ return function(e){ e.stopPropagation(); tripRerollTurno(i, k); }; })(idx, chave);
         acoes.appendChild(b);
       }
-      if (tipo !== 'vazio') {
+      if (tipo !== 'vazio' && tipo !== 'semLook') {
         var amp = document.createElement('button');
         amp.className = 'trip-turno-btn';
         amp.textContent = 'ver';
@@ -12831,7 +12910,15 @@ function tripRenderDays() {
         amp.onclick = (function(i, k){ return function(e){ e.stopPropagation(); tripAmpliarLook(i, k); }; })(idx, chave);
         acoes.appendChild(amp);
       }
-      if (!tripViewOnly && tipo !== 'vazio') {
+      if (!tripViewOnly && tipo !== 'vazio' && tipo !== 'semLook') {
+        var tira = document.createElement('button');
+        tira.className = 'trip-turno-btn';
+        tira.textContent = 'tirar';
+        tira.title = 'Deixar ' + d.day + (chave === 'dia' ? ' de dia' : ' à noite') + ' sem look';
+        tira.onclick = (function(i, k){ return function(e){ e.stopPropagation(); tripTirarLookDoTurno(i, k); }; })(idx, chave);
+        acoes.appendChild(tira);
+      }
+      if (!tripViewOnly && tipo !== 'vazio' && tipo !== 'semLook') {
         var mv = document.createElement('button');
         var armado = tripMesmoSlot(tripMovendo, { dia: idx, turno: chave });
         mv.className = 'trip-turno-btn' + (armado ? ' armado' : '');
@@ -12863,6 +12950,20 @@ function tripRenderDays() {
         leg.textContent = look ? (look.tags||[]).filter(function(x){ return x.split(':')[0].trim().toLowerCase() !== 'marca'; })
           .map(function(x){ return x.split(':').slice(1).join(':').trim(); }).join(' · ') : '';
         box.appendChild(leg);
+      } else if (tipo === 'semLook') {
+        var semLook = document.createElement('div');
+        semLook.className = 'trip-turno-vazio';
+        semLook.innerHTML = 'Sem look — você tirou.';
+        if (!tripViewOnly) {
+          var volta = document.createElement('button');
+          volta.className = 'trip-turno-btn';
+          volta.style.marginTop = '8px';
+          volta.textContent = 'montar aqui';
+          volta.onclick = (function(i, k){ return function(e){ e.stopPropagation(); tripMontarNoTurno(i, k); }; })(idx, chave);
+          semLook.appendChild(document.createElement('br'));
+          semLook.appendChild(volta);
+        }
+        box.appendChild(semLook);
       } else if (tipo === 'vazio' || tipo === 'livre') {
         var vazio = document.createElement('div');
         vazio.className = 'trip-turno-vazio';
