@@ -1275,8 +1275,11 @@ body.compare-mode .card-compare-btn { display: flex; }
       <span id="todayCardDayLabel"></span>
       <button id="todayCardNext" onclick="stepTodayCardDay(1)" title="Próximo dia">&rsaquo;</button>
     </div>
-    <img id="todaySuggestImg" src="" alt="" style="cursor:pointer;" onclick="viewTodaySuggestionLook()">
-    <div id="todaySuggestFlatlay" class="flatlay-canvas" style="display:none;cursor:pointer;" onclick="viewTodaySuggestionLook()"></div>
+    <div style="position:relative;">
+      <img id="todaySuggestImg" src="" alt="" style="cursor:pointer;" onclick="viewTodaySuggestionLook()">
+      <div id="todaySuggestFlatlay" class="flatlay-canvas" style="display:none;cursor:pointer;" onclick="viewTodaySuggestionLook()"></div>
+      <button id="todaySuggestRotateBtn" onclick="rotateTodaySuggestion(event)" title="Girar a foto 90°" style="position:absolute;top:12px;left:14px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:50%;width:38px;height:38px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:20;"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><rect x="3.2" y="8.2" width="12.6" height="12.6" rx="2.6"/><path d="M12.4 4.2h3.4a3.7 3.7 0 0 1 3.7 3.7v2.9"/><path d="M17.5 8.8 19.5 10.9 21.5 8.8"/></svg></button>
+    </div>
     <div class="modal-body">
       <div id="todaySuggestMeta" style="font-size:.74rem;color:#1A1A1A;font-weight:700;letter-spacing:.03em;margin-bottom:8px;"></div>
       <div id="todaySuggestTags" style="font-size:.92rem;color:#333333;margin-bottom:14px;line-height:1.5;"></div>
@@ -8425,6 +8428,19 @@ function renderViewTags(p) {
   }
 }
 
+// Girar a foto da sugestão do dia. Gira o look, não só a imagem na tela: o
+// ângulo fica salvo e vale em todo lugar que mostra essa foto.
+function rotateTodaySuggestion(e) {
+  if (e) e.stopPropagation();
+  if (todaySuggestionCurrentId == null) return;
+  rotateLookBy(todaySuggestionCurrentId, 90);
+  var p = data.find(function(x){ return x.id === todaySuggestionCurrentId; });
+  applyRotation(document.getElementById('todaySuggestImg'), p);
+  showSavedToast('Foto girada.');
+  renderGrid();
+  renderWeek();
+}
+
 function rotateCurrentView() {
   if (currentViewId == null) return;
   rotateLookBy(currentViewId, 90);
@@ -10797,6 +10813,9 @@ function renderTodaySuggestion() {
     useBtn.textContent = ehHoje ? 'Vou usar esse hoje' : ('Usar esse em ' + info.label);
     wornBtn.style.display = 'none';
   }
+
+  var rotBtn = document.getElementById('todaySuggestRotateBtn');
+  if (rotBtn) rotBtn.style.display = (img.style.display === 'none') ? 'none' : 'flex';
 
   var caixaVoto = document.getElementById('todaySuggestVoto');
   if (caixaVoto) {
