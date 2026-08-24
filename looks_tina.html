@@ -630,6 +630,15 @@ body.week-pick-mode .card-week-btn { display: block; }
   cursor:pointer; line-height:1.5;
 }
 .day-look-resuggest:hover { border-color:var(--ink); color:var(--ink); }
+.day-look-mover { position:absolute; bottom:4px; left:4px; z-index:6;
+  background:rgba(255,255,255,.92); color:var(--txt-2);
+  border:1px solid var(--line-input); border-radius:5px;
+  padding:1px 6px; font-size:.6rem; font-family:inherit; cursor:pointer; line-height:1.5; }
+.day-look-mover:hover { border-color:var(--ink); color:var(--ink); }
+.day-look-mover.armado { background:var(--ink); border-color:var(--ink); color:#fff; }
+.day-noite .day-look-mover { bottom:4px; left:auto; right:30px; }
+.destino-troca { cursor:pointer; outline:1px dashed var(--line-dash); outline-offset:-3px; }
+.destino-troca:hover { outline-color:var(--ink); }
 #dayPickerOverlay, #suggestPiecePickerOverlay {
   position:fixed; inset:0; z-index:10050; background:rgba(0,0,0,.6);
   display:none; align-items:center; justify-content:center;
@@ -5928,6 +5937,7 @@ function renderWeek() {
       resugg.onclick = (function(d){ return function(e){ e.stopPropagation(); sugerirLookParaDia(d, 'atual'); }; })(day);
       dl.appendChild(img); dl.appendChild(rm); dl.appendChild(resugg);
       botaoTrocarTurno(dl, day, 'atual', 'dia');
+      botaoMoverSemana(dl, day, 'atual', 'dia');
       col.appendChild(dl);
       avisoDeClimaNaColuna(col, day, 'atual', look.tags);
       // Dia com look do catálogo E look montado: o montado entra como etiqueta
@@ -5963,6 +5973,7 @@ function renderWeek() {
       dm.appendChild(mrs);
       dm.appendChild(mrm);
       botaoTrocarTurno(dm, day, 'atual', 'dia');
+      botaoMoverSemana(dm, day, 'atual', 'dia');
       dm.onclick = (function(mid){ return function(){ switchTab('montados'); openMontadoDetail(mid); }; })(montado.id);
       col.appendChild(dm);
       avisoDeClimaNaColuna(col, day, 'atual', tagsDoMontado(montado));
@@ -6273,6 +6284,7 @@ function renderNextWeekGrid() {
       rs.onclick = (function(dd){ return function(e){ e.stopPropagation(); sugerirLookParaDia(dd, 'proxima'); }; })(day);
       dl.appendChild(img); dl.appendChild(rm); dl.appendChild(rs);
       botaoTrocarTurno(dl, day, 'proxima', 'dia');
+      botaoMoverSemana(dl, day, 'proxima', 'dia');
       col.appendChild(dl);
       avisoDeClimaNaColuna(col, day, 'proxima', look.tags);
     } else if (montado) {
@@ -6295,6 +6307,7 @@ function renderNextWeekGrid() {
       dm.appendChild(mrs);
       dm.appendChild(mrm);
       botaoTrocarTurno(dm, day, 'proxima', 'dia');
+      botaoMoverSemana(dm, day, 'proxima', 'dia');
       dm.onclick = (function(mid){ return function(){ switchTab('montados'); openMontadoDetail(mid); }; })(montado.id);
       col.appendChild(dm);
       avisoDeClimaNaColuna(col, day, 'proxima', tagsDoMontado(montado));
@@ -6348,6 +6361,55 @@ function moverEntreDiaENoite(day, alvo) {
   if (noite) setWeekOccupants(day, noite, alvo);
   saveMontagens(); saveToStorage(); renderGrid(); renderWeek();
   showSavedToast(noite ? ('Dia e noite de ' + day + ' trocados.') : ('Look movido pra noite de ' + day + '.'));
+}
+
+// Mover look entre dias no celular 
+// A semana só tinha arrastar do HTML5, que não funciona no Safari do iPhone — e
+// é lá que ela usa o app. Mesma solução da mala: "mover" arma o look, os outros
+// dias viram destino, e um toque troca os dois. O arrastar continua valendo no
+// computador; os dois caem nas mesmas trocarDias/trocarNoites.
+var semanaMovendo = null; // {day, alvo, turno}
+
+function semanaMesmoSlot(a, b) {
+  return !!a && !!b && a.day === b.day && a.alvo === b.alvo && a.turno === b.turno;
+}
+
+function semanaTrocar(a, b) {
+  if (!a || !b || semanaMesmoSlot(a, b)) { semanaMovendo = null; renderWeek(); return; }
+  if (a.turno !== b.turno) {  // dia com noite: existe o botão da lua pra isso
+    semanaMovendo = null; renderWeek();
+    showSavedToast('Look de dia troca com look de dia, e de noite com de noite. Pra passar de um turno pro outro, use a lua.');
+    return;
+  }
+  semanaMovendo = null;
+  if (a.turno === 'noite') trocarNoites(a.day, a.alvo, b.day, b.alvo);
+  else trocarDias(a.day, a.alvo, b.day, b.alvo);
+}
+
+function semanaMover(day, alvo, turno) {
+  var slot = { day: day, alvo: alvo, turno: turno };
+  if (semanaMesmoSlot(semanaMovendo, slot)) { semanaMovendo = null; renderWeek(); return; }
+  if (semanaMovendo) { semanaTrocar(semanaMovendo, slot); return; }
+  semanaMovendo = slot;
+  renderWeek();
+  showSavedToast('Agora toca no dia com que ele troca de lugar.');
+}
+
+// Põe o botão no look e, quando há um look armado, transforma este em destino.
+function botaoMoverSemana(el, day, alvo, turno) {
+  var slot = { day: day, alvo: alvo, turno: turno };
+  var armado = semanaMesmoSlot(semanaMovendo, slot);
+  var b = document.createElement('button');
+  b.className = 'day-look-mover' + (armado ? ' armado' : '');
+  b.textContent = armado ? 'cancelar' : 'mover';
+  b.title = armado ? 'Cancelar a troca' : 'Trocar este look de dia';
+  b.onclick = (function(s){ return function(e){ e.stopPropagation(); semanaMover(s.day, s.alvo, s.turno); }; })(slot);
+  el.appendChild(b);
+  if (semanaMovendo && !armado && semanaMovendo.turno === turno) {
+    el.classList.add('destino-troca');
+    el.addEventListener('click', (function(s){ return function(e){
+      e.stopPropagation(); semanaTrocar(semanaMovendo, s); }; })(slot), { once: true });
+  }
 }
 
 function botaoTrocarTurno(el, day, alvo, deOndeVem) {
@@ -6412,6 +6474,7 @@ function blocoDaNoite(col, day, alvo) {
   rm.onclick = (function(d,a){ return function(e){ e.stopPropagation(); limparNoiteDoDia(d, a); saveMontagens(); saveToStorage(); renderGrid(); renderWeek(); }; })(day, alvo);
   wrap.appendChild(rm);
   botaoTrocarTurno(wrap, day, alvo, 'noite');
+  botaoMoverSemana(wrap, day, alvo, 'noite');
   col.appendChild(wrap);
 }
 
