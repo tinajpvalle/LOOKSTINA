@@ -3499,7 +3499,9 @@ var FLATLAY_POSITIONS = {
   Jewelry:     { top: 3,  left: 82, width: 10 },
   Accessories: { top: 3,  left: 18, width: 10 }
 };
-var FLATLAY_Z = { Outerwear: 1, Tops: 3, Bottoms: 2, Shoes: 2, Bags: 4, Jewelry: 5, Accessories: 5 };
+// Sapato acima da calça: no mesmo nível a calça comprida cobria o sapato quase
+// inteiro e o look aparecia sem sapato nenhum.
+var FLATLAY_Z = { Outerwear: 1, Tops: 3, Bottoms: 2, Shoes: 3, Bags: 4, Jewelry: 5, Accessories: 5 };
 // Usado só quando o look tem casaco E blusa: os dois dividem a linha de cima.
 var FLATLAY_LADO_A_LADO = {
   Outerwear: { top: 6,  left: 30, width: 36 },
@@ -3544,6 +3546,7 @@ function renderFlatLay(container, pieces, opts) {
       wrap.style.width = (n > 1 ? pos.width * 0.8 : pos.width) + '%';
       wrap.style.zIndex = String((FLATLAY_Z[cat] || 1) * 10 + i);
       wrap.title = p.brand + ' — ' + p.name + (opts.zoomable ? ' (clique pra ampliar)' : '');
+      wrap.dataset.cat = cat;
       wrap.innerHTML = '<img src="' + p.img + '" alt="' + p.name.replace(/"/g,'&quot;') + '" loading="lazy">';
       if (opts.zoomable) {
         var img = wrap.querySelector('img');
@@ -12489,6 +12492,7 @@ function tripRenderResultado() {
   document.getElementById('tripNaoGosteiBtn').style.display = tripViewOnly ? 'none' : 'inline-block';
   tripRenderDays();
   tripRenderPackList();
+  tripAutoSalvar();
 }
 
 function tripNomeCurto(p) {
@@ -12778,6 +12782,14 @@ function tripPodeEditarPecas(d, turno) {
   return tipo === 'montado' || tipo === 'meu';
 }
 
+// Repetir camiseta e calça é o que ela não quer — daí a troca cruzada, que
+// mantém uma diferente por dia. Sapato e bolsa são o contrário: a mala inteira
+// é montada em cima de 2 ou 3 sapatos, então repetir ali é o esperado. Trocar o
+// sapato de sábado não pode mexer no de sexta, e era o que estava acontecendo.
+function tripRepeticaoIncomoda(cat) {
+  return cat === 'Tops' || cat === 'Bottoms';
+}
+
 function tripTrocarPecaDoLook(pieceId) {
   if (!tripZoomSlot || tripViewOnly) return;
   tripGuardarEstado();
@@ -12825,7 +12837,7 @@ function tripTrocarPecaDoLook(pieceId) {
   // a peça que saía ia embora, a mala encolhia e sobrava blusa de menos pros
   // looks, o que forçava justamente a repetição que ela não quer.
   var trocouComOutroLook = null;
-  if (!veioDoArmario) {
+  if (!veioDoArmario && tripRepeticaoIncomoda(atual.category)) {
     tripDays.forEach(function(x, i){
       ['dia','noite'].forEach(function(t){
         if (trocouComOutroLook) return;
@@ -13102,7 +13114,7 @@ function tripPorPecaNoLook(pieceId) {
   // Se a nova já está em outro look, as duas trocam de lugar — nada entra nem
   // sai da mala. É a mesma regra do "sugerir outra".
   var trocouCom = null;
-  if (saindo) {
+  if (saindo && tripRepeticaoIncomoda(saindo.category)) {
     tripDays.forEach(function(x, i){
       ['dia','noite'].forEach(function(t){
         if (trocouCom) return;
@@ -13497,6 +13509,28 @@ function saveCurrentTrip() {
   salvarMalas();
   renderSavedTripsList();
   showSavedToast('Mala salva!');
+}
+
+// Toda mudança numa mala já salva grava sozinha 
+// Antes só o "já arrumei" gravava. Trocar uma peça, mover um look, tirar um
+// turno — tudo isso vivia só na memória e sumia ao fechar a mala. Ela trocou o
+// sapato, fechou no ✕ e perdeu a troca, sem nada avisando.
+function tripAutoSalvar() {
+  if (tripSavedIdx == null || tripViewOnly) return;
+  var antiga = savedTrips[tripSavedIdx];
+  if (!antiga) return;
+  var nova = tripEntradaAtual();
+  if (tripSemData(antiga) === tripSemData(nova)) return; // nada mudou: não grava à toa
+  savedTrips[tripSavedIdx] = nova;
+  salvarMalas();
+}
+
+// Compara duas malas ignorando a hora em que foram salvas, senão abrir a mala
+// já contaria como mudança e gravaria a cada render.
+function tripSemData(t) {
+  var c = {};
+  Object.keys(t).forEach(function(k){ if (k !== 'savedAt') c[k] = t[k]; });
+  return JSON.stringify(c);
 }
 
 function tripSalvarPacked() {
