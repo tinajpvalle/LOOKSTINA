@@ -12748,15 +12748,46 @@ var tripZoomSlot = null; // {dia, turno} do look aberto no "ver"
 // próxima vez a nota volta a escolhê-la. Quando acaba a lista, recomeça.
 var tripJaSugeridas = {};
 
+// Trocar uma peça num look que ela montou antes 
+// Antes só dava pra editar look que eu montei: o dela vinha travado, sem botão
+// nenhum na lista de peças, e ela ficou sem entender como trocar o sapato. Só
+// que editar o look salvo direto seria pior — ele é usado em outros lugares e
+// mudaria pra sempre. Então a primeira troca solta uma cópia: esse turno da mala
+// vira um look montado normal, com as mesmas peças, e o look salvo fica intacto.
+function tripSoltarDoMeuLook(d, turno) {
+  if (!d || d[turno + 'Tipo'] !== 'meu') return false;
+  var ref = d[turno + 'Ref'];
+  d[turno + 'Tipo'] = 'montado';
+  d[turno + 'Ref'] = null;
+  // Só tira da lista de "meus looks" da mala se nenhum outro turno ainda usa.
+  var aindaUsado = tripDays.some(function(x){
+    return (x.diaTipo === 'meu' && String(x.diaRef) === String(ref)) ||
+           (x.noiteTipo === 'meu' && String(x.noiteRef) === String(ref));
+  });
+  if (!aindaUsado) tripMeus = tripMeus.filter(function(id){ return String(id) !== String(ref); });
+  var m = montagens.find(function(x){ return String(x.id) === String(ref); });
+  showSavedToast('Soltei uma cópia pra essa mala — o look "' + ((m && m.name) || 'salvo') + '" continua como estava.');
+  return true;
+}
+
+// Dá pra editar as peças deste turno? Look meu ou dela, sim. Foto do catálogo
+// não tem peça pra trocar.
+function tripPodeEditarPecas(d, turno) {
+  if (!d || tripViewOnly) return false;
+  var tipo = d[turno + 'Tipo'];
+  return tipo === 'montado' || tipo === 'meu';
+}
+
 function tripTrocarPecaDoLook(pieceId) {
   if (!tripZoomSlot || tripViewOnly) return;
   tripGuardarEstado();
   var d = tripDays[tripZoomSlot.dia];
   var turno = tripZoomSlot.turno;
-  if (!d || d[turno + 'Tipo'] !== 'montado') {
-    showSavedToast('Esse look é escolha sua — pra mudar, use "Mudar o que vai".');
+  if (!tripPodeEditarPecas(d, turno)) {
+    showSavedToast('Esse turno é uma foto do catálogo — não tem peça pra trocar.');
     return;
   }
+  tripSoltarDoMeuLook(d, turno);
   var atual = findPieceById(pieceId);
   if (!atual) return;
 
@@ -12849,6 +12880,10 @@ function tripEstadoAtual() {
                noiteTipo: d.noiteTipo, noiteRef: d.noiteRef };
     }),
     capsule: tripCapsule, auto: tripAutoAdicionadas, disp: tripDispensadas,
+    // As duas listas abaixo faltavam aqui: o desfazer devolvia o look ao turno
+    // mas deixava o id pra trás em "meus looks"/catálogo da mala, e a conta do
+    // cabeçalho ("x dos y são escolha sua") ficava errada.
+    meus: tripMeus, catalogo: tripCatalogo,
     packed: Object.keys(tripPacked)
   });
 }
@@ -12872,6 +12907,8 @@ function tripDesfazer() {
   tripCapsule = o.capsule || [];
   tripAutoAdicionadas = o.auto || [];
   tripDispensadas = o.disp || [];
+  if (o.meus) tripMeus = o.meus.slice();
+  if (o.catalogo) tripCatalogo = o.catalogo.slice();
   tripPacked = {};
   (o.packed || []).forEach(function(id){ tripPacked[id] = true; });
   tripAtualizarSapatos();
@@ -12896,10 +12933,11 @@ function tripSugerirNovaPeca(pieceId) {
   tripGuardarEstado();
   var d = tripDays[tripZoomSlot.dia];
   var turno = tripZoomSlot.turno;
-  if (!d || d[turno + 'Tipo'] !== 'montado') {
-    showSavedToast('Esse look é escolha sua — pra mudar, use "Mudar o que vai".');
+  if (!tripPodeEditarPecas(d, turno)) {
+    showSavedToast('Esse turno é uma foto do catálogo — não tem peça pra trocar.');
     return;
   }
+  tripSoltarDoMeuLook(d, turno);
   var atual = findPieceById(pieceId);
   if (!atual) return;
   var nova = tripBuscarNovaDoArmario(atual.category, d, turno);
@@ -12914,7 +12952,8 @@ function tripAcrescentarSugerida(cat) {
   tripGuardarEstado();
   var d = tripDays[tripZoomSlot.dia];
   var turno = tripZoomSlot.turno;
-  if (!d || d[turno + 'Tipo'] !== 'montado') return;
+  if (!tripPodeEditarPecas(d, turno)) return;
+  tripSoltarDoMeuLook(d, turno);
   var nova = tripBuscarNovaDoArmario(cat, d, turno);
   if (!nova) { showSavedToast('Não achei ' + (TRIP_CAT_LABEL[cat] || cat).toLowerCase() + ' que sirva pro clima do dia.'); return; }
   tripPorNoLook(null, nova, d, turno);
@@ -13047,10 +13086,11 @@ function tripPorPecaNoLook(pieceId) {
   tripGuardarEstado();
   var d = tripDays[tripZoomSlot.dia];
   var turno = tripZoomSlot.turno;
-  if (!d || d[turno + 'Tipo'] !== 'montado') {
-    showSavedToast('Esse look é escolha sua — pra mudar, use "Mudar o que vai".');
+  if (!tripPodeEditarPecas(d, turno)) {
+    showSavedToast('Esse turno é uma foto do catálogo — não tem peça pra trocar.');
     return;
   }
+  tripSoltarDoMeuLook(d, turno);
   var nova = findPieceById(pieceId);
   if (!nova) return;
   var noLook = (d[turno] || []).slice();
@@ -13176,7 +13216,7 @@ function tripAmpliarLook(idx, turno) {
   tripZoomSlot = { dia: idx, turno: turno };
   renderFlatLay(document.getElementById('lookZoomFlatlay'), pecas, { zoomable: true });
   document.getElementById('lookZoomName').textContent = titulo;
-  tripRenderZoomPecas(pecas, !tripViewOnly && tipo === 'montado');
+  tripRenderZoomPecas(pecas, tripPodeEditarPecas(d, turno));
   document.getElementById('lookZoomOverlay').classList.add('open');
 }
 
