@@ -464,6 +464,7 @@ body.week-pick-mode .card-week-btn { display: block; }
 #tripEscolhaOverlay { z-index: 10005; }
 .trip-foto-look { width: 100%; aspect-ratio: 3/4; object-fit: cover; border-radius: var(--r-md); display: block; cursor: zoom-in; }
 .trip-pack-marca { position: absolute; left: 3px; bottom: 22px; font-size: .52rem; background: var(--ink); color: var(--surface); border-radius: var(--r-xs); padding: 1px 4px; letter-spacing: .02em; }
+.trip-pack-marca.sobra { background: var(--accent); color: #fff; }
 .trip-pack-marca.clara { background: var(--surface); color: var(--txt-3); border: 1px solid var(--line); }
 .trip-pack-foto-item { font-size: .72rem; color: var(--txt-2); padding: 3px 0; border-bottom: 1px solid var(--line-soft); }
 .trip-seu-look { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: var(--r-sm); background: var(--ink); color: var(--surface); letter-spacing: .06em; }
@@ -13455,8 +13456,37 @@ function tripRenderDays() {
   });
 }
 
+// Peça que não está em look nenhum não fica na lista 
+// A lista vinha do tripCapsule, e de lá só saía o que EU tinha trazido. Peça
+// que entrou junto com um look escolhido por ela ficava pra sempre: ela trocou
+// o sapato e a bolsa nos looks e os antigos continuaram na lista, ainda
+// marcados "do seu look" — de um look que não os usa mais.
+// O que ela escolheu peça a peça continua mesmo sem look nenhum, porque isso é
+// escolha dela; só ganha um aviso de que está sobrando.
+function tripPecasEmUso() {
+  var usada = {};
+  tripDays.forEach(function(d){
+    (d.dia || []).concat(d.noite || []).forEach(function(id){ usada[String(id)] = 1; });
+  });
+  return usada;
+}
+
+function tripLimparSobras() {
+  if (tripViewOnly) return;
+  var usada = tripPecasEmUso();
+  tripCapsule = tripCapsule.filter(function(id){
+    return usada[String(id)] || tripPecas.indexOf(id) !== -1;
+  });
+  tripAutoAdicionadas = tripAutoAdicionadas.filter(function(id){ return tripCapsule.indexOf(id) !== -1; });
+  Object.keys(tripPacked).forEach(function(k){
+    if (!tripCapsule.some(function(id){ return String(id) === k; })) delete tripPacked[k];
+  });
+}
+
 function tripRenderPackList() {
   var box = document.getElementById('tripPackList');
+  tripLimparSobras();
+  var emUso = tripPecasEmUso();
   var pecas = tripCapsule.map(findPieceById).filter(Boolean);
   var guardadas = pecas.filter(function(p){ return tripPacked[p.id]; }).length;
   var fotos = tripCatalogo.map(tripLookDoCatalogo).filter(Boolean);
@@ -13476,12 +13506,14 @@ function tripRenderPackList() {
         + doCat.map(function(p){
             var minha = tripAutoAdicionadas.indexOf(p.id) !== -1;
             var deLook = tripPecas.indexOf(p.id) === -1 && !minha;
+            var sobrando = !emUso[String(p.id)];
             return '<div class="trip-pack-cell">'
               + '<div class="trip-pack-piece' + (tripPacked[p.id] ? ' packed' : '') + '" onclick="tripTogglePacked(\'' + p.id + '\')">'
               + '<img src="' + tripEsc(p.img) + '" alt="' + tripEsc(p.name) + '" loading="lazy">'
               + '<div class="trip-pack-piece-check">✓</div>'
               + (minha ? '<div class="trip-pack-marca" title="Entrou por minha conta quando você mandou completar">eu pus</div>' : '')
-              + (deLook ? '<div class="trip-pack-marca clara" title="Faz parte de um look seu">do seu look</div>' : '')
+              + (deLook && !sobrando ? '<div class="trip-pack-marca clara" title="Faz parte de um look seu">do seu look</div>' : '')
+              + (sobrando ? '<div class="trip-pack-marca sobra" title="Você escolheu essa peça, mas ela não está em nenhum look da mala">sem look</div>' : '')
               + '<div class="trip-pack-lbl">' + tripEsc(tripNomeCurto(p)) + '</div>'
               + '</div>'
               + (deLook ? '' : '<button class="trip-pack-trocar" onclick="event.stopPropagation();tripTrocarPeca(\'' + p.id + '\')">tirar</button>')
