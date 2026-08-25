@@ -1645,6 +1645,7 @@ function pullRemoteUpdates() {
     if (res.value !== JSON.stringify(preferencias)) {
       try {
         preferencias = JSON.parse(res.value) || {};
+        esquecerCacheDeDimensoes();
         lsSet('looks_tina_preferencias_v1', res.value);
         if (typeof renderStats === 'function' && document.getElementById('statsContent')) renderStats();
       } catch (e) {}
@@ -5046,19 +5047,194 @@ function etiquetasQueContam(tags) {
   });
 }
 
+// O que entra no aprendizado. Inclui marca, que o etiquetasQueContam tira —
+// lá ela precisa ficar de fora porque aquele alimenta o paresDeEtiquetas, que
+// corta em 6 etiquetas: marca acabaria empurrando peça pra fora do par.
+function etiquetasParaAprender(tags) {
+  var lista = etiquetasQueContam(tags);
+  (tags || []).forEach(function(t){
+    t = (t || '').trim();
+    if (t.split(':')[0].trim().toLowerCase() === 'marca' && lista.indexOf(t) === -1) lista.push(t);
+  });
+  return lista;
+}
+
 function registrarPreferencia(tags, sinal, peso) {
-  var etiquetas = etiquetasQueContam(tags);
+  var etiquetas = etiquetasParaAprender(tags);
   if (!etiquetas.length) return;
   var campo = sinal > 0 ? 'sim' : 'nao';
   etiquetas.forEach(function(t){
     if (!preferencias[t]) preferencias[t] = { sim: 0, nao: 0 };
     preferencias[t][campo] += (peso || 1);
   });
+  esquecerCacheDeDimensoes();
   savePreferencias();
 }
 
 // Vale no máximo ±2,5: é um empurrão, não manda no resultado. Clima continua
 // decidindo — de nada adianta o look preferido num dia de 8°C.
+// Ler o look por dentro 
+// A descrição de cada look é texto livre ("calça: jeans wide leg preta"), e 57%
+// das etiquetas do catálogo aparecem em um único look. Um voto guardado na
+// etiqueta inteira quase nunca alcançava outro look — dos 87 votos de recusa,
+// 60 eram sobre etiqueta que só existe em 1 look, então o aprendizado não saía
+// do lugar. Aqui a etiqueta é quebrada nas dimensões que dá pra ler dentro
+// dela, e o mesmo voto passa a valer pra tudo que compartilha uma dimensão.
+// Nada disso pede etiqueta nova: é reler o que já está escrito.
+
+var DIM_SINONIMOS = {
+  denim: 'jeans', tricot: 'tricô', reto: 'reta', longo: 'longa', curto: 'curta',
+  justo: 'justa', largo: 'larga', soltinho: 'soltinha', listrado: 'listrada',
+  estampado: 'estampada', 'geométrico': 'geométrica', liso: 'lisa'
+};
+
+var DIMENSOES = [
+  ['tecido', ['jeans','denim','couro','tricô','tricot','seda','cetim','veludo','linho','algodão',
+              'lã','cashmere','camurça','moletom','malha','sarja','lurex','paetê','renda','crochê',
+              'matelassê','tweed','pelúcia','nylon','jacquard']],
+  ['caimento', ['oversized','slim','reta','reto','skinny','wide leg','flare','mom','cropped','midi',
+                'longa','longo','curta','curto','justa','justo','soltinha','soltinho','pantalona',
+                'alfaiataria','godê','evasê','larga','largo']],
+  ['estampa', ['listrada','listrado','xadrez','floral','poá','animal print','onça','zebra','tie dye',
+               'geométrica','geométrico','estampada','estampado','lisa','liso','vichy','tartan',
+               'paisley','risca de giz']],
+  ['manga', ['manga longa','manga curta','sem manga','regata','alcinha','gola alta','gola v','decote',
+             'tomara que caia','frente única','ombro a ombro','capuz','polo']]
+];
+
+// Um termo lido some do texto antes do próximo ser procurado, e os mais longos
+// vêm primeiro. Sem isso "manga longa" era lida duas vezes: como manga, certo,
+// e como caimento "longa", errado. Vale também pra cor: quem casa com "azul
+// marinho" não pode casar de novo com "azul".
+var DIM_TERMOS = null;
+function dimTermos() {
+  if (DIM_TERMOS) return DIM_TERMOS;
+  var lista = [];
+  DIMENSOES.forEach(function(par){
+    par[1].forEach(function(termo){ lista.push([par[0], termo]); });
+  });
+  CORES_REF.forEach(function(c){
+    if (c[0] === 'jeans') return;                       // já entra como tecido
+    lista.push(['cor', c[0]]);
+  });
+  lista.sort(function(a, b){ return b[1].length - a[1].length; });
+  DIM_TERMOS = lista;
+  return lista;
+}
+
+function dimSemAcento(s) {
+  return (s || '').toLowerCase()
+    .replace(/[áàâãä]/g, 'a').replace(/[éèêë]/g, 'e').replace(/[íìîï]/g, 'i')
+    .replace(/[óòôõö]/g, 'o').replace(/[úùûü]/g, 'u').replace(/ç/g, 'c');
+}
+
+// Texto pronto pra busca por palavra inteira: sem acento, só letras e números,
+// com espaço nas pontas. Assim "reta" não casa dentro de "preta" — que era o
+// erro que inflava a contagem quando eu media isso com expressão regular.
+function dimTexto(s) {
+  return ' ' + dimSemAcento(s).replace(/[^a-z0-9]+/g, ' ').trim() + ' ';
+}
+
+function dimCanonico(termo) {
+  return DIM_SINONIMOS[termo] || termo;
+}
+
+// As dimensões de uma etiqueta só ("calça: jeans wide leg preta").
+function dimensoesDaEtiqueta(t) {
+  t = (t || '').trim();
+  var i = t.indexOf(':');
+  if (i === -1) return [];
+  var peca = t.slice(0, i).trim().toLowerCase();
+  var desc = t.slice(i + 1);
+  if (peca === 'marca') {
+    var m = desc.trim().toLowerCase();
+    return m ? ['marca:' + m] : [];
+  }
+  var out = ['peça:' + peca];
+  var txt = dimTexto(desc);
+  dimTermos().forEach(function(par){
+    var alvo = ' ' + dimSemAcento(par[1]) + ' ';
+    if (txt.indexOf(alvo) === -1) return;
+    txt = txt.split(alvo).join(' ');                    // some pra não ser lido de novo
+    var d = par[0] + ':' + dimCanonico(par[1]);
+    if (out.indexOf(d) === -1) out.push(d);
+  });
+  return out;
+}
+
+function dimensoesDoLook(tags) {
+  var out = [];
+  (tags || []).forEach(function(t){
+    dimensoesDaEtiqueta(t).forEach(function(d){ if (out.indexOf(d) === -1) out.push(d); });
+  });
+  return out;
+}
+
+// Uma dimensão que está em quase todo look não diz nada sobre gosto: "peça:bolsa"
+// aparece em 92% do catálogo, "peça:calça" em 81%. Preferir o que discrimina.
+var DIM_COBERTURA = null, DIM_COBERTURA_N = -1;
+function dimensaoInformativa(d) {
+  if (DIM_COBERTURA === null || DIM_COBERTURA_N !== data.length) {
+    var m = {}, n = 0;
+    data.forEach(function(p){
+      if (p.archived) return;
+      n++;
+      dimensoesDoLook(p.tags).forEach(function(x){ m[x] = (m[x] || 0) + 1; });
+    });
+    DIM_COBERTURA = { m: m, n: n || 1 };
+    DIM_COBERTURA_N = data.length;
+  }
+  var c = DIM_COBERTURA.m[d] || 0;
+  return c > 0 && (c / DIM_COBERTURA.n) <= 0.6;
+}
+
+// Relê os votos que já existem por dimensão. Os votos continuam guardados como
+// sempre foram (na etiqueta inteira) — o que muda é a leitura, então nada se
+// perde e não tem migração.
+var DIM_PREF_CACHE = null;
+function esquecerCacheDeDimensoes() { DIM_PREF_CACHE = null; DIM_COBERTURA = null; DIM_COBERTURA_N = -1; }
+
+function preferenciasPorDimensao() {
+  if (DIM_PREF_CACHE) return DIM_PREF_CACHE;
+  var m = {};
+  Object.keys(preferencias || {}).forEach(function(t){
+    var r = preferencias[t];
+    if (!r) return;
+    dimensoesDaEtiqueta(t).forEach(function(d){
+      if (!m[d]) m[d] = { sim: 0, nao: 0 };
+      m[d].sim += r.sim || 0;
+      m[d].nao += r.nao || 0;
+    });
+  });
+  DIM_PREF_CACHE = m;
+  return m;
+}
+
+// Vale no máximo ±2,5, igual ao preferenciaScore: é empurrão, não decisão.
+function dimensaoScore(tags) {
+  var mapa = preferenciasPorDimensao();
+  var dims = dimensoesDoLook(tags).filter(dimensaoInformativa);
+  if (!dims.length) return 0;
+  var soma = 0, contadas = 0;
+  dims.forEach(function(d){
+    var r = mapa[d];
+    if (!r) return;
+    var total = r.sim + r.nao;
+    if (total < 2) return; // uma recusa isolada não vira regra
+    soma += (r.sim - r.nao) / total;
+    contadas++;
+  });
+  if (!contadas) return 0;
+  return Math.max(-2.5, Math.min(2.5, (soma / contadas) * 2.5));
+}
+
+// Em texto, pra poder explicar a indicação depois.
+function dimensoesEmTexto(tags) {
+  return dimensoesDoLook(tags).filter(function(d){
+    return d.indexOf('peça:') !== 0 && dimensaoInformativa(d);
+  }).map(function(d){ return d.split(':').slice(1).join(':'); });
+}
+
 function preferenciaScore(tags) {
   var etiquetas = etiquetasQueContam(tags);
   if (!etiquetas.length) return 0;
@@ -5086,6 +5262,7 @@ function esquecerCombinacoes() {
 function esquecerPreferencias() {
   if (!confirm('Esquecer tudo o que o app aprendeu das suas recusas?')) return;
   preferencias = {};
+  esquecerCacheDeDimensoes();
   savePreferencias();
   if (document.getElementById('statsContent')) renderStats();
   showSavedToast('Aprendizado zerado.');
@@ -10548,6 +10725,7 @@ function notaParaODia(tags, profile, extra) {
        + seasonScore(tags, seasonForProfile(profile))
        + recencyBonus(extra || {}) * 2
        + preferenciaScore(tags)
+       + dimensaoScore(tags)
        + combinacaoScore(tags)
        + regrasScore(tags)
        + ((extra && extra.favorite) ? 1.5 : 0)
@@ -13927,6 +14105,7 @@ function proceedToStep2() {
            + recencyBonus(p) * 2 * staleFactor
            + ocasiaoBoost(p, f.day, alvoDoAssistente())
            + preferenciaScore(p.tags)
+           + dimensaoScore(p.tags)
            + combinacaoScore(p.tags)
            + regrasScore(p.tags)
            + bonusDeRodizio(p)
@@ -14045,6 +14224,7 @@ function regenerateAssignedDay(day) {
          + recencyBonus(p) * 2 * staleFactor
          + ocasiaoBoost(p, day, alvoDoAssistente()) * 3
          + preferenciaScore(p.tags)
+         + dimensaoScore(p.tags)
          + combinacaoScore(p.tags)
          + regrasScore(p.tags)
          + bonusDeRodizio(p)
