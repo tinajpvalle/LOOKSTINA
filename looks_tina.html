@@ -14371,9 +14371,87 @@ function printTripPlan() {
   buildTripPrintWindow();
 }
 
+// Email da mala com as fotos 
+// O mailto: só carrega texto puro — é limitação do protocolo, não tem como
+// mandar HTML por ele. O caminho que funciona é copiar a mala formatada pra
+// área de transferência e ela colar no email: o Mail preserva o que foi colado,
+// fotos incluídas.
+// Aqui não vai o flat lay da tela: ele é montado com posição absoluta, que
+// editor de email desmonta. Vai cada peça do look lado a lado, que é o que
+// aguenta ser colado em qualquer lugar.
+function tripUrlAbsoluta(caminho) {
+  if (!caminho) return '';
+  if (/^(data:|https?:)/.test(caminho)) return caminho;
+  return location.origin + '/' + String(caminho).replace(/^\//, '');
+}
+
+function tripLookParaEmail(d, turno) {
+  var tipo = d[turno + 'Tipo'];
+  if (tipo === 'catalogo') {
+    var look = tripLookDoCatalogo(d[turno + 'Ref']);
+    if (!look) return '<span style="color:#999">—</span>';
+    return '<img src="' + tripEsc(tripUrlAbsoluta(lookThumb(look))) + '" width="150" '
+      + 'style="width:150px;border:1px solid #EAEAE7;border-radius:6px">';
+  }
+  var pecas = (d[turno] || []).map(findPieceById).filter(Boolean);
+  if (!pecas.length) return '<span style="color:#999">—</span>';
+  return pecas.map(function(p){
+    return '<img src="' + tripEsc(tripUrlAbsoluta(p.img)) + '" width="62" alt="' + tripEsc(tripNomeCurto(p)) + '" '
+      + 'style="width:62px;height:62px;object-fit:contain;background:#FAFAF8;border-radius:5px;'
+      + 'border:1px solid #EAEAE7;margin:0 3px 3px 0;vertical-align:middle">';
+  }).join('');
+}
+
+function tripEmailHtml() {
+  var pecas = tripCapsule.map(findPieceById).filter(Boolean);
+  var periodo = tripDays.length ? (tripDays[0].dateLabel + ' – ' + tripDays[tripDays.length-1].dateLabel) : '';
+  var est = 'font-family:Helvetica,Arial,sans-serif;color:#1A1A1A;';
+
+  var lista = '';
+  TRIP_CAT_ORDEM.forEach(function(cat){
+    var doCat = pecas.filter(function(p){ return p.category === cat; });
+    if (!doCat.length) return;
+    lista += '<div style="' + est + 'font-size:11px;font-weight:bold;color:#999;text-transform:uppercase;'
+      + 'letter-spacing:.06em;margin:14px 0 6px">' + tripEsc(TRIP_CAT_PT[cat] || cat) + ' (' + doCat.length + ')</div>'
+      + doCat.map(function(p){
+          return '<span style="display:inline-block;width:78px;margin:0 6px 8px 0;vertical-align:top;text-align:center">'
+            + '<img src="' + tripEsc(tripUrlAbsoluta(p.img)) + '" width="72" '
+            + 'style="width:72px;height:72px;object-fit:contain;background:#FAFAF8;border-radius:5px;border:1px solid #EAEAE7"><br>'
+            + '<span style="' + est + 'font-size:9px;color:#666;line-height:1.2">' + tripEsc(tripNomeCurto(p)) + '</span>'
+            + '</span>';
+        }).join('');
+  });
+
+  var linhas = tripDays.map(function(d){
+    return '<tr>'
+      + '<td style="' + est + 'border:1px solid #EAEAE7;padding:8px;font-size:12px;font-weight:bold;vertical-align:top;width:78px">'
+      + tripEsc(d.day) + '<br><span style="font-weight:normal;color:#666;font-size:10px">' + tripEsc(d.dateLabel)
+      + '<br>' + tripEsc(d.temp) + '</span></td>'
+      + '<td style="border:1px solid #EAEAE7;padding:8px;vertical-align:top">' + tripLookParaEmail(d, 'dia') + '</td>'
+      + '<td style="border:1px solid #EAEAE7;padding:8px;vertical-align:top">' + tripLookParaEmail(d, 'noite') + '</td>'
+      + '</tr>';
+  }).join('');
+
+  return '<div style="' + est + 'max-width:640px">'
+    + '<div style="font-size:17px;font-weight:bold">' + tripEsc(tripTitle()) + '</div>'
+    + '<div style="font-size:12px;color:#666;margin-bottom:10px">' + tripEsc(periodo) + ' · '
+    + tripDays.length + ' dia(s) · ' + pecas.length + ' peças</div>'
+    + '<div style="font-size:14px;font-weight:bold;margin:16px 0 4px">O que vai na mala</div>' + lista
+    + '<div style="font-size:14px;font-weight:bold;margin:20px 0 6px">Os looks de cada dia</div>'
+    + '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%">'
+    + '<tr><th style="' + est + 'border:1px solid #EAEAE7;background:#FAFAF8;padding:6px;font-size:11px;text-align:left">Dia</th>'
+    + '<th style="' + est + 'border:1px solid #EAEAE7;background:#FAFAF8;padding:6px;font-size:11px;text-align:left">De dia</th>'
+    + '<th style="' + est + 'border:1px solid #EAEAE7;background:#FAFAF8;padding:6px;font-size:11px;text-align:left">À noite</th></tr>'
+    + linhas + '</table></div>';
+}
+
+// Fica separado pra dar pra testar o resto sem o navegador sair da página.
+function tripAbrirMailto(subject, corpo) {
+  window.location.href = 'mailto:tina@teninvest.net?subject=' + subject + '&body=' + encodeURIComponent(corpo);
+}
+
 function emailTripPlan() {
   if (!tripDays.length) return;
-  buildTripPrintWindow(); // ela salva como PDF pra anexar
 
   var pecas = tripCapsule.map(findPieceById).filter(Boolean);
   var lista = '';
@@ -14389,13 +14467,31 @@ function emailTripPlan() {
     return d.day + ' ' + d.dateLabel + ' (' + d.temp + ')\n  dia:   ' + nomes(d.dia) + '\n  noite: ' + nomes(d.noite);
   }).join('\n');
 
-  setTimeout(function(){
-    var subject = encodeURIComponent(tripTitle());
-    var body = encodeURIComponent('O QUE VAI NA MALA (' + pecas.length + ' peças)\n' + lista
-      + '\n\nOS LOOKS DE CADA DIA\n\n' + looks
-      + '\n\n(Anexar o PDF salvo da janela que abriu)');
-    window.location.href = 'mailto:tina@teninvest.net?subject=' + subject + '&body=' + body;
-  }, 1500);
+  var texto = 'O QUE VAI NA MALA (' + pecas.length + ' peças)\n' + lista
+    + '\n\nOS LOOKS DE CADA DIA\n\n' + looks;
+  var subject = encodeURIComponent(tripTitle());
+
+  // Copiar antes de abrir o email: depois disso a página perde o foco e a área
+  // de transferência não aceita mais escrita.
+  function abrirEmail(colou) {
+    var corpo = colou
+      ? '\n\n(Cole aqui — a mala com as fotos já está copiada.)\n'
+      : (texto + '\n\n(Anexar o PDF salvo da janela que abriu)');
+    tripAbrirMailto(subject, corpo);
+  }
+
+  var podeCopiar = navigator.clipboard && window.ClipboardItem;
+  if (!podeCopiar) { setTimeout(function(){ abrirEmail(false); }, 1500); return; }
+
+  navigator.clipboard.write([new ClipboardItem({
+    'text/html': new Blob([tripEmailHtml()], { type: 'text/html' }),
+    'text/plain': new Blob([texto], { type: 'text/plain' })
+  })]).then(function(){
+    showSavedToast('Mala copiada com as fotos — é só colar no email.');
+    setTimeout(function(){ abrirEmail(true); }, 1200);
+  }).catch(function(){
+    setTimeout(function(){ abrirEmail(false); }, 1200);   // sem cópia, vai o texto de sempre
+  });
 }
 
 function proceedToStep2() {
