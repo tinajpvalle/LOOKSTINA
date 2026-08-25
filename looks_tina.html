@@ -6581,11 +6581,51 @@ function semanaMesmoSlot(a, b) {
   return !!a && !!b && a.day === b.day && a.alvo === b.alvo && a.turno === b.turno;
 }
 
+// Mover entre turnos de dias diferentes 
+// A lua já passava um look de dia pra noite, mas só no mesmo dia; o mover
+// passava de um dia pro outro, mas só dentro do mesmo turno. Faltava a
+// combinação das duas: quinta à noite pra sábado de dia, que é o que ela pediu.
+// Dia e noite guardam o look em campos diferentes, então o jeito é ler o
+// ocupante de cada lado pelo turno certo e devolver trocado.
+function ocupanteDoSlot(day, alvo, turno) {
+  if (turno === 'noite') return noiteDoDia(day, alvo) || { look: null, montado: null };
+  return weekOccupants(day, alvo);
+}
+
+function limparSlotDaSemana(day, alvo, turno) {
+  if (turno === 'noite') limparNoiteDoDia(day, alvo);
+  else clearWeekOccupants(day, alvo);
+}
+
+function porNoSlotDaSemana(day, alvo, turno, occ) {
+  if (!occ || (!occ.look && !occ.montado)) return;
+  if (turno === 'noite') porNoiteNoDia(day, alvo, occ);
+  else setWeekOccupants(day, occ, alvo);
+}
+
+function nomeDoSlotDaSemana(s) {
+  return s.day + (s.turno === 'noite' ? ' à noite' : ' de dia')
+    + (s.alvo === 'proxima' ? ' da próxima semana' : '');
+}
+
+function trocarEntreTurnos(a, b) {
+  var oa = ocupanteDoSlot(a.day, a.alvo, a.turno);
+  var ob = ocupanteDoSlot(b.day, b.alvo, b.turno);
+  limparSlotDaSemana(a.day, a.alvo, a.turno);
+  limparSlotDaSemana(b.day, b.alvo, b.turno);
+  porNoSlotDaSemana(b.day, b.alvo, b.turno, oa);
+  porNoSlotDaSemana(a.day, a.alvo, a.turno, ob);
+  saveMontagens(); saveToStorage(); renderGrid(); renderWeek();
+  showSavedToast((ob.look || ob.montado)
+    ? ('Trocado: ' + nomeDoSlotDaSemana(a) + ' ↔ ' + nomeDoSlotDaSemana(b) + '.')
+    : ('Look de ' + nomeDoSlotDaSemana(a) + ' foi pra ' + nomeDoSlotDaSemana(b) + '.'));
+}
+
 function semanaTrocar(a, b) {
   if (!a || !b || semanaMesmoSlot(a, b)) { semanaMovendo = null; renderWeek(); return; }
-  if (a.turno !== b.turno) {  // dia com noite: existe o botão da lua pra isso
-    semanaMovendo = null; renderWeek();
-    showSavedToast('Look de dia troca com look de dia, e de noite com de noite. Pra passar de um turno pro outro, use a lua.');
+  if (a.turno !== b.turno) {
+    semanaMovendo = null;
+    trocarEntreTurnos(a, b);
     return;
   }
   semanaMovendo = null;
@@ -6604,8 +6644,9 @@ function semanaMover(day, alvo, turno) {
 
 // Dia vazio também é destino: mover pra um dia sem look é justamente o caso
 // mais comum, e era o que estava faltando — só quem já tinha look virava alvo.
+// O turno também não limita: um look da noite pode ir pro dia de outro dia.
 function alvoDeTrocaSemana(el, day, alvo, turno) {
-  if (!semanaMovendo || semanaMovendo.turno !== turno) return;
+  if (!semanaMovendo) return;   // o turno não limita mais: dá pra ir de noite pra dia
   var slot = { day: day, alvo: alvo, turno: turno };
   if (semanaMesmoSlot(semanaMovendo, slot)) return;
   el.classList.add('destino-troca');
