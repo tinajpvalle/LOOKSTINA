@@ -6651,8 +6651,21 @@ function alvoDeTrocaSemana(el, day, alvo, turno) {
   var slot = { day: day, alvo: alvo, turno: turno };
   if (semanaMesmoSlot(semanaMovendo, slot)) return;
   el.classList.add('destino-troca');
-  el.onclick = (function(s){ return function(e){
-    e.stopPropagation(); semanaTrocar(semanaMovendo, s); }; })(slot);
+  // Com um look armado, tocar neste dia é pra completar a troca. Um onclick que
+  // já estava posto some aqui; um posto depois perde a vez, porque este escuta
+  // na captura e corta o evento antes de chegar em quem quer que seja. Sem
+  // isso, dia com look montado abria o detalhe do montado em vez de mover (o
+  // onclick dele é atribuído depois deste), e dia com foto abria o zoom da foto
+  // por cima da troca. Os botões do cartão continuam fazendo o que fazem.
+  el.onclick = null;
+  el.addEventListener('click', (function(s){ return function(e){
+    var btn = e.target && e.target.closest ? e.target.closest('button') : null;
+    if (btn && el.contains(btn) && !btn.classList.contains('day-look-mover')) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    e.stopPropagation();
+    semanaTrocar(semanaMovendo, s);
+  }; })(slot), true);
 }
 
 // Põe o botão no look e, quando há um look armado, transforma este em destino.
