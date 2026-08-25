@@ -476,6 +476,9 @@ body.week-pick-mode .card-week-btn { display: block; }
 .trip-turno.destino:hover { outline-color: var(--ink); }
 .trip-turno.arrastando { opacity: .45; }
 .trip-turno.solta-aqui { outline: 1px solid var(--ink); outline-offset: -4px; }
+.day-look.solta-aqui, .day-empty.solta-aqui, .day-noite.solta-aqui, .day-noite-acoes.solta-aqui {
+  outline: 2px solid var(--accent); outline-offset: -2px;
+}
 .trip-turno .flatlay-canvas { max-width: none; border-radius: var(--r-md); }
 .trip-turno-list { font-size: .64rem; color: var(--txt-2); margin-top: 5px; line-height: 1.4; }
 
@@ -6646,7 +6649,35 @@ function semanaMover(day, alvo, turno) {
 // Dia vazio também é destino: mover pra um dia sem look é justamente o caso
 // mais comum, e era o que estava faltando — só quem já tinha look virava alvo.
 // O turno também não limita: um look da noite pode ir pro dia de outro dia.
+// Soltar direto no turno certo 
+// O soltar estava ligado na coluna inteira, então o turno do destino era sempre
+// o mesmo da origem: arrastar um look da noite pra outro dia caía na noite de
+// lá, e soltar no próprio dia não fazia nada — a coluna era a mesma, e ela saía
+// cedo. Era isso que estava impedindo domingo à noite de virar domingo de dia
+// no computador, onde ela arrasta em vez de usar o botão.
+function ligarSoltarNoTurno(el, day, alvo, turno) {
+  el.addEventListener('dragover', function(e){
+    if (!dragSourceDay) return;
+    e.preventDefault(); e.stopPropagation();
+    el.classList.add('solta-aqui');
+  });
+  el.addEventListener('dragleave', function(){ el.classList.remove('solta-aqui'); });
+  el.addEventListener('drop', function(e){
+    e.preventDefault(); e.stopPropagation();
+    el.classList.remove('solta-aqui');
+    if (!dragSourceDay) return;
+    var de = { day: dragSourceDay, alvo: dragSourceAlvo, turno: dragSourceTurno };
+    var para = { day: day, alvo: alvo, turno: turno };
+    dragSourceDay = null; dragSourceAlvo = null; dragSourceTurno = 'dia';
+    if (semanaMesmoSlot(de, para)) return;
+    if (de.turno !== para.turno) { trocarEntreTurnos(de, para); return; }
+    if (de.turno === 'noite') trocarNoites(de.day, de.alvo, para.day, para.alvo);
+    else trocarDias(de.day, de.alvo, para.day, para.alvo);
+  });
+}
+
 function alvoDeTrocaSemana(el, day, alvo, turno) {
+  ligarSoltarNoTurno(el, day, alvo, turno);   // vale sempre, com ou sem look armado
   if (!semanaMovendo) return;   // o turno não limita mais: dá pra ir de noite pra dia
   var slot = { day: day, alvo: alvo, turno: turno };
   if (semanaMesmoSlot(semanaMovendo, slot)) return;
