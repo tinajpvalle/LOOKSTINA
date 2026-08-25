@@ -476,6 +476,11 @@ body.week-pick-mode .card-week-btn { display: block; }
 .trip-turno.destino:hover { outline-color: var(--ink); }
 .trip-turno.arrastando { opacity: .45; }
 .trip-turno.solta-aqui { outline: 1px solid var(--ink); outline-offset: -4px; }
+.wh-montado { width: 100%; height: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: #F0F0EC; }
+.wh-montado img { width: 100%; height: 100%; object-fit: contain; background: #fff; }
+.wh-day { position: relative; }
+.wh-lua { position: absolute; top: 2px; right: 2px; background: rgba(0,0,0,.6); color: #fff;
+  border-radius: 50%; width: 15px; height: 15px; display: flex; align-items: center; justify-content: center; }
 .day-look.solta-aqui, .day-empty.solta-aqui, .day-noite.solta-aqui, .day-noite-acoes.solta-aqui {
   outline: 2px solid var(--accent); outline-offset: -2px;
 }
@@ -1483,7 +1488,7 @@ function lsSet(key, value) {
 // Se o servidor não responder (ex: site aberto direto do GitHub Pages, sem
 // backend, ou sem internet), tudo falha silenciosamente e o app continua
 // funcionando 100% localmente, como sempre funcionou.
-var SYNC_KEYS = ['looks_tina_catalog_v1', 'looks_tina_montados_v1', 'looks_tina_pecas_avulsas_v1', 'looks_tina_proxsemana_v1', 'looks_tina_pecas_arquivadas_v1', 'looks_tina_proxsemana_dias_v1', 'looks_tina_proxsemana_noite_v1', 'looks_tina_inspiracoes_v1', 'looks_tina_preferencias_v1', 'looks_tina_combinacoes_v1', 'looks_tina_regras_v1', 'looks_tina_trips_v1'];
+var SYNC_KEYS = ['looks_tina_catalog_v1', 'looks_tina_montados_v1', 'looks_tina_pecas_avulsas_v1', 'looks_tina_proxsemana_v1', 'looks_tina_pecas_arquivadas_v1', 'looks_tina_proxsemana_dias_v1', 'looks_tina_proxsemana_noite_v1', 'looks_tina_inspiracoes_v1', 'looks_tina_preferencias_v1', 'looks_tina_combinacoes_v1', 'looks_tina_regras_v1', 'looks_tina_trips_v1', 'looks_tina_weekhistory_v1'];
 // Um aparelho que abre o app sem nada salvo começa com o catálogo embutido (851
 // looks) e a lista de montados vazia. Se ele mandar isso pro servidor antes de
 // ler o que está lá, apaga o que existe — foi o que aconteceu em 17/08/2026,
@@ -1638,6 +1643,18 @@ function pullRemoteUpdates() {
         inspiracoes = JSON.parse(res.value) || [];
         lsSet('looks_tina_inspiracoes_v1', res.value);
         if (typeof renderInspiracoes === 'function' && document.getElementById('inspiracoesGrid')) renderInspiracoes();
+      } catch (e) {}
+    }
+  });
+  syncGet('looks_tina_weekhistory_v1').then(function(res) {
+    liberarEnvio('looks_tina_weekhistory_v1', !!(res && res.value != null));
+    if (!res || res.value == null) return;
+    if (servidorVeioVazio(res.value) && temAlgoAqui(weekHistory)) { saveWeekHistory(); return; }
+    if (res.value !== JSON.stringify(weekHistory)) {
+      try {
+        weekHistory = JSON.parse(res.value) || [];
+        lsSet('looks_tina_weekhistory_v1', res.value);
+        if (typeof renderWeekHistoryList === 'function' && document.getElementById('weekHistoryList')) renderWeekHistoryList();
       } catch (e) {}
     }
   });
@@ -8248,7 +8265,7 @@ function clearWeek() {
 // (diferente do "Limpar semana", que arquiva e some com tudo).
 function saveWeekToHistoryNow() {
   var snap = buildWeekSnapshot();
-  if (!snap.some(function(d){ return d.pieceId || d.casa; })) {
+  if (!snap.some(diaDoHistoricoTemAlgo)) {
     alert('A semana está vazia — monte os looks antes de salvar no histórico.');
     return;
   }
@@ -13757,14 +13774,52 @@ function closeWeekTemplates() {
   document.getElementById('weekTemplatesOverlay').classList.remove('open');
 }
 
+// A foto que o histórico guarda de cada dia. Antes só enxergava o look do
+// catálogo de dia: look montado e look da noite eram gravados como dia vazio, e
+// uma semana inteira de looks montados aparecia como "1 dia preenchido". Guarda
+// a imagem junto, como já fazia com a foto do catálogo, pra continuar
+// aparecendo mesmo que o look seja apagado depois.
+function fotoDoOcupante(day, turno) {
+  var look = weekLookFor(day, 'atual', turno);
+  if (look && !look.archived) {
+    return { tipo: 'look', id: look.id, thumb: lookThumb(look), tags: (look.tags || []).slice() };
+  }
+  var campo = campoMontadoDe('atual', turno), k = chaveDoDia(day);
+  var m = k ? montagens.find(function(x){ return x[campo] === k; }) : null;
+  if (!m) return null;
+  return {
+    tipo: 'montado', id: m.id, nome: m.name || '',
+    pieceIds: (m.pieceIds || []).slice(),
+    imgs: (m.pieceIds || []).map(findPieceById).filter(Boolean).slice(0, 4).map(function(p){ return p.img; })
+  };
+}
+
+// O histórico tem semanas gravadas antes disso, com o look de dia solto no
+// próprio dia. Ler pelas duas formas, pra elas não virarem dia vazio agora.
+function ocupanteDoHistorico(d, turno) {
+  if (turno === 'noite') return d.noite || null;
+  if (d.dia) return d.dia;
+  if (d.pieceId) return { tipo: 'look', id: d.pieceId, thumb: d.thumb, tags: d.tags };
+  return null;
+}
+
+function diaDoHistoricoTemAlgo(d) {
+  return !!(ocupanteDoHistorico(d, 'dia') || ocupanteDoHistorico(d, 'noite') || d.casa);
+}
+
 function buildWeekSnapshot() {
   return DAYS.map(function(day){
-    var look = data.find(function(p){ return p.weekday === day; });
+    var dia = fotoDoOcupante(day, 'dia');
+    var noite = fotoDoOcupante(day, 'noite');
     return {
       day: day,
-      pieceId: look ? look.id : null,
-      thumb: look ? lookThumb(look) : null,
-      tags: look ? (look.tags || []).slice() : null,
+      // Campos soltos do formato antigo. Ficam aqui pra uma versão anterior do
+      // app ainda conseguir ler o que esta gravar — só o look de dia cabe neles.
+      pieceId: (dia && dia.tipo === 'look') ? dia.id : null,
+      thumb: (dia && dia.tipo === 'look') ? dia.thumb : null,
+      tags: (dia && dia.tipo === 'look') ? dia.tags : null,
+      dia: dia,
+      noite: noite,
       casa: !!weekCasaDays[day],
       note: weekNotes[day] || '',
       ocasiao: weekDayOcasiao[day] || null
@@ -13778,7 +13833,7 @@ function buildWeekSnapshot() {
 // fazer nada. Guarda thumb/tags junto (não só o id) pra continuar mostrando a foto
 // mesmo que o look seja arquivado ou apagado do catálogo depois.
 function archiveWeekToHistory(weekStartIso, snapshotDays) {
-  if (!snapshotDays.some(function(d){ return d.pieceId || d.casa; })) return false;
+  if (!snapshotDays.some(diaDoHistoricoTemAlgo)) return false;
   var monday = new Date(weekStartIso + 'T00:00:00');
   var sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
   var entry = {
@@ -13792,8 +13847,14 @@ function archiveWeekToHistory(weekStartIso, snapshotDays) {
   else weekHistory.unshift(entry);
   weekHistory.sort(function(a,b){ return (b.weekStart||'').localeCompare(a.weekStart||''); });
   if (weekHistory.length > WEEK_HISTORY_MAX) weekHistory.length = WEEK_HISTORY_MAX;
-  lsSet('looks_tina_weekhistory_v1', JSON.stringify(weekHistory));
+  saveWeekHistory();
   return true;
+}
+
+function saveWeekHistory() {
+  var json = JSON.stringify(weekHistory);
+  lsSet('looks_tina_weekhistory_v1', json);
+  syncPut('looks_tina_weekhistory_v1', json);
 }
 
 function showHistoryToast(msg) {
@@ -14080,6 +14141,20 @@ function closeWeekHistory() {
   document.getElementById('weekHistoryOverlay').classList.remove('open');
 }
 
+// Look montado não tem uma foto só: mostra as peças dele num quadradinho.
+function miniDoHistorico(occ, titulo) {
+  titulo = tripEsc(titulo);
+  if (occ.tipo === 'montado') {
+    var imgs = (occ.imgs || []).filter(Boolean).slice(0, 4);
+    var nome = tripEsc(occ.nome || 'look montado');
+    if (!imgs.length) return '<div class="wh-empty" title="' + titulo + ': ' + nome + '"></div>';
+    return '<div class="wh-montado" title="' + titulo + ': ' + nome + '">'
+      + imgs.map(function(src){ return '<img src="' + tripEsc(src) + '" alt="">'; }).join('') + '</div>';
+  }
+  if (occ.thumb) return '<img src="' + tripEsc(occ.thumb) + '" alt="" title="' + titulo + '">';
+  return '<div class="wh-empty" title="' + titulo + '"></div>';
+}
+
 function renderWeekHistoryList() {
   var box = document.getElementById('weekHistoryList');
   if (!box) return;
@@ -14089,13 +14164,18 @@ function renderWeekHistoryList() {
   }
   var html = '';
   weekHistory.forEach(function(w, i){
-    var filled = w.days.filter(function(d){ return d.pieceId || d.casa; }).length;
+    var filled = w.days.filter(diaDoHistoricoTemAlgo).length;
     var thumbsHtml = w.days.map(function(d){
+      var dia = ocupanteDoHistorico(d, 'dia');
+      var noite = ocupanteDoHistorico(d, 'noite');
       var inner;
-      if (d.thumb) inner = '<img src="' + d.thumb + '" alt="' + d.day + '" title="' + d.day + '">';
+      if (dia) inner = miniDoHistorico(dia, d.day);
       else if (d.casa) inner = '<div class="wh-empty" title="' + d.day + ': em casa"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3.8 10.4 8.2-6.6 8.2 6.6V19a1.6 1.6 0 0 1-1.6 1.6H5.4A1.6 1.6 0 0 1 3.8 19v-8.6z"/></svg></div>';
+      else if (noite) inner = miniDoHistorico(noite, d.day + ' à noite');
       else inner = '<div class="wh-empty" title="' + d.day + ': sem look"></div>';
-      return '<div class="wh-day">' + inner + '<span class="wh-day-label">' + d.day + '</span></div>';
+      // Dia com look de dia E de noite: a lua avisa que tem um segundo look ali.
+      var lua = (dia && noite) ? '<span class="wh-lua" title="' + d.day + ': também tem look de noite"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.6 8.6 0 1 0 11.1 11.1z"/></svg></span>' : '';
+      return '<div class="wh-day">' + inner + lua + '<span class="wh-day-label">' + d.day + '</span></div>';
     }).join('');
     html += '<div class="week-history-card">'
       + '<div class="week-history-thumbs">' + thumbsHtml + '</div>'
@@ -14117,28 +14197,41 @@ function restoreWeekFromHistory(idx) {
   if (!w) return;
   if (!confirm('Restaurar a semana de ' + w.label + '? Isso substitui os looks da semana atual.')) return;
 
+  // Sai tudo o que está na semana agora, dia e noite, do catálogo e montado.
   DAYS.forEach(function(day){
     var cur = data.find(function(p){ return p.weekday === day; });
     if (cur) cur.weekday = null;
+    var curN = data.find(function(p){ return p.weekdayNoite === day; });
+    if (curN) curN.weekdayNoite = null;
   });
+  montagens.forEach(function(m){ m.weekday = null; m.weekdayNoite = null; });
   weekCasaDays = {};
   weekNotes = {};
   weekDayOcasiao = {};
 
   var missing = [];
   w.days.forEach(function(d){
-    if (d.casa) {
-      weekCasaDays[d.day] = true;
-    } else if (d.pieceId) {
-      var look = data.find(function(p){ return p.id === d.pieceId; });
-      if (look && !look.archived) look.weekday = d.day;
-      else missing.push(d.day);
-    }
+    if (d.casa) weekCasaDays[d.day] = true;
+    ['dia', 'noite'].forEach(function(turno){
+      var occ = ocupanteDoHistorico(d, turno);
+      if (!occ) return;
+      var onde = d.day + (turno === 'noite' ? ' (noite)' : '');
+      if (occ.tipo === 'montado') {
+        var m = montagens.find(function(x){ return String(x.id) === String(occ.id); });
+        if (m) m[campoMontadoDe('atual', turno)] = chaveDoDia(d.day);
+        else missing.push(onde);
+        return;
+      }
+      var look = data.find(function(p){ return p.id === occ.id; });
+      if (look && !look.archived) look[campoDoTurno(turno)] = d.day;
+      else missing.push(onde);
+    });
     if (d.note) weekNotes[d.day] = d.note;
     if (d.ocasiao) weekDayOcasiao[d.day] = d.ocasiao;
   });
 
   saveToStorage();
+  saveMontagens();
   lsSet('looks_tina_casadays_v1', JSON.stringify(weekCasaDays));
   lsSet('looks_tina_weeknotes_v1', JSON.stringify(weekNotes));
   lsSet('looks_tina_dayocasiao_v1', JSON.stringify(weekDayOcasiao));
@@ -14148,7 +14241,7 @@ function restoreWeekFromHistory(idx) {
   showSavedToast();
   if (missing.length) {
     setTimeout(function(){
-      alert('Algumas peças dessa semana não existem mais no catálogo (arquivadas ou removidas): dia(s) ' + missing.join(', ') + ' ficaram vazios. A foto ainda aparece no histórico porque foi guardada junto.');
+      alert('Alguns looks dessa semana não existem mais (arquivados, removidos ou o look montado foi apagado): ' + missing.join(', ') + ' ficaram vazios. A foto ainda aparece no histórico porque foi guardada junto.');
     }, 300);
   }
 }
@@ -14156,7 +14249,7 @@ function restoreWeekFromHistory(idx) {
 function deleteWeekHistoryEntry(idx) {
   if (!confirm('Excluir esta semana do histórico?')) return;
   weekHistory.splice(idx, 1);
-  lsSet('looks_tina_weekhistory_v1', JSON.stringify(weekHistory));
+  saveWeekHistory();   // e não só local: senão a semana apagada voltava do servidor
   renderWeekHistoryList();
 }
 
