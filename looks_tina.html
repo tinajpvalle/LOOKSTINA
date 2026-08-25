@@ -1625,6 +1625,7 @@ function pullRemoteUpdates() {
     if (res.value !== currentJson) {
       try {
         montagens = JSON.parse(res.value) || [];
+        esquecerParesDosLooks();
         lsSet('looks_tina_montados_v1', res.value);
         if (typeof renderLooksMontados === 'function' && document.getElementById('montadosGrid')) renderLooksMontados();
         if (typeof renderWeekPlanner === 'function') renderWeekPlanner();
@@ -3439,6 +3440,7 @@ var builderPieceIds = [];
 var builderActiveCat = '__all__';
 
 function saveMontagens() {
+  esquecerParesDosLooks();   // look novo dela muda o que combina com o quê
   var json = JSON.stringify(montagens);
   lsSet(MONTADOS_STORAGE_KEY, json);
   syncPut(MONTADOS_STORAGE_KEY, json);
@@ -3677,13 +3679,92 @@ var COMBINA_COM = {
   'Accessories': ['Tops', 'Bottoms', 'Shoes']
 };
 
+// Com o que essa peça combina 
+// A nota vinha só da roda de cores: "dois neutros", "tom sobre tom", "cores
+// opostas". Nenhum voto dela entrava. Agora entra o que ela ensinou — as peças
+// que ela mesma já juntou num look (264 pares nos 42 looks salvos), os votos de
+// par, as regras que ela escreveu e o gosto por tecido/caimento/estampa. A cor
+// continua contando, só deixou de ser a única voz.
+
+// Uma etiqueta em português da peça, montada do que dá pra ler nela. É o que
+// faz as regras dela ("calça listrada com camisa xadrez não combinam") valerem
+// pro armário, onde os nomes estão em inglês.
+function tripEtiquetaPt(p) {
+  var dims = dimensoesDaPeca(p);
+  var peca = dims.filter(function(d){ return d.indexOf('peça:') === 0; })[0];
+  var resto = dims.filter(function(d){ return d.indexOf('peça:') !== 0 && d.indexOf('marca:') !== 0; })
+    .map(function(d){ return d.split(':').slice(1).join(':'); });
+  var cat = (CATEGORIA_EM_PT[p.category] || p.category || '').toLowerCase();
+  return (peca ? peca.split(':')[1] : cat) + ': ' + resto.join(' ');
+}
+
+var PARES_DOS_LOOKS = null;
+function esquecerParesDosLooks() { PARES_DOS_LOOKS = null; }
+function chaveDoPar(a, b) { return [String(a), String(b)].sort().join('|'); }
+
+// Quantas vezes ela já pôs essas duas peças no mesmo look.
+function paresDosLooksDela() {
+  if (PARES_DOS_LOOKS) return PARES_DOS_LOOKS;
+  var m = {};
+  (montagens || []).forEach(function(look){
+    var ids = (look.pieceIds || []).map(String);
+    for (var i = 0; i < ids.length; i++) {
+      for (var j = i + 1; j < ids.length; j++) {
+        var k = chaveDoPar(ids[i], ids[j]);
+        m[k] = (m[k] || 0) + 1;
+      }
+    }
+  });
+  PARES_DOS_LOOKS = m;
+  return m;
+}
+
+function notaDePar(a, b) {
+  var motivos = [], n = 0;
+
+  var juntas = paresDosLooksDela()[chaveDoPar(a.id, b.id)] || 0;
+  if (juntas) {
+    n += Math.min(4, 2.5 + juntas * 0.5);
+    motivos.push(juntas > 1 ? ('você já usou as duas juntas ' + juntas + ' vezes') : 'você já usou as duas juntas');
+  }
+
+  var voto = combinacoes[[tripEtiqueta(a), tripEtiqueta(b)].sort().join('  +  ')];
+  if (voto && (voto.sim + voto.nao)) {
+    var q = ((voto.sim - voto.nao) / (voto.sim + voto.nao)) * 3;
+    n += q;
+    if (q > 0) motivos.push('você aprovou esse par');
+    else if (q < 0) motivos.push('você recusou esse par');
+  }
+
+  var tagsPt = [tripEtiquetaPt(a), tripEtiquetaPt(b)];
+  var proibindo = (regrasEscritas || []).filter(function(r){
+    return r.tipo !== 'exige' && regraBateNoLook(r, tagsPt);
+  });
+  if (proibindo.length) {
+    n -= 6 * proibindo.length;
+    motivos.push('bate na sua regra: "' + proibindo[0].texto + '"');
+  }
+
+  var dim = dimensaoScore(tagsPt);
+  if (dim) {
+    n += dim;
+    if (dim > 0.8) motivos.push('do tipo que você tem gostado');
+    else if (dim < -0.8) motivos.push('do tipo que você costuma recusar');
+  }
+
+  var cor = notaDeCombinacao(perfilDaCor(a.color), perfilDaCor(b.color));
+  n += cor.n * 0.5;
+  motivos.push(cor.motivo);
+
+  return { n: n, motivo: motivos.slice(0, 2).join(' · '), motivos: motivos };
+}
+
 function pecasQueCombinam(peca) {
-  var base = perfilDaCor(peca.color);
   var cats = COMBINA_COM[peca.category] || ['Tops','Bottoms','Shoes','Bags'];
   return cats.map(function(cat){
-    var lista = allPecas().filter(function(x){ return x.id !== peca.id && x.category === cat; })
+    var lista = allPecas().filter(function(x){ return x.id !== peca.id && x.category === cat && !x.archived; })
       .map(function(x){
-        var nota = notaDeCombinacao(base, perfilDaCor(x.color));
+        var nota = notaDePar(peca, x);
         return { peca: x, nota: nota.n, motivo: nota.motivo };
       })
       .sort(function(a,b){ return b.nota - a.nota; })
@@ -3712,10 +3793,14 @@ function abrirCombinaCom(pieceId) {
   combinaPecaId = pieceId;
   closePieceZoom();
 
-  var base = perfilDaCor(peca.color);
   document.getElementById('combinaTitulo').textContent = 'Com o que combina: ' + peca.name;
-  document.getElementById('combinaSub').textContent = peca.category + ' · ' + peca.color +
-    (base ? (base.neutra ? ' · cor neutra, combina com quase tudo' : ' · lido como ' + base.nome) : ' · cor não reconhecida, mostrando por categoria');
+  // O subtítulo falava só da cor porque a nota era só cor. Agora diz de onde ela
+  // vem de verdade.
+  var quantos = Object.keys(paresDosLooksDela()).length;
+  document.getElementById('combinaSub').textContent =
+    (CATEGORIA_EM_PT[peca.category] || peca.category) + ' · ' + (peca.color || 'sem cor')
+    + ' · pelos seus ' + (montagens || []).length + ' looks, ' + Object.keys(combinacoes || {}).length
+    + ' votos e ' + (regrasEscritas || []).length + ' regras';
   var fotoBase = document.getElementById('combinaFoto');
   if (fotoBase) fotoBase.src = peca.img;
 
@@ -5106,24 +5191,79 @@ function registrarPreferencia(tags, sinal, peso) {
 // dela, e o mesmo voto passa a valer pra tudo que compartilha uma dimensão.
 // Nada disso pede etiqueta nova: é reler o que já está escrito.
 
+// As etiquetas do catálogo estão em português e os nomes das peças em inglês.
+// Enquanto só o português era lido, o que ela ensina no catálogo não alcançava o
+// armário: das 285 peças, só 68 tinham alguma dimensão legível. Aqui cada termo
+// em inglês cai no mesmo valor do termo em português, então os dois vocabulários
+// viram um só.
 var DIM_SINONIMOS = {
   denim: 'jeans', tricot: 'tricô', reto: 'reta', longo: 'longa', curto: 'curta',
   justo: 'justa', largo: 'larga', soltinho: 'soltinha', listrado: 'listrada',
-  estampado: 'estampada', 'geométrico': 'geométrica', liso: 'lisa'
+  estampado: 'estampada', 'geométrico': 'geométrica', liso: 'lisa',
+
+  // tecido
+  leather: 'couro', suede: 'camurça', silk: 'seda', satin: 'cetim', velvet: 'veludo',
+  linen: 'linho', cotton: 'algodão', wool: 'lã', knit: 'tricô', knitted: 'tricô',
+  fleece: 'moletom', sweatshirt: 'moletom', lace: 'renda', crochet: 'crochê',
+  quilted: 'matelassê', boucle: 'tweed', corduroy: 'cotelê', canvas: 'lona',
+  jersey: 'malha', ribbed: 'malha', 'faux leather': 'couro', shearling: 'pelúcia',
+
+  // caimento
+  'straight leg': 'reta', straight: 'reta', baggy: 'larga', loose: 'soltinha',
+  fitted: 'justa', 'high waist': 'cintura alta', 'high waisted': 'cintura alta',
+  'wide leg': 'wide leg', pleated: 'plissada', 'a-line': 'evasê', tapered: 'reta',
+  boyfriend: 'larga', relaxed: 'soltinha',
+
+  // estampa
+  striped: 'listrada', stripe: 'listrada', stripes: 'listrada', plaid: 'xadrez',
+  checked: 'xadrez', check: 'xadrez', gingham: 'vichy', 'polka dot': 'poá',
+  leopard: 'onça', printed: 'estampada', 'graphic print': 'estampada',
+  patterned: 'estampada', solid: 'lisa', houndstooth: 'pied de poule',
+
+  // manga e decote
+  'long sleeve': 'manga longa', 'short sleeve': 'manga curta', sleeveless: 'sem manga',
+  tank: 'regata', cami: 'alcinha', 'spaghetti strap': 'alcinha',
+  turtleneck: 'gola alta', 'mock neck': 'gola alta', 'v-neck': 'gola v',
+  'crew neck': 'gola redonda', hooded: 'capuz', hoodie: 'capuz',
+  halter: 'frente única', 'off shoulder': 'ombro a ombro', strapless: 'tomara que caia'
+};
+
+// Cor vem do campo da peça, que está em inglês. Traduz pro vocabulário do
+// CORES_REF, que é o que o resto do app compara.
+var DIM_COR_EN = {
+  black: 'preto', white: 'branco', gray: 'cinza', grey: 'cinza', charcoal: 'cinza',
+  beige: 'bege', taupe: 'bege', cream: 'creme', ivory: 'creme', 'off white': 'creme',
+  brown: 'marrom', chocolate: 'marrom', tan: 'caramelo', camel: 'caramelo',
+  caramel: 'caramelo', burgundy: 'vinho', maroon: 'vinho', wine: 'vinho',
+  red: 'vermelho', pink: 'rosa', blush: 'rosa', orange: 'laranja',
+  yellow: 'amarelo', mustard: 'amarelo', green: 'verde', 'olive green': 'verde militar',
+  olive: 'verde militar', khaki: 'verde militar', blue: 'azul', 'light blue': 'azul',
+  navy: 'azul marinho', 'navy blue': 'azul marinho', purple: 'roxo', lilac: 'roxo',
+  lavender: 'roxo', teal: 'azul', gold: 'dourado', silver: 'prateado'
 };
 
 var DIMENSOES = [
   ['tecido', ['jeans','denim','couro','tricô','tricot','seda','cetim','veludo','linho','algodão',
               'lã','cashmere','camurça','moletom','malha','sarja','lurex','paetê','renda','crochê',
-              'matelassê','tweed','pelúcia','nylon','jacquard']],
+              'matelassê','tweed','pelúcia','nylon','jacquard',
+              'leather','faux leather','suede','silk','satin','velvet','linen','cotton','wool',
+              'knit','knitted','fleece','sweatshirt','lace','crochet','quilted','boucle',
+              'corduroy','canvas','jersey','ribbed','shearling']],
   ['caimento', ['oversized','slim','reta','reto','skinny','wide leg','flare','mom','cropped','midi',
                 'longa','longo','curta','curto','justa','justo','soltinha','soltinho','pantalona',
-                'alfaiataria','godê','evasê','larga','largo']],
+                'alfaiataria','godê','evasê','larga','largo',
+                'straight leg','straight','baggy','loose','fitted','high waist','high waisted',
+                'pleated','a-line','tapered','boyfriend','relaxed']],
   ['estampa', ['listrada','listrado','xadrez','floral','poá','animal print','onça','zebra','tie dye',
                'geométrica','geométrico','estampada','estampado','lisa','liso','vichy','tartan',
-               'paisley','risca de giz']],
+               'paisley','risca de giz',
+               'striped','stripe','stripes','plaid','checked','check','gingham','polka dot',
+               'leopard','printed','graphic print','patterned','solid','houndstooth']],
   ['manga', ['manga longa','manga curta','sem manga','regata','alcinha','gola alta','gola v','decote',
-             'tomara que caia','frente única','ombro a ombro','capuz','polo']]
+             'tomara que caia','frente única','ombro a ombro','capuz','polo',
+             'long sleeve','short sleeve','sleeveless','tank','cami','spaghetti strap',
+             'turtleneck','mock neck','v-neck','crew neck','hooded','hoodie','halter',
+             'off shoulder','strapless']]
 ];
 
 // Um termo lido some do texto antes do próximo ser procurado, e os mais longos
@@ -5183,6 +5323,24 @@ function dimensoesDaEtiqueta(t) {
     var d = par[0] + ':' + dimCanonico(par[1]);
     if (out.indexOf(d) === -1) out.push(d);
   });
+  return out;
+}
+
+// As dimensões de uma peça do armário. Diferente da etiqueta do catálogo, a
+// peça tem campo de cor e de marca próprios — melhor usar eles do que torcer
+// pra cor aparecer escrita no nome.
+function dimensoesDaPeca(p) {
+  if (!p) return [];
+  var out = dimensoesDaEtiqueta(tripEtiqueta(p));
+  var cor = DIM_COR_EN[dimSemAcento(p.color || '')] || (p.color || '').toLowerCase();
+  if (cor && out.indexOf('cor:' + cor) === -1) {
+    // Só entra se for cor do vocabulário do app; nome solto vira ruído.
+    if (CORES_REF.some(function(c){ return c[0] === cor; }) || cor === 'dourado' || cor === 'prateado') {
+      out = out.filter(function(d){ return d.indexOf('cor:') !== 0; }).concat(['cor:' + cor]);
+    }
+  }
+  var marca = (p.brand || '').trim().toLowerCase();
+  if (marca && marca !== 'no brand' && marca !== 'sem marca') out.push('marca:' + marca);
   return out;
 }
 
