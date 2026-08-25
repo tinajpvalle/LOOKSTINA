@@ -656,7 +656,7 @@ body.week-pick-mode .card-week-btn { display: block; }
 #suggestPickerGrid img { background:#FAFAF8; object-fit:contain; }
 #lookZoomOverlay { position: fixed; inset: 0; z-index: 10100; background: rgba(0,0,0,.82); display: none; align-items: center; justify-content: center; padding: 20px; }
 #lookZoomOverlay.open { display: flex; }
-#lookZoomOverlay > button { position: absolute; top: 16px; right: 16px; background: rgba(255,255,255,.14); color: #fff; border: none; border-radius: 50%; width: 40px; height: 40px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+#lookZoomOverlay > button { position: absolute; top: 16px; right: 16px; background: rgba(0,0,0,.6); color: #fff; border: none; border-radius: 50%; width: 40px; height: 40px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 /* dimensiona pela altura: o flat lay é 3/4, então mandar na largura estourava
    a tela na vertical */
 #lookZoomBox { display: flex; flex-direction: column; align-items: center; }
@@ -671,6 +671,7 @@ body.week-pick-mode .card-week-btn { display: block; }
 .zoom-peca-nome { font-size: .76rem; color: #fff; flex: 1; min-width: 0; }
 .zoom-peca-btn { flex-shrink: 0; background: transparent; border: 1px solid rgba(255,255,255,.4); color: #fff; border-radius: 5px; font-size: .68rem; padding: 3px 9px; cursor: pointer; font-family: inherit; }
 .zoom-peca-btn:hover { background: #fff; color: #1A1A1A; border-color: #fff; }
+.zoom-peca-sair { justify-content: center; border-bottom: none; }
 .zoom-peca-btn.forte { border-color: rgba(255,255,255,.85); font-weight: 500; }
 .zoom-peca-btn.voltar { margin-left: auto; }
 .zoom-peca-add { flex-wrap: wrap; }
@@ -12962,7 +12963,10 @@ function tripRenderZoomPecas(pecas, editavel) {
         + '<span class="zoom-peca-nome">' + (add ? 'Acrescentar ao look — eu escolho:' : 'Acrescentar ao look:') + '</span>'
         + add
         + '<button class="zoom-peca-btn" id="tripLookPickerBtn" onclick="tripAlternarPickerNoLook()">escolher eu</button>'
-        + (tripHistorico.length ? '<button class="zoom-peca-btn voltar" title="Desfaz a última mudança" onclick="tripDesfazer()">↺ voltar</button>' : '')
+        + (tripHistorico.length ? '<button class="zoom-peca-btn voltar" title="Desfaz a última mudança" onclick="tripDesfazer()">↺ desfazer</button>' : '')
+        + '</div>'
+        + '<div class="zoom-peca zoom-peca-sair">'
+        + '<button class="zoom-peca-btn forte" onclick="fecharZoomDoLook()">voltar pra mala</button>'
         + '</div>';
     })()
       + '<div id="tripLookPicker" style="display:none;">'
