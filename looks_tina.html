@@ -14258,10 +14258,47 @@ function tripTitle() {
   return tripDest ? (base + ' · ' + tripDest.nome) : base;
 }
 
+// A foto do look no lugar da descrição escrita. Cada look é um conjunto de
+// peças, não uma foto só, então vai o mesmo flat lay que aparece na tela: as
+// mesmas posições, as mesmas larguras e a mesma ordem de sobreposição. Turno com
+// foto do catálogo entra como a foto mesmo, com a rotação que ela deu.
+function tripLookParaPdf(d, turno) {
+  var tipo = d[turno + 'Tipo'];
+  if (tipo === 'catalogo') {
+    var look = tripLookDoCatalogo(d[turno + 'Ref']);
+    if (!look) return '<span class="vazio">—</span>';
+    var r = getRotation(look);
+    return '<div class="fl-box"><img class="fl-foto" src="' + tripEsc(lookThumb(look)) + '"'
+      + (r ? ' style="transform:rotate(' + r + 'deg)"' : '') + '></div>';
+  }
+  var pecas = (d[turno] || []).map(findPieceById).filter(Boolean);
+  if (!pecas.length) return '<span class="vazio">—</span>';
+
+  var porCat = {};
+  pecas.forEach(function(p){
+    var cat = FLATLAY_POSITIONS[p.category] ? p.category : 'Accessories';
+    if (!porCat[cat]) porCat[cat] = [];
+    porCat[cat].push(p);
+  });
+  var ladoALado = porCat.Outerwear && porCat.Tops;
+  var itens = '';
+  Object.keys(porCat).forEach(function(cat){
+    var pos = (ladoALado && FLATLAY_LADO_A_LADO[cat]) ? FLATLAY_LADO_A_LADO[cat] : FLATLAY_POSITIONS[cat];
+    var lista = porCat[cat], n = lista.length;
+    lista.forEach(function(p, i){
+      var desvio = n > 1 ? (i - (n - 1) / 2) * 14 : 0;
+      itens += '<img class="fl" src="' + tripEsc(p.img) + '" style="top:' + pos.top
+        + '%;left:' + (pos.left + desvio) + '%;width:' + (n > 1 ? pos.width * 0.8 : pos.width)
+        + '%;z-index:' + ((FLATLAY_Z[cat] || 1) * 10 + i) + '">';
+    });
+  });
+  return '<div class="fl-box">' + itens + '</div>';
+}
+
 // PDF da mala: a lista de peças com foto vem primeiro, porque é ela que se usa
-// na hora de fazer a mala; os looks de cada dia vêm depois, em texto, que é o
-// que cabe numa folha e ainda dá pra ler.
-function buildTripPrintWindow() {
+// na hora de fazer a mala; os looks de cada dia vêm depois, cada um com a foto
+// do look montado.
+function tripPrintHtml() {
   if (!tripDays.length) return null;
 
   var pecas = tripCapsule.map(findPieceById).filter(Boolean);
@@ -14277,15 +14314,12 @@ function buildTripPrintWindow() {
   });
 
   var rows = tripDays.map(function(d){
-    function nomes(ids) { return (ids || []).map(findPieceById).filter(Boolean).map(tripNomeCurto).join(' · '); }
     return '<tr><th>' + tripEsc(d.day) + '<br><span class="sub">' + tripEsc(d.dateLabel) + '</span><br><span class="sub">' + tripEsc(d.temp) + '</span></th>'
-      + '<td>' + tripEsc(nomes(d.dia)) + '</td><td>' + tripEsc(nomes(d.noite)) + '</td></tr>';
+      + '<td>' + tripLookParaPdf(d, 'dia') + '</td><td>' + tripLookParaPdf(d, 'noite') + '</td></tr>';
   }).join('');
 
   var periodo = tripDays.length ? (tripDays[0].dateLabel + ' – ' + tripDays[tripDays.length-1].dateLabel) : '';
-  var win = window.open('', '_blank', 'width=1000,height=800');
-  if (!win) return null;
-  win.document.write('<!DOCTYPE html><html><head><meta charset="utf-8">'
+  return ('<!DOCTYPE html><html><head><meta charset="utf-8">'
     + '<base href="' + location.href + '">'
     + '<title>' + tripEsc(tripTitle()) + '</title>'
     + '<style>'
@@ -14303,6 +14337,12 @@ function buildTripPrintWindow() {
     + 'table{width:100%;border-collapse:collapse;margin-top:2mm}'
     + 'th,td{border:1px solid #EAEAE7;padding:2mm;font-size:8pt;text-align:left;vertical-align:top}'
     + 'th{width:20mm;font-weight:700}'
+    + '.fl-box{position:relative;width:34mm;height:45mm;background:#FAFAF8;border-radius:2mm;overflow:hidden;'
+    +   '-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+    + '.fl{position:absolute;transform:translate(-50%,0);object-fit:contain}'
+    + '.fl-foto{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:contain}'
+    + '.vazio{color:#BBB}'
+    + 'tr{break-inside:avoid;page-break-inside:avoid}'
     + 'thead th{background:#FAFAF8;width:auto}'
     + '.sub{font-weight:400;color:#666;font-size:6.5pt}'
     + '.print-btn{display:block;margin:6mm auto;padding:8px 24px;background:#1A1A1A;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer}'
@@ -14315,6 +14355,14 @@ function buildTripPrintWindow() {
     + '<table><thead><tr><th>Dia</th><th>De dia</th><th>À noite</th></tr></thead><tbody>' + rows + '</tbody></table>'
     + '<button class="print-btn" onclick="window.print()">Salvar como PDF</button>'
     + '</body></html>');
+}
+
+function buildTripPrintWindow() {
+  var html = tripPrintHtml();
+  if (!html) return null;
+  var win = window.open('', '_blank', 'width=1000,height=800');
+  if (!win) return null;
+  win.document.write(html);
   win.document.close();
   return win;
 }
