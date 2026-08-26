@@ -1626,6 +1626,7 @@ function pullRemoteUpdates() {
       try {
         montagens = JSON.parse(res.value) || [];
         esquecerParesDosLooks();
+        esquecerReceita();
         lsSet('looks_tina_montados_v1', res.value);
         if (typeof renderLooksMontados === 'function' && document.getElementById('montadosGrid')) renderLooksMontados();
         if (typeof renderWeekPlanner === 'function') renderWeekPlanner();
@@ -3441,6 +3442,7 @@ var builderActiveCat = '__all__';
 
 function saveMontagens() {
   esquecerParesDosLooks();   // look novo dela muda o que combina com o quê
+  esquecerReceita();
   var json = JSON.stringify(montagens);
   lsSet(MONTADOS_STORAGE_KEY, json);
   syncPut(MONTADOS_STORAGE_KEY, json);
@@ -3757,6 +3759,42 @@ function notaDePar(a, b) {
   motivos.push(cor.motivo);
 
   return { n: n, motivo: motivos.slice(0, 2).join(' · '), motivos: motivos };
+}
+
+// A receita dos looks dela 
+// O app montava com um formato fixo: blusa, calça, sapato e bolsa, sempre. Os
+// 42 looks que ela salvou dizem outro formato — o dela. Blusa e calça em todos,
+// sapato em 40, bolsa em 25, casaco em 12, joia em 2. Aqui isso vira a chance
+// de cada categoria entrar no look, em vez de "sempre" ou "nunca". Com poucos
+// looks salvos a conta seria instável, então abaixo de 8 vale um padrão.
+var RECEITA_CACHE = null;
+function esquecerReceita() { RECEITA_CACHE = null; }
+
+var RECEITA_PADRAO = { Tops: 1, Bottoms: 1, Shoes: 0.95, Bags: 0.5, Outerwear: 0.25, Accessories: 0.1, Jewelry: 0.05 };
+var RECEITA_ORDEM = ['Tops', 'Bottoms', 'Shoes', 'Outerwear', 'Bags', 'Accessories', 'Jewelry'];
+
+function receitaDosLooksDela() {
+  if (RECEITA_CACHE) return RECEITA_CACHE;
+  var looks = (montagens || []).filter(function(m){ return (m.pieceIds || []).length >= 2; });
+  if (looks.length < 8) { RECEITA_CACHE = { chance: RECEITA_PADRAO, base: 'padrão', looks: looks.length }; return RECEITA_CACHE; }
+  var chance = {};
+  RECEITA_ORDEM.forEach(function(cat){
+    var n = looks.filter(function(m){
+      return (m.pieceIds || []).map(findPieceById).filter(Boolean).some(function(p){ return p.category === cat; });
+    }).length;
+    chance[cat] = n / looks.length;
+  });
+  RECEITA_CACHE = { chance: chance, base: 'seus looks', looks: looks.length };
+  return RECEITA_CACHE;
+}
+
+// Quanto uma peça combina com as que já estão no look, pela régua que ela
+// ensinou. Média e não soma, senão look com mais peça ganharia por tamanho.
+function notaDaPecaNoLook(peca, escolhidas) {
+  if (!escolhidas || !escolhidas.length) return 0;
+  var soma = 0;
+  escolhidas.forEach(function(q){ soma += notaDePar(q, peca).n; });
+  return soma / escolhidas.length;
 }
 
 function pecasQueCombinam(peca) {
@@ -4600,13 +4638,25 @@ function pickPieceForCategory(cat, referencePieces, excludeId) {
   list = tirandoAsQueAcabaramDeSair(list);
   if (list.length === 0) return null;
   if (!referencePieces || referencePieces.length === 0) {
-    return weightedRandomPiece(list, function(p){ return fatorDeRodizioDaPeca(p); });
+    // A primeira peça não tem com o que combinar, mas tem o gosto dela: sem isso
+    // o look nascia de sorteio puro e vinha rosa, que ela recusou em 7 de 7
+    // votos. Aqui a preferência corta e o rodízio escolhe dentro do que sobra.
+    var comGosto = list.map(function(p){ return { p: p, n: dimensaoScore([tripEtiquetaPt(p)]) }; })
+      .sort(function(a, b){ return b.n - a.n; });
+    var boas = comGosto.slice(0, Math.max(6, Math.round(comGosto.length * 0.4)));
+    return weightedRandomPiece(boas.map(function(x){ return x.p; }), fatorDeRodizioDaPeca);
   }
-  return weightedRandomPiece(list, function(p) {
-    var total = 0;
-    referencePieces.forEach(function(rp) { total += compatibilityScore(p, rp); });
-    return (total / referencePieces.length) * fatorDeRodizioDaPeca(p);
-  });
+  // A nota vinha do compatibilityScore: cor 50%, estação 30%, ocasião 20% — sem
+  // nenhum voto dela. Agora vem do notaDePar, que é o que ela ensinou.
+  // Só que multiplicar nota por rodízio não bastou: as notas ficam todas perto
+  // (média 3,1) e o fator de rodízio varia seis vezes, então quem decidia era o
+  // rodízio — a peça escolhida caía no percentil 55, quase sorteio. Aqui o gosto
+  // corta primeiro, e o rodízio escolhe dentro do que sobrou, que é o papel
+  // dele: variar entre as boas, não passar por cima delas.
+  var comNota = list.map(function(p) { return { p: p, n: notaDaPecaNoLook(p, referencePieces) }; })
+    .sort(function(a, b) { return b.n - a.n; });
+  var faixa = comNota.slice(0, Math.max(4, Math.round(comNota.length * 0.15)));
+  return weightedRandomPiece(faixa.map(function(x){ return x.p; }), fatorDeRodizioDaPeca);
 }
 
 function randomPieceForCategory(cat, excludeId) {
@@ -4641,7 +4691,11 @@ function generateFullSuggestion() {
   });
   SUGGESTION_OPTIONAL_CATS.forEach(function(cat) {
     if (lockedCats[cat]) return; // já ocupada por uma peça travada
-    var chance = SUGGESTION_OPTIONAL_CHANCE[cat] != null ? SUGGESTION_OPTIONAL_CHANCE[cat] : 0.3;
+    // A chance vinha de um número escrito à mão. Agora vem dos looks dela:
+    // bolsa em 60% deles, casaco em 29%, joia em 5%.
+    var receita = receitaDosLooksDela().chance;
+    var chance = receita[cat] != null ? receita[cat]
+      : (SUGGESTION_OPTIONAL_CHANCE[cat] != null ? SUGGESTION_OPTIONAL_CHANCE[cat] : 0.3);
     if (Math.random() < chance) {
       var p = pickPieceForCategory(cat, chosen);
       if (p) { suggestionSlots.push({ category: cat, pieceId: p.id }); chosen.push(p); }
