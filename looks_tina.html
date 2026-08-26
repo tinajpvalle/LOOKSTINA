@@ -3746,6 +3746,23 @@ function paresDosLooksDela() {
   return m;
 }
 
+// Estampa com estampa 
+// Cinco das oito regras escritas por ela dizem a mesma coisa em palavras
+// diferentes: listrada com xadrez, listrada com florida, listrada com bolinhas,
+// "muita informação". Só que cada regra bloqueava um par específico, então eu
+// seguia montando listrada com listrada e ela via o app ignorando o que já
+// tinha dito cinco vezes. Nos 42 looks dela: 21 sem estampa, 23 com uma peça
+// estampada, 5 com duas. Ou seja, duas estampas é exceção, não regra.
+function temEstampa(p) {
+  return dimensoesDaPeca(p).some(function(d){
+    return d.indexOf('estampa:') === 0 && d !== 'estampa:lisa';
+  });
+}
+
+function quantasEstampas(pecas) {
+  return (pecas || []).filter(temEstampa).length;
+}
+
 function notaDePar(a, b) {
   var motivos = [], n = 0;
 
@@ -3777,6 +3794,11 @@ function notaDePar(a, b) {
     n += dim;
     if (dim > 0.8) motivos.push('do tipo que você tem gostado');
     else if (dim < -0.8) motivos.push('do tipo que você costuma recusar');
+  }
+
+  if (temEstampa(a) && temEstampa(b)) {
+    n -= 3.5;
+    motivos.push('duas estampas juntas');
   }
 
   var cor = notaDeCombinacao(perfilDaCor(a.color), perfilDaCor(b.color));
@@ -4277,6 +4299,17 @@ function openMontadoDetail(id) {
         acoes.appendChild(voltar);
       }
     }
+    if (m.source === 'auto') {
+      var outro = document.createElement('button');
+      outro.className = 'btn btn-ghost';
+      outro.title = m.baseId
+        ? ('Monto outro mantendo ' + (findPieceById(m.baseId) || {}).name)
+        : 'Monto outro com as suas peças';
+      outro.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M20.3 12a8.3 8.3 0 1 1-2.7-6.1"/><path d="M20.3 3.6v4.7h-4.7"/></svg> Montar outro'
+        + (m.corPedida ? (' (' + m.corPedida + ')') : '');
+      outro.onclick = (function(mid){ return function(){ remontarLookAutomatico(mid); }; })(m.id);
+      acoes.appendChild(outro);
+    }
     var excluir = document.createElement('button');
     excluir.className = 'btn btn-ghost';
     excluir.style.cssText = 'background:#FAFAF8;color:#8C8C88;border-color:#E0E0DB;margin-left:auto;';
@@ -4668,6 +4701,12 @@ function pickPieceForCategory(cat, referencePieces, excludeId) {
   var semRecusadas = list.filter(function(p){ return dimensaoScore([tripEtiquetaPt(p)]) > -1.2; });
   if (semRecusadas.length) list = semRecusadas;
 
+  // Já tem uma peça estampada no look: as outras entram lisas.
+  if (quantasEstampas(referencePieces) >= 1) {
+    var semEstampa = list.filter(function(p){ return !temEstampa(p); });
+    if (semEstampa.length) list = semEstampa;
+  }
+
   // Cor pedida: as daquela cor concorrem primeiro. Se não houver nenhuma nessa
   // categoria, a lista segue inteira — a cor entra em outra peça do look.
   if (corPedidaNoMontador) {
@@ -4778,9 +4817,18 @@ function cumprirExigencias(lockedCats) {
       if (!candidatas.length) return; // ela exigiu algo que não tem no armário
       candidatas = tirandoAsQueAcabaramDeSair(candidatas, 3);
 
-      // Cumprir a regra dela não pode desfazer a cor que ela pediu: essa troca
-      // entra depois da escolha normal e trocava a peça na cor por outra
-      // qualquer que satisfizesse a regra.
+      // Essa etapa entra DEPOIS da escolha normal, então ela desfazia o que já
+      // tinha sido decidido: trocava a peça na cor pedida por outra qualquer, e
+      // recolocava peça estampada num look que já tinha uma.
+      var noLookAgora = suggestionSlots.map(function(sl){ return findPieceById(sl.pieceId); }).filter(Boolean);
+      var jaTemEstampa = noLookAgora.filter(function(p){
+        return p.category !== candidatas[0].category && temEstampa(p);
+      }).length > 0;
+      if (jaTemEstampa) {
+        var lisas = candidatas.filter(function(p){ return !temEstampa(p); });
+        if (lisas.length) candidatas = lisas;
+      }
+
       if (corPedidaNoMontador) {
         var naCor = candidatas.filter(function(p){
           return dimensoesDaPeca(p).indexOf('cor:' + corPedidaNoMontador) !== -1;
@@ -11280,6 +11328,51 @@ function renderCoresDaBase() {
   }).join('');
 }
 
+// Montar outro no lugar deste 
+// Ela escolheu a peça, não gostou do resultado e ficou presa na primeira
+// tentativa. Aqui o mesmo look é remontado com o mesmo pedido — a peça de
+// partida e a cor ficam guardadas no próprio look —, trocando as peças no lugar
+// em vez de criar outro look: assim o dia da semana continua apontando pra ele.
+function remontarLookAutomatico(id) {
+  var m = (montagens || []).find(function(x){ return String(x.id) === String(id); });
+  if (!m) return;
+  var base = m.baseId ? findPieceById(m.baseId) : null;
+  var cor = m.corPedida || null;
+  var atual = (m.pieceIds || []).slice().sort().join('|');
+  var outros = montagens.filter(function(x){ return String(x.id) !== String(id); })
+    .map(function(x){ return (x.pieceIds || []).slice().sort().join('|'); });
+
+  var guardado = { slots: suggestionSlots, locked: suggestionLockedIds, hist: historicoSugestoes };
+  suggestionLockedIds = base ? [base.id] : [];
+  historicoSugestoes = [];
+  corPedidaNoMontador = cor;
+  var ids = null;
+  for (var i = 0; i < 12 && !ids; i++) {
+    generateFullSuggestion();
+    var ps = suggestionSlots.map(function(s){ return findPieceById(s.pieceId); }).filter(Boolean);
+    if (ps.length < 2) continue;
+    if (!ps.some(function(p){ return p.category === 'Tops'; })) continue;
+    if (lookBateEmRegra(ps)) continue;
+    if (quantasEstampas(ps) > 1) continue;
+    if (cor && !ps.some(function(p){ return dimensoesDaPeca(p).indexOf('cor:' + cor) !== -1; })) continue;
+    var chave = ps.map(function(p){ return p.id; }).sort().join('|');
+    if (chave === atual) continue;                 // tem que sair diferente deste
+    if (outros.indexOf(chave) !== -1) continue;    // e não virar cópia de outro
+    ids = ps.map(function(p){ return p.id; });
+  }
+  suggestionSlots = guardado.slots; suggestionLockedIds = guardado.locked; historicoSugestoes = guardado.hist;
+  corPedidaNoMontador = null;
+
+  if (!ids) { showSavedToast('Não achei outra combinação diferente dessa — tente de novo.'); return; }
+  m.pieceIds = ids;
+  saveMontagens();
+  if (typeof renderLooksMontados === 'function') renderLooksMontados();
+  if (typeof renderWeek === 'function') renderWeek();
+  if (typeof renderGrid === 'function') renderGrid();
+  openMontadoDetail(m.id);
+  showSavedToast('Montei outro' + (base ? (' com ' + tripNomeCurto(base)) : '') + '.');
+}
+
 function montarDoArmarioNoDia(day, alvo, turno, baseId, cor) {
   turno = (turno === 'noite') ? 'noite' : 'dia';
   alvo = alvo || 'atual';
@@ -11299,6 +11392,7 @@ function montarDoArmarioNoDia(day, alvo, turno, baseId, cor) {
     if (ps.length < 2) continue;
     if (!ps.some(function(p){ return p.category === 'Tops'; })) continue;
     if (lookBateEmRegra(ps)) continue;
+    if (quantasEstampas(ps) > 1) continue;           // ela reclamou disso cinco vezes
     var chave = ps.map(function(p){ return p.id; }).sort().join('|');
     if (jaExistem.indexOf(chave) !== -1) continue;   // não repete look que já existe
     // Pediu cor: o look precisa ter pelo menos uma peça dela. Tudo naquela cor
@@ -11322,6 +11416,9 @@ function montarDoArmarioNoDia(day, alvo, turno, baseId, cor) {
     pieceIds: ids,
     createdAt: new Date().toISOString(),
     source: 'auto',
+    // Guardados pra dar pra montar outro depois com o mesmo pedido dela.
+    baseId: base ? base.id : null,
+    corPedida: cor || null,
     weekday: null, weekdayNext: null, weekdayNoite: null, weekdayNoiteNext: null
   };
   novo[campoMontadoDe(alvo, turno)] = chaveDoDia(day);
