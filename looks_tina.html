@@ -481,6 +481,8 @@ body.week-pick-mode .card-week-btn { display: block; }
 .wh-day { position: relative; }
 .wh-lua { position: absolute; top: 2px; right: 2px; background: rgba(0,0,0,.6); color: #fff;
   border-radius: 50%; width: 15px; height: 15px; display: flex; align-items: center; justify-content: center; }
+.dia-montar-barra { display: flex; gap: 4px; margin-top: 4px; }
+.dia-montar-barra button { flex: 1; }
 .day-look.solta-aqui, .day-empty.solta-aqui, .day-noite.solta-aqui, .day-noite-acoes.solta-aqui {
   outline: 2px solid var(--accent); outline-offset: -2px;
 }
@@ -1393,6 +1395,19 @@ body.compare-mode .card-compare-btn { display: flex; }
     <div style="display:flex;gap:6px;flex-shrink:0;">
       <button class="btn-back" onclick="tripBackToStep1()">←</button>
       <button class="btn-next" id="tripBuildBtn" onclick="tripBuild()">Montar mala →</button>
+    </div>
+  </div>
+</div>
+
+<!-- Escolher a peça por onde começar o look do dia -->
+<div class="overlay" id="pecaBaseOverlay" onclick="if(event.target===this) fecharEscolhaDePecaBase()">
+  <div class="modal trip-modal">
+    <button class="close-btn" onclick="fecharEscolhaDePecaBase()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"/></svg></button>
+    <div class="modal-body">
+      <h3 id="pecaBaseTitulo" style="margin-bottom:4px;">Começar por qual peça?</h3>
+      <div id="pecaBaseSub" style="font-size:.82rem;color:var(--txt-2);margin-bottom:12px;"></div>
+      <input type="text" id="pecaBaseBusca" class="trip-busca" autocomplete="off" oninput="escolhaDePecaBaseBuscou()">
+      <div class="trip-picker-grid" id="pecaBaseGrid" style="padding-bottom:0;"></div>
     </div>
   </div>
 </div>
@@ -4635,6 +4650,13 @@ function pickPieceForCategory(cat, referencePieces, excludeId) {
   }
   var semProibidas = list.filter(function(p){ return !pecaProibidaComAsOutras(p, referencePieces); });
   if (semProibidas.length) list = semProibidas; // se zerar, melhor sugerir do que travar
+
+  // Peça do tipo que ela recusa fica de fora, tendo referência ou não. Antes o
+  // corte valia só pra primeira peça do look, então bastava ela escolher a peça
+  // de partida pra voltar a aparecer camiseta rosa — que ela recusou em 7 de 7
+  // votos. Se o corte zerar a lista, melhor sugerir do que travar.
+  var semRecusadas = list.filter(function(p){ return dimensaoScore([tripEtiquetaPt(p)]) > -1.2; });
+  if (semRecusadas.length) list = semRecusadas;
   list = tirandoAsQueAcabaramDeSair(list);
   if (list.length === 0) return null;
   if (!referencePieces || referencePieces.length === 0) {
@@ -6375,6 +6397,7 @@ function renderWeek() {
       botaoTrocarTurno(dl, day, 'atual', 'dia');
       botaoMoverSemana(dl, day, 'atual', 'dia');
       col.appendChild(dl);
+      barraDeMontarNoDia(col, day, 'atual', 'dia');
       avisoDeClimaNaColuna(col, day, 'atual', look.tags);
       // Dia com look do catálogo E look montado: o montado entra como etiqueta
       // embaixo, pra não sumir da vista (mesma ideia usada no Calendário).
@@ -6412,6 +6435,7 @@ function renderWeek() {
       botaoMoverSemana(dm, day, 'atual', 'dia');
       dm.onclick = (function(mid){ return function(){ switchTab('montados'); openMontadoDetail(mid); }; })(montado.id);
       col.appendChild(dm);
+      barraDeMontarNoDia(col, day, 'atual', 'dia');
       avisoDeClimaNaColuna(col, day, 'atual', tagsDoMontado(montado));
     } else if (weekCasaDays[day]) {
       // Day marked as "em casa"
@@ -6438,7 +6462,8 @@ function renderWeek() {
         + '<span style="font-size:.65rem;color:#B0B0AC;margin-top:4px;display:block;">ou</span>'
         + '<button onclick="event.stopPropagation();toggleCasaDay(\''+day+'\', true)" style="font-size:.68rem;color:#C4985A;background:#FAFAF8;border:1px solid #E0E0DB;border-radius:6px;padding:2px 8px;cursor:pointer;margin-top:2px;font-family:inherit;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="m3.8 10.4 8.2-6.6 8.2 6.6V19a1.6 1.6 0 0 1-1.6 1.6H5.4A1.6 1.6 0 0 1 3.8 19v-8.6z"/></svg> Em casa</button>'
         + '<button onclick="event.stopPropagation();sugerirLookParaDia(\''+day+'\', \'atual\')" class="day-suggest-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><circle cx="7.8" cy="7.6" r="2.8"/><path d="M7.8 2.4v1.4M3.6 3.4l1 1M2.4 7.6h1.4M12 3.4l-1 1"/><path d="M9.4 19.4a3.7 3.7 0 0 1 .6-7.4 4.8 4.8 0 0 1 9.1 1.4 3.1 3.1 0 0 1-.6 6h-9.1z"/></svg> Sugerir look</button>'
-        + '<button onclick="event.stopPropagation();montarDoArmarioNoDia(\''+day+'\', \'atual\', \'dia\')" class="day-suggest-btn" title="Monto um look novo com as suas peças"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><rect x="3.6" y="3.6" width="16.8" height="16.8" rx="3"/><circle cx="8.6" cy="8.6" r="1.1"/><circle cx="15.4" cy="15.4" r="1.1"/><circle cx="12" cy="12" r="1.1"/></svg> Montar do armário</button>';
+        + '<button onclick="event.stopPropagation();montarDoArmarioNoDia(\''+day+'\', \'atual\', \'dia\')" class="day-suggest-btn" title="Monto um look novo com as suas peças"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><rect x="3.6" y="3.6" width="16.8" height="16.8" rx="3"/><circle cx="8.6" cy="8.6" r="1.1"/><circle cx="15.4" cy="15.4" r="1.1"/><circle cx="12" cy="12" r="1.1"/></svg> Montar do armário</button>'
+        + '<button onclick="event.stopPropagation();abrirEscolhaDePecaBase(\''+day+'\', \'atual\', \'dia\')" class="day-suggest-btn" title="Escolho eu a peça e você monta o resto em volta"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M12 7.2a2.1 2.1 0 1 1 2.1-2.1c0 1.1-1 1.5-2.1 2.1v2"/><path d="M12 9.2 3.6 15.3A1.5 1.5 0 0 0 4.5 18h15a1.5 1.5 0 0 0 .9-2.7L12 9.2z"/></svg> Começar por uma peça</button>';
       de.onclick = (function(dd){ return function(){ openDayPicker(dd, 'atual'); }; })(day);
       alvoDeTrocaSemana(de, day, 'atual', 'dia');
       col.appendChild(de);
@@ -6904,6 +6929,27 @@ function ligarSoltarNoTurno(el, day, alvo, turno) {
     if (de.turno === 'noite') trocarNoites(de.day, de.alvo, para.day, para.alvo);
     else trocarDias(de.day, de.alvo, para.day, para.alvo);
   });
+}
+
+// Ela não achou o "Montar do armário" porque ele só existia em dia vazio — e
+// semana cheia é o caso normal. Aqui ele fica junto de todo dia, trocando o look
+// que estiver lá.
+function barraDeMontarNoDia(col, day, alvo, turno) {
+  if (tripViewOnly) return;
+  var barra = document.createElement('div');
+  barra.className = 'dia-montar-barra';
+  var a = document.createElement('button');
+  a.className = 'day-noite-add';
+  a.textContent = 'montar do armário';
+  a.title = 'Monto um look novo com as suas peças e ponho neste dia';
+  a.onclick = (function(d, al, t){ return function(e){ e.stopPropagation(); montarDoArmarioNoDia(d, al, t); }; })(day, alvo, turno);
+  var b = document.createElement('button');
+  b.className = 'day-noite-add';
+  b.textContent = 'por uma peça';
+  b.title = 'Você escolhe a peça, eu monto o resto em volta';
+  b.onclick = (function(d, al, t){ return function(e){ e.stopPropagation(); abrirEscolhaDePecaBase(d, al, t); }; })(day, alvo, turno);
+  barra.appendChild(a); barra.appendChild(b);
+  col.appendChild(barra);
 }
 
 function alvoDeTrocaSemana(el, day, alvo, turno) {
@@ -11100,15 +11146,81 @@ function lookBateEmRegra(pecas) {
   });
 }
 
-function montarDoArmarioNoDia(day, alvo, turno) {
+// Montar em volta de uma peça que ela escolhe 
+// "Vamos supor que eu quero usar um jeans": ela tem a peça em mente e quer o
+// resto montado em volta. A peça escolhida entra travada, então o montador
+// completa o look sem trocá-la.
+var pecaBaseAlvo = null;
+
+function abrirEscolhaDePecaBase(day, alvo, turno) {
+  pecaBaseAlvo = { day: day, alvo: alvo || 'atual', turno: (turno === 'noite') ? 'noite' : 'dia' };
+  document.getElementById('pecaBaseTitulo').textContent =
+    'Começar por qual peça? · ' + day + (pecaBaseAlvo.turno === 'noite' ? ' à noite' : '');
+  var busca = document.getElementById('pecaBaseBusca');
+  busca.value = '';
+  busca.placeholder = 'jeans, blusa, preto, Paula Raia…';
+  renderEscolhaDePecaBase();
+  document.getElementById('pecaBaseOverlay').classList.add('open');
+  setTimeout(function(){ busca.focus(); }, 60);
+}
+
+function fecharEscolhaDePecaBase() {
+  document.getElementById('pecaBaseOverlay').classList.remove('open');
+  pecaBaseAlvo = null;
+}
+
+function escolhaDePecaBaseBuscou() { renderEscolhaDePecaBase(); }
+
+function renderEscolhaDePecaBase() {
+  var grid = document.getElementById('pecaBaseGrid');
+  if (!grid) return;
+  var q = (document.getElementById('pecaBaseBusca').value || '').trim().toLowerCase();
+  var lista = allPecas().filter(function(p){ return !p.archived && !pecaArquivada(p.id); });
+  if (q) {
+    lista = lista.filter(function(p){
+      var texto = (p.name + ' ' + (p.brand||'') + ' ' + (p.color||'') + ' '
+        + (CATEGORIA_EM_PT[p.category] || p.category) + ' ' + tripEtiquetaPt(p)).toLowerCase();
+      return texto.indexOf(q) !== -1;
+    });
+  }
+  // Mais usadas nos looks dela primeiro: é por onde ela começaria.
+  var uso = {};
+  (montagens || []).forEach(function(m){
+    (m.pieceIds || []).forEach(function(i){ uso[String(i)] = (uso[String(i)] || 0) + 1; });
+  });
+  lista.sort(function(a, b){ return (uso[String(b.id)] || 0) - (uso[String(a.id)] || 0); });
+  lista = lista.slice(0, 120);
+
+  document.getElementById('pecaBaseSub').textContent = lista.length
+    ? (lista.length + ' peça(s) — toque na que você quer usar')
+    : 'Nada com esse nome no armário.';
+  grid.innerHTML = lista.map(function(p){
+    return '<div class="trip-shoe-card" onclick="montarComEssaPeca(\'' + p.id + '\')">'
+      + '<img src="' + tripEsc(p.img) + '" alt="' + tripEsc(p.name) + '" loading="lazy">'
+      + '<div class="trip-shoe-nome">' + tripEsc(tripNomeCurto(p)) + '</div>'
+      + (uso[String(p.id)] ? '<div class="trip-shoe-marca">em ' + uso[String(p.id)] + ' look(s) seus</div>' : '')
+      + '</div>';
+  }).join('');
+}
+
+function montarComEssaPeca(pieceId) {
+  if (!pecaBaseAlvo) return;
+  var alvo = pecaBaseAlvo;
+  fecharEscolhaDePecaBase();
+  montarDoArmarioNoDia(alvo.day, alvo.alvo, alvo.turno, pieceId);
+}
+
+function montarDoArmarioNoDia(day, alvo, turno, baseId) {
   turno = (turno === 'noite') ? 'noite' : 'dia';
   alvo = alvo || 'atual';
+  var base = baseId ? findPieceById(baseId) : null;
   var jaExistem = montagens.map(function(m){ return (m.pieceIds || []).slice().sort().join('|'); });
 
   // O construtor guarda o estado dele em variáveis globais; aqui ele é usado
   // sem a tela, então o que estava aberto volta como estava.
   var guardado = { slots: suggestionSlots, locked: suggestionLockedIds, hist: historicoSugestoes };
-  suggestionLockedIds = []; historicoSugestoes = [];
+  suggestionLockedIds = base ? [base.id] : [];   // peça escolhida por ela fica travada
+  historicoSugestoes = [];
   var ids = null;
   for (var i = 0; i < 10 && !ids; i++) {
     generateFullSuggestion();
@@ -11122,11 +11234,15 @@ function montarDoArmarioNoDia(day, alvo, turno) {
   }
   suggestionSlots = guardado.slots; suggestionLockedIds = guardado.locked; historicoSugestoes = guardado.hist;
 
-  if (!ids) { showSavedToast('Não consegui montar um look novo agora — tente de novo.'); return; }
+  if (!ids) {
+    showSavedToast(base ? ('Não consegui montar um look com ' + base.name + ' agora — tente de novo.')
+                        : 'Não consegui montar um look novo agora — tente de novo.');
+    return;
+  }
 
   var novo = {
     id: 'm_' + Date.now() + '_' + Math.floor(Math.random() * 100000),
-    name: 'Montado pra ' + day,
+    name: base ? (tripNomeCurto(base) + ' — ' + day) : ('Montado pra ' + day),
     pieceIds: ids,
     createdAt: new Date().toISOString(),
     source: 'auto',
@@ -11137,7 +11253,9 @@ function montarDoArmarioNoDia(day, alvo, turno) {
   saveMontagens();
   renderWeek();
   if (typeof renderGrid === 'function') renderGrid();
-  showSavedToast('Montei um look do seu armário pra ' + day + (turno === 'noite' ? ' à noite' : '') + '.');
+  showSavedToast(base
+    ? ('Montei um look com ' + tripNomeCurto(base) + ' pra ' + day + '.')
+    : ('Montei um look do seu armário pra ' + day + (turno === 'noite' ? ' à noite' : '') + '.'));
 }
 
 function sugerirLookParaDia(day, alvo, turno) {
