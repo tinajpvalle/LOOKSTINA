@@ -3682,8 +3682,43 @@ function perfilDaCor(cor) {
   return { rgb: rgb, h: h, s: sat, l: l, neutra: neutra, nome: nome };
 }
 
+// Combinações que funcionam, do livro de cores dela 
+// A régua do app é geometria pura: mede a distância entre os matizes e chama de
+// "contraste forte" o que estiver longe. As duas combinações mais bonitas que
+// ela trouxe do livro — verde com salmão ocre, e azul com verde e amarelo —
+// levavam 0,5 por isso, ou seja, eram descartadas. E as quatro que passavam,
+// passavam pelo motivo errado: "cinza é neutro", "creme combina com tudo". Ele
+// acertava por acidente.
+// Aqui a combinação vira fato conhecido e passa na frente da régua. Comparação
+// por família de cor, que é a resolução que o app enxerga: a sutileza do livro
+// (dois cinzas diferentes, um puxado pro ameixa e outro pro violeta) não cabe
+// no vocabulário de 18 cores, e medi que isso não é o gargalo — as sete
+// combinações couberam sem colidir.
+// Cada leva de páginas que ela mandar entra nesta lista.
+var COMBINACOES_DO_LIVRO = [
+  ['azul', 'cinza', 'caramelo'],     // 青色 · 梅鼠 · 山吹茶
+  ['creme', 'roxo', 'marrom'],       // 卵色 · 藤鼠 · 焦茶色
+  ['roxo', 'caramelo'],              // 黒紫 · 代赭色
+  ['amarelo', 'vermelho'],           // 蒸栗色 · 紅色
+  ['amarelo', 'laranja'],            // 淡卵色 · 朱色
+  ['verde', 'laranja'],              // 鶸萌木 · 欵冬色
+  ['azul', 'verde', 'amarelo']       // 納戸色 · 青竹色 · amarelo
+];
+
+// Compara pela cor exata, não pela família. Por família, "terra" junta caramelo,
+// marrom, creme e bege — e aí "azul com creme" passava como se fosse a
+// combinação azul · cinza · ocre do livro, que é outra coisa. Com família, 75%
+// dos looks montados davam combinação do livro; quase tudo falso positivo.
+function combinacaoDoLivro(c1, c2) {
+  if (!c1 || !c2 || c1 === c2) return false;
+  return COMBINACOES_DO_LIVRO.some(function(conjunto){
+    return conjunto.indexOf(c1) !== -1 && conjunto.indexOf(c2) !== -1;
+  });
+}
+
 function notaDeCombinacao(a, b) {
   if (!a || !b) return { n: 0, motivo: 'cor não cadastrada' };
+  if (combinacaoDoLivro(a.nome, b.nome)) return { n: 4.5, motivo: 'combinação do seu livro de cores' };
   if (a.neutra && b.neutra) return { n: 3, motivo: 'dois neutros' };
   if (b.neutra) return { n: 4, motivo: b.nome + ' é neutro' };
   if (a.neutra) return { n: 4, motivo: a.nome + ' combina com tudo' };
