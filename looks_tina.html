@@ -6763,6 +6763,7 @@ function renderNextWeekGrid() {
       cb.onclick = (function(dd){ return function(e){ e.stopPropagation(); sugerirLookParaDia(dd, 'proxima'); }; })(day);
       dc.appendChild(cb);
       col.appendChild(dc);
+      barraDeMontarNoDia(col, day, 'proxima', 'dia');
     } else if (look) {
       var dl = document.createElement('div'); dl.className = 'day-look';
       ligarArrastarLook(dl, day, 'proxima');
@@ -6782,6 +6783,7 @@ function renderNextWeekGrid() {
       botaoTrocarTurno(dl, day, 'proxima', 'dia');
       botaoMoverSemana(dl, day, 'proxima', 'dia');
       col.appendChild(dl);
+      barraDeMontarNoDia(col, day, 'proxima', 'dia');
       avisoDeClimaNaColuna(col, day, 'proxima', look.tags);
     } else if (montado) {
       var dm = document.createElement('div'); dm.className = 'day-look day-look-montado';
@@ -6806,6 +6808,7 @@ function renderNextWeekGrid() {
       botaoMoverSemana(dm, day, 'proxima', 'dia');
       dm.onclick = (function(mid){ return function(){ switchTab('montados'); openMontadoDetail(mid); }; })(montado.id);
       col.appendChild(dm);
+      barraDeMontarNoDia(col, day, 'proxima', 'dia');
       avisoDeClimaNaColuna(col, day, 'proxima', tagsDoMontado(montado));
     } else {
       var de = document.createElement('div'); de.className = 'day-empty';
@@ -6815,6 +6818,7 @@ function renderNextWeekGrid() {
       de.onclick = (function(dd){ return function(){ openDayPicker(dd, 'proxima'); }; })(day);
       alvoDeTrocaSemana(de, day, 'proxima', 'dia');
       col.appendChild(de);
+      barraDeMontarNoDia(col, day, 'proxima', 'dia');
     }
 
     blocoDaNoite(col, day, 'proxima');
@@ -11189,7 +11193,9 @@ function abrirEscolhaDePecaBase(day, alvo, turno) {
   pecaBaseAlvo = { day: day, alvo: alvo || 'atual', turno: (turno === 'noite') ? 'noite' : 'dia' };
   pecaBaseCor = null;
   document.getElementById('pecaBaseTitulo').textContent =
-    'Começar por qual peça? · ' + day + (pecaBaseAlvo.turno === 'noite' ? ' à noite' : '');
+    'Começar por qual peça? · ' + day
+    + (pecaBaseAlvo.turno === 'noite' ? ' à noite' : '')
+    + (pecaBaseAlvo.alvo === 'proxima' ? ' da próxima semana' : '');
   var busca = document.getElementById('pecaBaseBusca');
   busca.value = '';
   busca.placeholder = 'jeans, blusa, preto, Paula Raia…';
