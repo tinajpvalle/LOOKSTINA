@@ -3763,6 +3763,57 @@ function quantasEstampas(pecas) {
   return (pecas || []).filter(temEstampa).length;
 }
 
+// O look de acento 
+// Oito das 15 inspirações que ela salvou seguem a mesma receita: as peças
+// grandes em até duas cores que se sustentam, e um item pequeno numa terceira
+// cor que não aparece em lugar nenhum — o cinto roxo com o blazer marrom, a
+// clutch laranja na camisa verde. Ela tem 15 acessórios assim no armário e eles
+// entram em 7 dos 50 looks dela: o que a atrai é justamente o que ela não usa.
+// Azul fica de fora da lista de propósito: metade do armário é jeans, então
+// bolsa azul não lê como acento, lê como combinando.
+var CORES_DE_ACENTO = ['vermelho','laranja','amarelo','verde','roxo','rosa','vinho','dourado'];
+var CATEGORIAS_DE_ACENTO = ['Bags','Shoes','Jewelry','Accessories'];
+var CATEGORIAS_DA_BASE = ['Tops','Bottoms','Outerwear'];
+var CHANCE_DE_ACENTO = 0.4;      // nem sempre, senão vira maneirismo
+var buscandoAcento = false;
+
+// Verde e verde militar são cores diferentes pro app e a mesma coisa pro olho:
+// sapato verde com calça verde militar saía marcado como acento, quando é tom
+// sobre tom. O acento tem que ser de outra família, não só de outro nome.
+var FAMILIA_DA_COR = {
+  'verde': 'verde', 'verde militar': 'verde',
+  'vermelho': 'vermelho', 'vinho': 'vermelho',
+  'azul': 'azul', 'azul marinho': 'azul', 'jeans': 'azul',
+  'bege': 'terra', 'creme': 'terra', 'caramelo': 'terra', 'marrom': 'terra',
+  'preto': 'preto', 'branco': 'branco', 'cinza': 'cinza',
+  'rosa': 'rosa', 'laranja': 'laranja', 'amarelo': 'amarelo',
+  'roxo': 'roxo', 'dourado': 'dourado', 'prateado': 'prateado'
+};
+function familiaDaCor(c) { return FAMILIA_DA_COR[c] || c; }
+
+function corDaPeca(p) {
+  var d = dimensoesDaPeca(p).find(function(x){ return x.indexOf('cor:') === 0; });
+  return d ? d.slice(4) : null;
+}
+
+function coresDaBaseDoLook(pecas) {
+  return (pecas || []).filter(function(p){ return CATEGORIAS_DA_BASE.indexOf(p.category) !== -1; })
+    .map(corDaPeca).filter(Boolean);
+}
+
+// O acento de um look, lido do próprio look: acessório numa cor forte que as
+// peças grandes não têm. Serve pra qualquer look, inclusive os que ela montou.
+function acentoDoLook(pecas) {
+  var base = coresDaBaseDoLook(pecas).map(familiaDaCor);
+  var achado = (pecas || []).filter(function(p){
+    var c = corDaPeca(p);
+    return CATEGORIAS_DE_ACENTO.indexOf(p.category) !== -1
+      && CORES_DE_ACENTO.indexOf(c) !== -1 && base.indexOf(familiaDaCor(c)) === -1;
+  });
+  if (achado.length !== 1) return null;   // duas cores soltas não é acento, é confusão
+  return { cor: corDaPeca(achado[0]), peca: achado[0] };
+}
+
 function notaDePar(a, b) {
   var motivos = [], n = 0;
 
@@ -4232,7 +4283,14 @@ function openMontadoDetail(id) {
   if (nameEl) nameEl.textContent = m.name ? m.name : 'Look sem nome';
   if (metaEl) {
     metaEl.textContent = m.pieceIds.length + (m.pieceIds.length === 1 ? ' peça' : ' peças') +
-      (m.casa ? ' · look de casa' : m.source === 'auto' ? ' · gerado por sugestão automática' : ' · montado manualmente');
+      (m.casa ? ' · look de casa' : m.source === 'auto' ? ' · gerado por sugestão automática' : ' · montado manualmente')
+      + (function(){
+          var ac = acentoDoLook((m.pieceIds || []).map(findPieceById).filter(Boolean));
+          if (!ac) return '';
+          return ' · acento ' + ac.cor + ' n' + (ac.peca.category === 'Bags' ? 'a bolsa'
+            : ac.peca.category === 'Shoes' ? 'o sapato'
+            : ac.peca.category === 'Jewelry' ? 'a joia' : 'o acessório');
+        })();
   }
   var dayBar = document.getElementById('montadoDetailWeekday');
   if (dayBar) {
@@ -4712,6 +4770,19 @@ function pickPieceForCategory(cat, referencePieces, excludeId) {
   var semRecusadas = list.filter(function(p){ return dimensaoScore([tripEtiquetaPt(p)]) > -1.2; });
   if (semRecusadas.length) list = semRecusadas;
 
+  // Buscando acento: o acessório entra numa cor forte que a base não tem. Só o
+  // primeiro — depois disso o resto volta ao normal, senão viraria arco-íris.
+  if (buscandoAcento && !corPedidaNoMontador
+      && CATEGORIAS_DE_ACENTO.indexOf(cat) !== -1
+      && !acentoDoLook(referencePieces || [])) {
+    var base = coresDaBaseDoLook(referencePieces || []).map(familiaDaCor);
+    var comAcento = list.filter(function(p){
+      var c = corDaPeca(p);
+      return CORES_DE_ACENTO.indexOf(c) !== -1 && base.indexOf(familiaDaCor(c)) === -1;
+    });
+    if (comAcento.length) list = comAcento;
+  }
+
   // Já tem uma peça estampada no look: as outras entram lisas.
   if (quantasEstampas(referencePieces) >= 1) {
     var semEstampa = list.filter(function(p){ return !temEstampa(p); });
@@ -4765,6 +4836,7 @@ function currentSuggestionPieces(excludeIdx) {
 // primeiro e viram referência de compatibilidade pro resto, e a categoria delas
 // sai do sorteio — um look nunca tem duas peças da mesma categoria.
 function generateFullSuggestion() {
+  buscandoAcento = Math.random() < CHANCE_DE_ACENTO;
   var locked = suggestionLockedIds.map(findPieceById).filter(Boolean);
   suggestionSlots = [];
   var chosen = [];
@@ -11444,8 +11516,12 @@ function montarDoArmarioNoDia(day, alvo, turno, baseId, cor) {
 
   var novo = {
     id: 'm_' + Date.now() + '_' + Math.floor(Math.random() * 100000),
-    name: (base ? tripNomeCurto(base) : 'Montado')
-      + (cor ? (' + ' + cor) : '') + ' — ' + day,
+    name: (function(){
+      var a = acentoDoLook(ids.map(findPieceById).filter(Boolean));
+      if (base) return tripNomeCurto(base) + (cor ? (' + ' + cor) : '') + ' — ' + day;
+      if (cor) return 'Montado + ' + cor + ' — ' + day;
+      return (a ? ('Acento ' + a.cor) : 'Montado') + ' — ' + day;
+    })(),
     pieceIds: ids,
     createdAt: new Date().toISOString(),
     source: 'auto',
@@ -11459,7 +11535,9 @@ function montarDoArmarioNoDia(day, alvo, turno, baseId, cor) {
   saveMontagens();
   renderWeek();
   if (typeof renderGrid === 'function') renderGrid();
-  var comOQue = [base ? tripNomeCurto(base) : null, cor].filter(Boolean).join(' e ');
+  var ac = acentoDoLook(ids.map(findPieceById).filter(Boolean));
+  var comOQue = [base ? tripNomeCurto(base) : null, cor, ac ? ('acento ' + ac.cor) : null]
+    .filter(Boolean).join(' e ');
   showSavedToast(comOQue
     ? ('Montei um look com ' + comOQue + ' pra ' + day + '.')
     : ('Montei um look do seu armário pra ' + day + (turno === 'noite' ? ' à noite' : '') + '.'));
