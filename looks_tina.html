@@ -6437,7 +6437,8 @@ function renderWeek() {
       de.innerHTML = '<span style="font-size:1.5rem"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M12 7.2a2.1 2.1 0 1 1 2.1-2.1c0 1.1-1 1.5-2.1 2.1v2"/><path d="M12 9.2 3.6 15.3A1.5 1.5 0 0 0 4.5 18h15a1.5 1.5 0 0 0 .9-2.7L12 9.2z"/></svg></span><span class="add-look-hint">Adicionar look</span>'
         + '<span style="font-size:.65rem;color:#B0B0AC;margin-top:4px;display:block;">ou</span>'
         + '<button onclick="event.stopPropagation();toggleCasaDay(\''+day+'\', true)" style="font-size:.68rem;color:#C4985A;background:#FAFAF8;border:1px solid #E0E0DB;border-radius:6px;padding:2px 8px;cursor:pointer;margin-top:2px;font-family:inherit;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="m3.8 10.4 8.2-6.6 8.2 6.6V19a1.6 1.6 0 0 1-1.6 1.6H5.4A1.6 1.6 0 0 1 3.8 19v-8.6z"/></svg> Em casa</button>'
-        + '<button onclick="event.stopPropagation();sugerirLookParaDia(\''+day+'\', \'atual\')" class="day-suggest-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><circle cx="7.8" cy="7.6" r="2.8"/><path d="M7.8 2.4v1.4M3.6 3.4l1 1M2.4 7.6h1.4M12 3.4l-1 1"/><path d="M9.4 19.4a3.7 3.7 0 0 1 .6-7.4 4.8 4.8 0 0 1 9.1 1.4 3.1 3.1 0 0 1-.6 6h-9.1z"/></svg> Sugerir look</button>';
+        + '<button onclick="event.stopPropagation();sugerirLookParaDia(\''+day+'\', \'atual\')" class="day-suggest-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><circle cx="7.8" cy="7.6" r="2.8"/><path d="M7.8 2.4v1.4M3.6 3.4l1 1M2.4 7.6h1.4M12 3.4l-1 1"/><path d="M9.4 19.4a3.7 3.7 0 0 1 .6-7.4 4.8 4.8 0 0 1 9.1 1.4 3.1 3.1 0 0 1-.6 6h-9.1z"/></svg> Sugerir look</button>'
+        + '<button onclick="event.stopPropagation();montarDoArmarioNoDia(\''+day+'\', \'atual\', \'dia\')" class="day-suggest-btn" title="Monto um look novo com as suas peças"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><rect x="3.6" y="3.6" width="16.8" height="16.8" rx="3"/><circle cx="8.6" cy="8.6" r="1.1"/><circle cx="15.4" cy="15.4" r="1.1"/><circle cx="12" cy="12" r="1.1"/></svg> Montar do armário</button>';
       de.onclick = (function(dd){ return function(){ openDayPicker(dd, 'atual'); }; })(day);
       alvoDeTrocaSemana(de, day, 'atual', 'dia');
       col.appendChild(de);
@@ -7077,6 +7078,17 @@ function renderDayPickerGrid(day, filterText) {
     var pecas = m.pieceIds.map(findPieceById).filter(Boolean)
       .map(function(x){ return (x.name+' '+x.brand+' '+x.color).toLowerCase(); }).join(' ');
     return nome.indexOf(q) !== -1 || pecas.indexOf(q) !== -1;
+  });
+
+  // Mais novo primeiro, como já é na aba de Looks Montados. Aqui vinha na ordem
+  // em que foram criados, então o look que ela acabou de montar ficava no fim.
+  var ordemDeCriacao = {};
+  montagens.forEach(function(m, i){ ordemDeCriacao[m.id] = i; });
+  mont.sort(function(a, b){
+    var ta = a.createdAt ? Date.parse(a.createdAt) : 0;
+    var tb = b.createdAt ? Date.parse(b.createdAt) : 0;
+    if (ta !== tb) return tb - ta;
+    return ordemDeCriacao[b.id] - ordemDeCriacao[a.id];   // sem data, vale a ordem da lista
   });
 
   grid.innerHTML = '';
@@ -11073,6 +11085,59 @@ function looksJaNaSemana(alvo, exceto) {
     });
   });
   return ids;
+}
+
+// Montar um look do armário pra um dia 
+// A indicação do dia escolhia entre as 873 fotos do catálogo e os looks já
+// salvos — nunca montava nada novo. Só de blusa, calça e sapato o armário dela
+// dá 342 mil combinações, e nenhuma era oferecida pra um dia. Agora monta com a
+// régua que ela ensinou, salva como look montado marcado 'auto' (igual aos
+// looks de casa, que já funcionam assim) e põe no dia.
+function lookBateEmRegra(pecas) {
+  var tags = pecas.map(tripEtiquetaPt);
+  return (regrasEscritas || []).some(function(r){
+    return r.tipo !== 'exige' && regraBateNoLook(r, tags);
+  });
+}
+
+function montarDoArmarioNoDia(day, alvo, turno) {
+  turno = (turno === 'noite') ? 'noite' : 'dia';
+  alvo = alvo || 'atual';
+  var jaExistem = montagens.map(function(m){ return (m.pieceIds || []).slice().sort().join('|'); });
+
+  // O construtor guarda o estado dele em variáveis globais; aqui ele é usado
+  // sem a tela, então o que estava aberto volta como estava.
+  var guardado = { slots: suggestionSlots, locked: suggestionLockedIds, hist: historicoSugestoes };
+  suggestionLockedIds = []; historicoSugestoes = [];
+  var ids = null;
+  for (var i = 0; i < 10 && !ids; i++) {
+    generateFullSuggestion();
+    var ps = suggestionSlots.map(function(s){ return findPieceById(s.pieceId); }).filter(Boolean);
+    if (ps.length < 2) continue;
+    if (!ps.some(function(p){ return p.category === 'Tops'; })) continue;
+    if (lookBateEmRegra(ps)) continue;
+    var chave = ps.map(function(p){ return p.id; }).sort().join('|');
+    if (jaExistem.indexOf(chave) !== -1) continue;   // não repete look que já existe
+    ids = ps.map(function(p){ return p.id; });
+  }
+  suggestionSlots = guardado.slots; suggestionLockedIds = guardado.locked; historicoSugestoes = guardado.hist;
+
+  if (!ids) { showSavedToast('Não consegui montar um look novo agora — tente de novo.'); return; }
+
+  var novo = {
+    id: 'm_' + Date.now() + '_' + Math.floor(Math.random() * 100000),
+    name: 'Montado pra ' + day,
+    pieceIds: ids,
+    createdAt: new Date().toISOString(),
+    source: 'auto',
+    weekday: null, weekdayNext: null, weekdayNoite: null, weekdayNoiteNext: null
+  };
+  novo[campoMontadoDe(alvo, turno)] = chaveDoDia(day);
+  montagens.push(novo);
+  saveMontagens();
+  renderWeek();
+  if (typeof renderGrid === 'function') renderGrid();
+  showSavedToast('Montei um look do seu armário pra ' + day + (turno === 'noite' ? ' à noite' : '') + '.');
 }
 
 function sugerirLookParaDia(day, alvo, turno) {
