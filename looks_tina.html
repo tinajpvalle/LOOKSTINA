@@ -3702,7 +3702,19 @@ var COMBINACOES_DO_LIVRO = [
   ['amarelo', 'vermelho'],           // 蒸栗色 · 紅色
   ['amarelo', 'laranja'],            // 淡卵色 · 朱色
   ['verde', 'laranja'],              // 鶸萌木 · 欵冬色
-  ['azul', 'verde', 'amarelo']       // 納戸色 · 青竹色 · amarelo
+  ['azul', 'verde', 'amarelo'],      // 納戸色 · 青竹色 · amarelo
+
+  // Segunda leva, 27/08/2026 — páginas de quatro cores. Cada uma rende seis
+  // pares. Onde duas cores da página caem no mesmo nome do app (dois roxos, dois
+  // verdes, dois rosas), sobra uma só: é o limite do vocabulário de 18 cores.
+  ['roxo', 'caramelo', 'rosa'],                   // 藤色 · 黄茶 · 浅紅 · 蒲葡色
+  ['vermelho', 'verde', 'cinza', 'amarelo'],      // 茜色 · 常磐色 · 石板色 · 黄色
+  ['rosa', 'verde militar', 'amarelo'],           // 紅藤 · 橄欖色 · 蒸栗色 · 肉色
+  ['azul', 'vermelho', 'roxo', 'amarelo'],        // 青色 · 赤色 · 半色 · 山吹色
+  ['rosa', 'verde', 'caramelo'],                  // 長春色 · 若竹色 · 裏葉色 · 香色
+  ['azul', 'cinza', 'amarelo', 'azul marinho'],   // 納戸鼠 · 灰色 · 金絲雀色 · 勝色
+  ['vermelho', 'creme', 'verde militar', 'verde'],// 赤色 · 白茶 · 松葉色 · 青竹色
+  ['roxo', 'vinho', 'caramelo', 'preto']          // 半色 · 海老茶色 · 檜皮色 · 黒色
 ];
 
 // Compara pela cor exata, não pela família. Por família, "terra" junta caramelo,
@@ -16502,6 +16514,36 @@ function paletaDoArmario() {
   };
 }
 
+// As que nunca saíram 
+// Das 285 peças do armário dela, 184 nunca entraram em look nenhum — 98 blusas
+// e 34 calças. Não é peça ruim: é peça que não teve a chance. Ficam aqui com um
+// caminho de uma tocada pra virar look, porque lista sem saída não muda nada.
+// A ordem é do que mais rende: peça de categoria escassa (casaco, bolsa) abre
+// mais looks do que a centésima blusa.
+function pecasQueNuncaSairam() {
+  var usadas = {};
+  (montagens || []).forEach(function(m){
+    (m.pieceIds || []).forEach(function(i){ usadas[String(i)] = 1; });
+  });
+  (data || []).forEach(function(p){
+    if (p.weekday || p.weekdayNoite) usadas[String(p.id)] = 1;
+  });
+  var todas = allPecas().filter(function(p){ return !p.archived && !pecaArquivada(p.id); });
+  var porCat = {};
+  todas.forEach(function(p){ porCat[p.category] = (porCat[p.category] || 0) + 1; });
+  return todas.filter(function(p){ return !usadas[String(p.id)]; })
+    .sort(function(a, b){
+      var ea = porCat[a.category] || 0, eb = porCat[b.category] || 0;
+      if (ea !== eb) return ea - eb;                       // categoria escassa primeiro
+      return (a.name || '').localeCompare(b.name || '');
+    });
+}
+
+function montarComPecaParada(pieceId) {
+  switchTab('montados');
+  setTimeout(function(){ openSuggestionBuilder([pieceId]); }, 60);
+}
+
 function renderConsultoria() {
   var el = document.getElementById('consultoriaContent');
   if (!el) return;
@@ -16564,6 +16606,35 @@ function renderConsultoria() {
    + sust.emUmLookSo + ' aparecem em um único look.</div>';
   html += bloco('AS QUE SUSTENTAM O ARMÁRIO', listaSust,
     'As peças mais combinadas. Se uma delas sai de cena, dezenas de looks saem junto.');
+
+  // ── as que nunca saíram ──
+  var paradas = pecasQueNuncaSairam();
+  if (paradas.length) {
+    var porCatParadas = {};
+    paradas.forEach(function(p){
+      (porCatParadas[p.category] = porCatParadas[p.category] || []).push(p);
+    });
+    var resumo = Object.keys(porCatParadas)
+      .sort(function(a, b){ return porCatParadas[b].length - porCatParadas[a].length; })
+      .map(function(c){ return porCatParadas[c].length + ' ' + (TRIP_CAT_PT[c] || c).toLowerCase(); })
+      .join(' · ');
+    var listaParadas = '<div style="display:flex;flex-wrap:wrap;gap:10px;">'
+      + paradas.slice(0, 24).map(function(p){
+          return '<div style="width:96px;text-align:center;">'
+            + '<img src="' + tripEsc(p.img) + '" alt="' + tripEsc(p.name) + '" loading="lazy" '
+            + 'style="width:96px;height:96px;object-fit:contain;background:#FAFAF8;border-radius:8px;border:1px solid #EAEAE7;">'
+            + '<div style="font-size:.68rem;color:#666;line-height:1.25;margin:4px 0 3px;">' + tripEsc(tripNomeCurto(p)) + '</div>'
+            + '<button class="btn btn-ghost" style="font-size:.68rem;padding:3px 8px;" '
+            + 'onclick="montarComPecaParada(\'' + p.id + '\')">montar com ela</button>'
+            + '</div>';
+        }).join('')
+      + '</div>'
+      + (paradas.length > 24 ? '<div style="font-size:.72rem;color:#A8A8A4;margin-top:8px;">e mais '
+          + (paradas.length - 24) + ' — as mais raras aparecem primeiro.</div>' : '');
+    html += bloco('AS QUE NUNCA SAÍRAM (' + paradas.length + ')', listaParadas,
+      'Peças que não entraram em nenhum look seu: ' + resumo
+      + '. Não são peças ruins — são as que não tiveram a chance. Toque em "montar com ela" e eu monto um look em volta.');
+  }
 
   // ── 3. buracos ──
   var bur = buracosDoArmario();
