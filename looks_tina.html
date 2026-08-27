@@ -819,6 +819,10 @@ body.compare-mode .card-compare-btn { display: flex; }
 .flatlay-icon-actions { position: absolute; top: -6px; right: -6px; display: flex; gap: 3px; z-index: 30; }
 .flatlay-icon-btn { background: #fff; border: 1px solid #E0E0DB; border-radius: 50%; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: .68rem; box-shadow: 0 1px 3px rgba(0,0,0,.15); }
 .montado-card .flatlay-canvas { max-width: none; border-radius: 12px 12px 0 0; }
+.montado-card-lixo { position: absolute; top: 8px; right: 8px; z-index: 4; background: rgba(255,255,255,.92);
+  border: 1px solid var(--line); border-radius: 50%; width: 28px; height: 28px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; color: #8C8C88; }
+.montado-card-lixo:hover { background: #fff; color: var(--ink); }
 .flatlay-icon-btn.active { background: #1A1A1A; border-color: #1A1A1A; color: #fff; }
 .sugg-lock-hint { font-size: .72rem; color: #666666; margin: 8px 0 0; }
 .sugg-legend { display: flex; flex-direction: column; gap: 4px; margin: 10px 0 8px; }
@@ -4148,7 +4152,7 @@ function renderMontadosFiltro() {
   var nParada = montagens.filter(function(m){ return m.parada; }).length;
   var opcoes = [];
   if (nCasa || nParada) {
-    opcoes.push(['todos', 'Todos', montagens.length]);
+    opcoes.push(['todos', 'Todos', montagens.length - nParada]);
     opcoes.push(['meus', 'Meus', montagens.length - nCasa - nParada]);
     if (nCasa) opcoes.push(['casa', 'De casa', nCasa]);
     if (nParada) opcoes.push(['parada', 'Peças paradas', nParada]);
@@ -4177,7 +4181,9 @@ function renderLooksMontados() {
     if (montadosFiltro === 'casa') return !!m.casa;
     if (montadosFiltro === 'parada') return !!m.parada;
     if (montadosFiltro === 'meus') return !m.casa && !m.parada;
-    return true;
+    // Look montado por mim com peça parada é experimento, não acervo dela: fica
+    // só na gaveta própria, senão polui a lista dos looks que ela fez.
+    return !m.parada;
   });
   if (countEl) {
     countEl.textContent = lista.length + (lista.length === 1 ? ' look montado' : ' looks montados');
@@ -4205,6 +4211,19 @@ function renderLooksMontados() {
     card.appendChild(body);
     var pieces = m.pieceIds.map(findPieceById).filter(Boolean);
     renderFlatLay(flatlay, pieces);
+
+    // Na gaveta das peças paradas, apagar tem que ser de uma tocada: são looks
+    // que eu propus, e descartar o que ela não gostou é metade do uso.
+    if (m.parada && !montadosSelecao) {
+      card.style.position = 'relative';
+      var lixo = document.createElement('button');
+      lixo.className = 'montado-card-lixo';
+      lixo.title = 'Não gostei — apagar este look';
+      lixo.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14"/></svg>';
+      lixo.onclick = (function(id){ return function(e){ e.stopPropagation(); apagarLookDeParada(id); }; })(m.id);
+      card.appendChild(lixo);
+    }
+
     if (montadosSelecao) {
       var marcado = montadosSelecionados.indexOf(m.id) !== -1;
       if (marcado) {
@@ -16630,6 +16649,19 @@ function gerarLooksComParadas(quantos) {
     ? ('Montei ' + criados + ' look(s) com peças que nunca saíram — estão em Looks Montados.')
     : 'Não consegui montar nenhum diferente agora.');
   return criados;
+}
+
+// Apaga sem perguntar: é look que eu propus, não coisa dela. Perguntar "tem
+// certeza?" a cada descarte atrapalharia justamente o uso normal.
+function apagarLookDeParada(id) {
+  var i = montagens.findIndex(function(m){ return String(m.id) === String(id); });
+  if (i === -1) return;
+  var nome = montagens[i].name || 'look';
+  montagens.splice(i, 1);
+  saveMontagens();
+  renderLooksMontados();
+  if (typeof renderConsultoria === 'function' && document.getElementById('consultoriaContent')) renderConsultoria();
+  showSavedToast('Apaguei o look de ' + nome + '.');
 }
 
 function irParaLooksDeParadas() {
