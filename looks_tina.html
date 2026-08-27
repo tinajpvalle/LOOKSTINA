@@ -1652,6 +1652,7 @@ function pullRemoteUpdates() {
         montagens = JSON.parse(res.value) || [];
         esquecerParesDosLooks();
         esquecerReceita();
+        esquecerUsosEmLooks();
         lsSet('looks_tina_montados_v1', res.value);
         if (typeof renderLooksMontados === 'function' && document.getElementById('montadosGrid')) renderLooksMontados();
         if (typeof renderWeekPlanner === 'function') renderWeekPlanner();
@@ -3468,6 +3469,7 @@ var builderActiveCat = '__all__';
 function saveMontagens() {
   esquecerParesDosLooks();   // look novo dela muda o que combina com o quê
   esquecerReceita();
+  esquecerUsosEmLooks();
   var json = JSON.stringify(montagens);
   lsSet(MONTADOS_STORAGE_KEY, json);
   syncPut(MONTADOS_STORAGE_KEY, json);
@@ -4143,7 +4145,15 @@ function renderMontadosFiltro() {
   bar.style.display = 'flex';
   // os três filtros só fazem sentido havendo look de casa; o "Selecionar",
   // logo abaixo, aparece sempre.
-  (nCasa ? [['todos','Todos', montagens.length], ['meus','Meus', nMeus], ['casa','De casa', nCasa]] : []).forEach(function(o){
+  var nParada = montagens.filter(function(m){ return m.parada; }).length;
+  var opcoes = [];
+  if (nCasa || nParada) {
+    opcoes.push(['todos', 'Todos', montagens.length]);
+    opcoes.push(['meus', 'Meus', montagens.length - nCasa - nParada]);
+    if (nCasa) opcoes.push(['casa', 'De casa', nCasa]);
+    if (nParada) opcoes.push(['parada', 'Peças paradas', nParada]);
+  }
+  opcoes.forEach(function(o){
     var pill = document.createElement('div');
     pill.className = 'pc-cat-pill' + (montadosFiltro === o[0] ? ' active' : '');
     pill.textContent = o[1] + ' (' + o[2] + ')';
@@ -4165,7 +4175,8 @@ function renderLooksMontados() {
   var countEl = document.getElementById('montadosCount');
   var lista = montagens.filter(function(m){
     if (montadosFiltro === 'casa') return !!m.casa;
-    if (montadosFiltro === 'meus') return !m.casa;
+    if (montadosFiltro === 'parada') return !!m.parada;
+    if (montadosFiltro === 'meus') return !m.casa && !m.parada;
     return true;
   });
   if (countEl) {
@@ -4798,13 +4809,31 @@ function tirandoAsQueAcabaramDeSair(lista, minimo) {
 // Multiplica a nota de compatibilidade: quem nunca saiu quase dobra de peso,
 // quem já saiu muito quase some — sem nunca zerar, porque a peça continua
 // combinando.
+// Quantas vezes cada peça já entrou num look salvo ou num dia da semana. O
+// rodízio só contava aparição no montador — uma peça mostrada uma vez e nunca
+// usada valia o mesmo que uma que está em oito looks dela. É por isso que 175
+// peças nunca saíram: nada empurrava elas.
+var USOS_EM_LOOKS = null;
+function esquecerUsosEmLooks() { USOS_EM_LOOKS = null; }
+
+function usosEmLooks() {
+  if (USOS_EM_LOOKS) return USOS_EM_LOOKS;
+  var m = {};
+  (montagens || []).forEach(function(look){
+    (look.pieceIds || []).forEach(function(i){ m[String(i)] = (m[String(i)] || 0) + 1; });
+  });
+  USOS_EM_LOOKS = m;
+  return m;
+}
+
 function fatorDeRodizioDaPeca(p) {
-  var v = vezesNoMontador[p.id] || 0;
-  if (!v) return 1.9;
-  if (v === 1) return 1.25;
-  if (v === 2) return 0.85;
-  if (v <= 4) return 0.55;
-  return 0.3;
+  var emLooks = usosEmLooks()[String(p.id)] || 0;
+  var mostrada = vezesNoMontador[p.id] || 0;
+  // O que nunca virou look tem prioridade; o que já é muito usado, menos.
+  var base = emLooks === 0 ? 2.4 : emLooks === 1 ? 1.4 : emLooks <= 3 ? 0.9 : 0.6;
+  // Dentro disso, o que acabou de ser mostrado espera a vez.
+  var ajuste = !mostrada ? 1 : mostrada === 1 ? 0.85 : mostrada === 2 ? 0.7 : mostrada <= 4 ? 0.55 : 0.4;
+  return base * ajuste;
 }
 
 // escolhe uma peça de uma categoria, ponderando por compatibilidade com as peças já escolhidas no look
@@ -16547,6 +16576,68 @@ function alternarParadas(idBloco, botao, quantas) {
   botao.textContent = aberto ? ('ver as outras ' + quantas) : 'mostrar menos';
 }
 
+// Dez looks prontos com as peças paradas 
+// Ela pediu uma página com looks já montados usando o que nunca sai. Ficam como
+// look montado de verdade, marcados 'parada', com filtro próprio na aba Looks
+// Montados: assim duram, entram na semana, podem ser editados e apagados como
+// qualquer outro. Cada um parte de uma peça parada diferente, começando pelas
+// categorias mais escassas.
+function gerarLooksComParadas(quantos) {
+  var paradas = pecasQueNuncaSairam();
+  if (!paradas.length) { showSavedToast('Nenhuma peça parada — todas já entraram em algum look.'); return 0; }
+  var jaExistem = montagens.map(function(m){ return (m.pieceIds || []).slice().sort().join('|'); });
+  var guardado = { slots: suggestionSlots, locked: suggestionLockedIds, hist: historicoSugestoes };
+  var criados = 0, usadasAgora = {};
+
+  for (var i = 0; i < paradas.length && criados < quantos; i++) {
+    var base = paradas[i];
+    if (usadasAgora[String(base.id)]) continue;
+    suggestionLockedIds = [base.id];
+    historicoSugestoes = [];
+    var ids = null;
+    for (var t = 0; t < 8 && !ids; t++) {
+      generateFullSuggestion();
+      var ps = suggestionSlots.map(function(s){ return findPieceById(s.pieceId); }).filter(Boolean);
+      if (ps.length < 2) continue;
+      if (!ps.some(function(p){ return p.category === 'Tops'; })) continue;
+      if (lookBateEmRegra(ps)) continue;
+      if (quantasEstampas(ps) > 1) continue;
+      var chave = ps.map(function(p){ return p.id; }).sort().join('|');
+      if (jaExistem.indexOf(chave) !== -1) continue;
+      ids = ps.map(function(p){ return p.id; });
+      jaExistem.push(chave);
+    }
+    if (!ids) continue;
+    usadasAgora[String(base.id)] = 1;
+    montagens.push({
+      id: 'm_' + Date.now() + '_' + Math.floor(Math.random() * 100000),
+      name: tripNomeCurto(base),
+      pieceIds: ids,
+      createdAt: new Date().toISOString(),
+      source: 'auto', parada: true, baseId: base.id,
+      weekday: null, weekdayNext: null, weekdayNoite: null, weekdayNoiteNext: null
+    });
+    criados++;
+  }
+
+  suggestionSlots = guardado.slots; suggestionLockedIds = guardado.locked; historicoSugestoes = guardado.hist;
+  if (criados) {
+    saveMontagens();
+    if (typeof renderLooksMontados === 'function') renderLooksMontados();
+    if (typeof renderConsultoria === 'function' && document.getElementById('consultoriaContent')) renderConsultoria();
+  }
+  showSavedToast(criados
+    ? ('Montei ' + criados + ' look(s) com peças que nunca saíram — estão em Looks Montados.')
+    : 'Não consegui montar nenhum diferente agora.');
+  return criados;
+}
+
+function irParaLooksDeParadas() {
+  montadosFiltro = 'parada';
+  switchTab('montados');
+  setTimeout(function(){ if (typeof renderLooksMontados === 'function') renderLooksMontados(); }, 60);
+}
+
 function montarComPecaParada(pieceId) {
   switchTab('montados');
   setTimeout(function(){ openSuggestionBuilder([pieceId]); }, 60);
@@ -16670,6 +16761,13 @@ function renderConsultoria() {
       if (n === 1) nome = nome.replace(/s$/, '').replace(/ç as$/, 'ça');
       return n + ' ' + nome;
     }).join(' · ');
+    var jaTem = montagens.filter(function(m){ return m.parada; }).length;
+    corpoParadas = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">'
+      + '<button class="btn btn-week" style="font-size:.76rem;" onclick="gerarLooksComParadas(10)">'
+      + 'Montar 10 looks com elas</button>'
+      + (jaTem ? '<button class="btn btn-ghost" style="font-size:.76rem;" onclick="irParaLooksDeParadas()">'
+                 + 'ver os ' + jaTem + ' que já montei</button>' : '')
+      + '</div>' + corpoParadas;
     html += bloco('AS QUE NUNCA SAÍRAM (' + paradas.length + ')', corpoParadas,
       'Peças que não entraram em nenhum look seu: ' + resumo
       + '. Não são peças ruins — são as que não tiveram a chance. Toque em "montar com ela" e eu monto um look em volta.');
