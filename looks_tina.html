@@ -3863,7 +3863,12 @@ function acentoDoLook(pecas) {
     return CATEGORIAS_DE_ACENTO.indexOf(p.category) !== -1
       && CORES_DE_ACENTO.indexOf(c) !== -1 && base.indexOf(familiaDaCor(c)) === -1;
   });
-  if (achado.length !== 1) return null;   // duas cores soltas não é acento, é confusão
+  if (!achado.length) return null;
+  // Duas cores soltas é confusão; duas peças na MESMA cor é acento coordenado —
+  // a bolsa caramelo com o sapato caramelo, que é o que o Alta faz.
+  var familias = {};
+  achado.forEach(function(p){ familias[familiaDaCor(corDaPeca(p))] = 1; });
+  if (Object.keys(familias).length !== 1) return null;
   return { cor: corDaPeca(achado[0]), peca: achado[0] };
 }
 
@@ -4889,6 +4894,23 @@ function pickPieceForCategory(cat, referencePieces, excludeId) {
   // votos. Se o corte zerar a lista, melhor sugerir do que travar.
   var semRecusadas = list.filter(function(p){ return dimensaoScore([tripEtiquetaPt(p)]) > -1.2; });
   if (semRecusadas.length) list = semRecusadas;
+
+  // Sapato e bolsa conversando 
+  // Ela disse que os looks do Alta "parecem mais combinados" e o dado mostrou
+  // onde: no Alta, sapato e bolsa ficam na mesma família de cor em 4 de 4; nos
+  // looks dela, 15 de 28; eu fazia em 3 de 25. Eu escolhia os dois soltos, um
+  // sem olhar o outro. Em 70% das vezes agora eles conversam — entre o hábito
+  // dela (54%) e o do Alta (100%), porque sempre viraria maneirismo.
+  if (CATEGORIAS_DE_ACENTO.indexOf(cat) !== -1 && cat !== 'Jewelry' && Math.random() < 0.7) {
+    var parceiro = (referencePieces || []).filter(function(p){
+      return (cat === 'Bags' && p.category === 'Shoes') || (cat === 'Shoes' && p.category === 'Bags');
+    })[0];
+    if (parceiro) {
+      var famParceiro = familiaDaCor(corDaPeca(parceiro));
+      var combinando = list.filter(function(p){ return familiaDaCor(corDaPeca(p)) === famParceiro; });
+      if (combinando.length) list = combinando;
+    }
+  }
 
   // Buscando acento: o acessório entra numa cor forte que a base não tem. Só o
   // primeiro — depois disso o resto volta ao normal, senão viraria arco-íris.
