@@ -3930,6 +3930,32 @@ function notaDaPecaNoLook(peca, escolhidas) {
   return soma / escolhidas.length;
 }
 
+// Peça de cor neutra não separa nada: com uma camisa branca todo mundo leva 4
+// por "branco combina com tudo", e a ordem passa a ser decidida por diferenças
+// minúsculas de gosto — 4,07 contra 3,30. Mostrar as seis primeiras assim vira
+// seis variações da mesma ideia: ela viu quatro calças verdes e duas roxas e
+// perguntou por que o jeans e a preta nunca apareciam, sendo que estavam a
+// 0,7 de distância. Entre notas empatadas, variar a cor.
+var MARGEM_DE_EMPATE = 1.2;
+
+function comVariedadeDeCor(pontuadas, quantas) {
+  if (!pontuadas.length) return [];
+  var teto = pontuadas[0].nota;
+  var escolhidas = [], familias = {};
+  pontuadas.forEach(function(x){
+    if (escolhidas.length >= quantas) return;
+    if (teto - x.nota > MARGEM_DE_EMPATE) return;      // fora do empate: vale a nota
+    var fam = familiaDaCor(corDaPeca(x.peca)) || '?';
+    if (familias[fam]) return;
+    familias[fam] = 1;
+    escolhidas.push(x);
+  });
+  pontuadas.forEach(function(x){                        // completa por nota
+    if (escolhidas.length < quantas && escolhidas.indexOf(x) === -1) escolhidas.push(x);
+  });
+  return escolhidas.slice(0, quantas);
+}
+
 function pecasQueCombinam(peca) {
   var cats = COMBINA_COM[peca.category] || ['Tops','Bottoms','Shoes','Bags'];
   return cats.map(function(cat){
@@ -3938,9 +3964,8 @@ function pecasQueCombinam(peca) {
         var nota = notaDePar(peca, x);
         return { peca: x, nota: nota.n, motivo: nota.motivo };
       })
-      .sort(function(a,b){ return b.nota - a.nota; })
-      .slice(0, 6);
-    return { categoria: cat, itens: lista };
+      .sort(function(a,b){ return b.nota - a.nota; });
+    return { categoria: cat, itens: comVariedadeDeCor(lista, 6) };
   }).filter(function(g){ return g.itens.length; });
 }
 
@@ -4852,7 +4877,13 @@ function pickPieceForCategory(cat, referencePieces, excludeId) {
   // dele: variar entre as boas, não passar por cima delas.
   var comNota = list.map(function(p) { return { p: p, n: notaDaPecaNoLook(p, referencePieces) }; })
     .sort(function(a, b) { return b.n - a.n; });
-  var faixa = comNota.slice(0, Math.max(4, Math.round(comNota.length * 0.15)));
+  // A faixa era 15% fixos, e quando a nota não separa (peça-base neutra) esses
+  // 15% eram seis variações da mesma cor — ela recebeu calça verde três vezes
+  // seguidas. Agora a faixa é quem está empatado com o primeiro: aperta quando
+  // ela tem opinião forte, abre quando a nota não decide.
+  var teto = comNota.length ? comNota[0].n : 0;
+  var faixa = comNota.filter(function(x){ return teto - x.n <= MARGEM_DE_EMPATE; });
+  if (faixa.length < 4) faixa = comNota.slice(0, Math.max(4, Math.round(comNota.length * 0.15)));
   return weightedRandomPiece(faixa.map(function(x){ return x.p; }), fatorDeRodizioDaPeca);
 }
 
