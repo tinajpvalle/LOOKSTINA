@@ -7947,7 +7947,20 @@ var CATEGORIA_DA_PALAVRA = {
 // Cada pedaço separado por vírgula é uma peça da foto.
 // Devolve o nome da cor quando a palavra é cor — aceitando o feminino, que é
 // como ela escreve ("camisa branca", "calça preta").
+// Palavra de peça e palavra de estampa não podem virar cor. "calça" tem "jeans"
+// na lista de sinônimos, e jeans é uma cor conhecida — então "calça preta" era
+// lida como cor jeans, porque a busca pega a primeira palavra que devolve cor e
+// "calça" vem antes de "preta". "xadrez" tinha o mesmo problema com "tartan".
+// Isso valia pra qualquer receita escrita com a palavra calça.
+function palavraDeTipo(w) {
+  if (CATEGORIA_DA_PALAVRA[w]) return true;
+  return DIMENSOES.some(function(par){
+    return par[0] !== 'cor' && par[1].some(function(termo){ return dimSemAcento(termo) === w; });
+  });
+}
+
 function corDaPalavra(w) {
+  if (palavraDeTipo(w)) return null;
   if (rgbDaCorConhecida(w)) return w;
   var variacoes = SINONIMOS_DE_PECA[w];
   if (!variacoes) return null;
@@ -7958,7 +7971,10 @@ function corDaPalavra(w) {
 }
 
 function lerReceita(texto) {
-  return String(texto || '').split(',').map(function(pedaco){
+  // Separava só por vírgula, e ela escreve como fala: "camisa azul e casaco
+  // vermelho" virava UMA peça (a camisa), com o casaco sumindo sem aviso. O
+  // " e " e o " com " agora separam também.
+  return String(texto || '').replace(/\s+(e|com)\s+/gi, ',').split(',').map(function(pedaco){
     var palavras = textoParaBusca(pedaco).split(' ').filter(Boolean);
     if (!palavras.length) return null;
     var categoria = null;
@@ -7993,7 +8009,12 @@ function notaDaPecaNaReceita(peca, slot, perfisDaPaleta) {
   } else if (perfisDaPaleta && perfisDaPaleta.length) {
     nota += proximidadeDaPaleta(perfil, perfisDaPaleta) * 1.2;
   }
-  return nota * fatorDeRodizioDaPeca(peca);
+  // O rodízio saiu daqui. Ele varia seis vezes (0,3 a 1,9) e a nota da receita
+  // varia bem menos, então quem decidia era ele: pedindo "tricô vermelho" vinha
+  // cardigã verde militar, "calça preta" vinha calça verde. A receita dela era
+  // lida e depois ignorada. Agora ela corta, e o rodízio escolhe entre as que
+  // atendem — mesmo conserto que o do montador.
+  return nota;
 }
 
 function pecasPelaReceita(insp, evitar) {
@@ -8025,9 +8046,13 @@ function pecasPelaReceita(insp, evitar) {
     if (frescas.length) candidatas = frescas;
     if (!candidatas.length) return;
 
-    var escolhida = weightedRandomPiece(candidatas, function(p){
-      return notaDaPecaNaReceita(p, slot, perfisDaPaleta);
-    });
+    var comNota = candidatas.map(function(p){
+      return { p: p, n: notaDaPecaNaReceita(p, slot, perfisDaPaleta) };
+    }).sort(function(x, y){ return y.n - x.n; });
+    var teto = comNota[0].n;
+    var faixa = comNota.filter(function(x){ return teto - x.n <= 0.6; });
+    if (faixa.length < 3) faixa = comNota.slice(0, 3);
+    var escolhida = weightedRandomPiece(faixa.map(function(x){ return x.p; }), fatorDeRodizioDaPeca);
     if (escolhida) ids.push(escolhida.id);
   });
   return ids.length ? ids : null;
