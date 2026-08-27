@@ -16539,6 +16539,14 @@ function pecasQueNuncaSairam() {
     });
 }
 
+function alternarParadas(idBloco, botao, quantas) {
+  var el = document.getElementById(idBloco);
+  if (!el) return;
+  var aberto = el.style.display !== 'none';
+  el.style.display = aberto ? 'none' : 'flex';
+  botao.textContent = aberto ? ('ver as outras ' + quantas) : 'mostrar menos';
+}
+
 function montarComPecaParada(pieceId) {
   switchTab('montados');
   setTimeout(function(){ openSuggestionBuilder([pieceId]); }, 60);
@@ -16614,24 +16622,55 @@ function renderConsultoria() {
     paradas.forEach(function(p){
       (porCatParadas[p.category] = porCatParadas[p.category] || []).push(p);
     });
-    var resumo = Object.keys(porCatParadas)
-      .sort(function(a, b){ return porCatParadas[b].length - porCatParadas[a].length; })
-      .map(function(c){ return porCatParadas[c].length + ' ' + (TRIP_CAT_PT[c] || c).toLowerCase(); })
-      .join(' · ');
-    var listaParadas = '<div style="display:flex;flex-wrap:wrap;gap:10px;">'
-      + paradas.slice(0, 24).map(function(p){
-          return '<div style="width:96px;text-align:center;">'
-            + '<img src="' + tripEsc(p.img) + '" alt="' + tripEsc(p.name) + '" loading="lazy" '
-            + 'style="width:96px;height:96px;object-fit:contain;background:#FAFAF8;border-radius:8px;border:1px solid #EAEAE7;">'
-            + '<div style="font-size:.68rem;color:#666;line-height:1.25;margin:4px 0 3px;">' + tripEsc(tripNomeCurto(p)) + '</div>'
-            + '<button class="btn btn-ghost" style="font-size:.68rem;padding:3px 8px;" '
-            + 'onclick="montarComPecaParada(\'' + p.id + '\')">montar com ela</button>'
-            + '</div>';
-        }).join('')
-      + '</div>'
-      + (paradas.length > 24 ? '<div style="font-size:.72rem;color:#A8A8A4;margin-top:8px;">e mais '
-          + (paradas.length - 24) + ' — as mais raras aparecem primeiro.</div>' : '');
-    html += bloco('AS QUE NUNCA SAÍRAM (' + paradas.length + ')', listaParadas,
+    // Da categoria mais escassa pra mais farta: uma bolsa parada abre mais look
+    // novo do que a nonagésima blusa.
+    var totalPorCat = {};
+    allPecas().filter(function(p){ return !p.archived; })
+      .forEach(function(p){ totalPorCat[p.category] = (totalPorCat[p.category] || 0) + 1; });
+    var cats = Object.keys(porCatParadas).sort(function(a, b){
+      return (totalPorCat[a] || 0) - (totalPorCat[b] || 0);
+    });
+
+    function cartaoParado(p) {
+      return '<div style="width:96px;text-align:center;">'
+        + '<img src="' + tripEsc(p.img) + '" alt="' + tripEsc(p.name) + '" loading="lazy" '
+        + 'style="width:96px;height:96px;object-fit:contain;background:#FAFAF8;border-radius:8px;border:1px solid #EAEAE7;">'
+        + '<div style="font-size:.68rem;color:#666;line-height:1.25;margin:4px 0 3px;">' + tripEsc(tripNomeCurto(p)) + '</div>'
+        + '<button class="btn btn-ghost" style="font-size:.68rem;padding:3px 8px;" '
+        + 'onclick="montarComPecaParada(\'' + p.id + '\')">montar com ela</button>'
+        + '</div>';
+    }
+
+    var VISIVEIS = 12;   // o resto abre no "ver as outras"
+    var corpoParadas = cats.map(function(cat){
+      var lista = porCatParadas[cat];
+      var nome = (TRIP_CAT_PT[cat] || cat);
+      nome = nome.charAt(0).toUpperCase() + nome.slice(1);
+      var visiveis = lista.slice(0, VISIVEIS), escondidas = lista.slice(VISIVEIS);
+      var idBloco = 'paradas-' + cat;
+      return '<div style="margin-bottom:20px;">'
+        + '<div style="font-size:.74rem;font-weight:600;color:#666;margin-bottom:8px;">'
+        + tripEsc(nome) + ' <span style="color:#A8A8A4;font-weight:400;">' + lista.length
+        + ' de ' + (totalPorCat[cat] || lista.length) + '</span></div>'
+        + '<div style="display:flex;flex-wrap:wrap;gap:10px;">' + visiveis.map(cartaoParado).join('') + '</div>'
+        + (escondidas.length
+            ? '<div id="' + idBloco + '" style="display:none;flex-wrap:wrap;gap:10px;margin-top:10px;">'
+              + escondidas.map(cartaoParado).join('') + '</div>'
+              + '<button class="btn btn-ghost" style="font-size:.7rem;padding:3px 10px;margin-top:8px;" '
+              + 'onclick="alternarParadas(\'' + idBloco + '\', this, ' + escondidas.length + ')">'
+              + 'ver as outras ' + escondidas.length + '</button>'
+            : '')
+        + '</div>';
+    }).join('');
+
+    // "1 joias" ficava esquisito: com uma peça só, vai no singular.
+    var resumo = cats.map(function(c){
+      var n = porCatParadas[c].length;
+      var nome = (TRIP_CAT_PT[c] || c).toLowerCase();
+      if (n === 1) nome = nome.replace(/s$/, '').replace(/ç as$/, 'ça');
+      return n + ' ' + nome;
+    }).join(' · ');
+    html += bloco('AS QUE NUNCA SAÍRAM (' + paradas.length + ')', corpoParadas,
       'Peças que não entraram em nenhum look seu: ' + resumo
       + '. Não são peças ruins — são as que não tiveram a chance. Toque em "montar com ela" e eu monto um look em volta.');
   }
