@@ -486,6 +486,14 @@ body.week-pick-mode .card-week-btn { display: block; }
   border-radius: 14px; padding: 3px 9px 3px 4px; font-size: .74rem; font-family: inherit; cursor: pointer; color: var(--ink); }
 .cor-chip.active { background: var(--ink); color: #fff; border-color: var(--ink); }
 .cor-bolinha { width: 13px; height: 13px; border-radius: 50%; border: 1px solid rgba(0,0,0,.15); flex-shrink: 0; }
+.dia-com-mala { background: #FAF7F2; border: 1px solid #E8DFD0; border-radius: 10px;
+  padding: 7px 8px; margin-bottom: 8px; cursor: pointer; }
+.dia-com-mala:hover { background: #F6F1E8; }
+.dia-com-mala-titulo { font-size: .68rem; font-weight: 600; color: #A07A45; margin-bottom: 5px; line-height: 1.3; }
+.dia-com-mala-turno { display: flex; align-items: center; gap: 6px; font-size: .64rem; color: #8C8C88; margin-top: 4px; }
+.dia-com-mala-turno span { flex-shrink: 0; width: 38px; }
+.dia-com-mala-turno img { width: 42px; height: 42px; object-fit: contain; background: #fff; border-radius: 5px; }
+.dia-com-mala-flat { width: 42px; height: 56px; max-width: none; border-radius: 5px; }
 .dia-montar-barra { display: flex; gap: 4px; margin-top: 4px; }
 .dia-montar-barra button { flex: 1; }
 .day-look.solta-aqui, .day-empty.solta-aqui, .day-noite.solta-aqui, .day-noite-acoes.solta-aqui {
@@ -6668,6 +6676,77 @@ function renderAvisoUsoRegistrado() {
   el.appendChild(btn);
 }
 
+// A mala aparecendo na semana 
+// Ela montou uma mala de sexta a domingo, salvou, e estranhou não ver nada na
+// semana. E estava certa: não existia nenhuma ligação entre as duas — os dias
+// de viagem ficavam vazios na grade, como se ela não tivesse decidido nada.
+// Aqui a semana só MOSTRA o que a mala já decidiu. Nada é copiado: a mala
+// continua sendo a dona, então mudar lá muda aqui sozinho.
+function malaNoDia(dataIso) {
+  if (!dataIso) return null;
+  for (var i = 0; i < (savedTrips || []).length; i++) {
+    var t = savedTrips[i];
+    if (!t || !t.startVal || !(t.days || []).length) continue;
+    var ini = new Date(t.startVal + 'T00:00:00');
+    for (var d = 0; d < t.days.length; d++) {
+      var dia = new Date(ini); dia.setDate(ini.getDate() + d);
+      if (isoDate(dia) === dataIso) return { mala: t, idx: i, dia: t.days[d], diaIdx: d };
+    }
+  }
+  return null;
+}
+
+function faixaDaMalaNoDia(col, dataIso) {
+  var m = malaNoDia(dataIso);
+  if (!m) return;
+  var faixa = document.createElement('div');
+  faixa.className = 'dia-com-mala';
+  faixa.title = 'Você viaja neste dia — clique pra abrir a mala';
+  // O viewSavedTrip é chamado de dentro da tela da mala e assume ela aberta;
+  // vindo da semana, é preciso abrir antes.
+  faixa.onclick = (function(idx){ return function(e){
+    e.stopPropagation();
+    document.getElementById('tripOverlay').classList.add('open');
+    viewSavedTrip(idx);
+  }; })(m.idx);
+
+  var titulo = document.createElement('div');
+  titulo.className = 'dia-com-mala-titulo';
+  titulo.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M9 7V4h6v3M3 13.5h18"/></svg> '
+    + tripEsc(m.mala.name || 'Mala')
+    + (m.mala.dest && m.mala.dest.nome ? (' · ' + tripEsc(m.mala.dest.nome)) : '');
+  faixa.appendChild(titulo);
+
+  ['dia', 'noite'].forEach(function(turno){
+    var tipo = m.dia[turno + 'Tipo'];
+    var linha = document.createElement('div');
+    linha.className = 'dia-com-mala-turno';
+    var rotulo = (turno === 'dia') ? 'de dia' : 'à noite';
+    if (tipo === 'semLook') { linha.textContent = rotulo + ': sem look'; faixa.appendChild(linha); return; }
+    if (tipo === 'catalogo') {
+      var look = tripLookDoCatalogo(m.dia[turno + 'Ref']);
+      if (!look) return;
+      linha.innerHTML = '<span>' + rotulo + '</span>';
+      var img = document.createElement('img');
+      img.src = lookThumb(look); img.loading = 'lazy';
+      applyRotation(img, look);
+      linha.appendChild(img);
+      faixa.appendChild(linha);
+      return;
+    }
+    var pecas = (m.dia[turno] || []).map(findPieceById).filter(Boolean);
+    if (!pecas.length) return;
+    linha.innerHTML = '<span>' + rotulo + '</span>';
+    var fl = document.createElement('div');
+    fl.className = 'flatlay-canvas dia-com-mala-flat';
+    renderFlatLay(fl, pecas);
+    linha.appendChild(fl);
+    faixa.appendChild(linha);
+  });
+
+  col.appendChild(faixa);
+}
+
 function renderWeek() {
   renderAvisoUsoRegistrado();
   var wg = document.getElementById('weekGrid');
@@ -6677,6 +6756,11 @@ function renderWeek() {
     col.dataset.day = day;
     var dh = document.createElement('div'); dh.className = 'day-header'; dh.textContent = day;
     col.appendChild(dh);
+
+    // Dia de viagem: a mala já decidiu, então ela aparece antes do resto.
+    var dataDoDia = new Date(mondayOfCurrentWeek());
+    dataDoDia.setDate(dataDoDia.getDate() + DAYS.indexOf(day));
+    faixaDaMalaNoDia(col, isoDate(dataDoDia));
 
     var look = weekLookFor(day);
     // Look montado atribuído a este dia. Ele vive em `montagens`, storage separado
