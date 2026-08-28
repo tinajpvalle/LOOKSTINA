@@ -6836,6 +6836,9 @@ function renderWeek() {
       col.appendChild(dm);
       barraDeMontarNoDia(col, day, 'atual', 'dia');
       avisoDeClimaNaColuna(col, day, 'atual', tagsDoMontado(montado));
+    } else if (malaDoDia && cartaoDaMalaNoTurno(col, malaDoDia, 'dia')) {
+      // A mala vem antes do "em casa": viajando, ela não está em casa. O domingo
+      // dela estava marcado assim e o look da mala nunca aparecia.
     } else if (weekCasaDays[day]) {
       // Day marked as "em casa"
       var de = document.createElement('div'); de.className = 'day-empty';
@@ -6856,8 +6859,6 @@ function renderWeek() {
       de.appendChild(casaBtn);
       col.appendChild(de);
       barraDeMontarNoDia(col, day, 'atual', 'dia');
-    } else if (malaDoDia && cartaoDaMalaNoTurno(col, malaDoDia, 'dia')) {
-      // O look de dia veio da mala: nada mais entra aqui.
     } else {
       var de = document.createElement('div'); de.className = 'day-empty';
       de.innerHTML = '<span style="font-size:1.5rem"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M12 7.2a2.1 2.1 0 1 1 2.1-2.1c0 1.1-1 1.5-2.1 2.1v2"/><path d="M12 9.2 3.6 15.3A1.5 1.5 0 0 0 4.5 18h15a1.5 1.5 0 0 0 .9-2.7L12 9.2z"/></svg></span><span class="add-look-hint">Adicionar look</span>'
