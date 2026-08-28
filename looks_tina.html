@@ -486,20 +486,15 @@ body.week-pick-mode .card-week-btn { display: block; }
   border-radius: 14px; padding: 3px 9px 3px 4px; font-size: .74rem; font-family: inherit; cursor: pointer; color: var(--ink); }
 .cor-chip.active { background: var(--ink); color: #fff; border-color: var(--ink); }
 .cor-bolinha { width: 13px; height: 13px; border-radius: 50%; border: 1px solid rgba(0,0,0,.15); flex-shrink: 0; }
-.dia-com-mala { background: #FAF7F2; border: 1px solid #E8DFD0; border-radius: 10px;
-  padding: 7px 8px; margin-bottom: 8px; cursor: pointer; }
-.dia-com-mala:hover { background: #F6F1E8; }
-.dia-com-mala-titulo { font-size: .68rem; font-weight: 600; color: #A07A45; margin-bottom: 5px; line-height: 1.3; }
-.dia-com-mala-turno { display: flex; align-items: center; gap: 6px; font-size: .64rem; color: #8C8C88; margin-top: 4px; }
-.dia-com-mala-turno span { flex-shrink: 0; width: 38px; }
-/* Só a foto do catálogo, que é filha direta da linha. Sem o ">" esta regra
-   pegava também as peças de dentro do flat lay — que são posicionadas umas
-   sobre as outras — e forçava cada uma a 42x42, encavalando o look todo. */
-.dia-com-mala-turno > img { width: 42px; height: 42px; object-fit: contain; background: #fff; border-radius: 5px; }
-/* Dois nomes de classe pra ganhar do .flatlay-canvas, que vem depois no arquivo
-   e tem width:100% — dentro do flex isso dava largura zero. */
-.dia-com-mala-turno .dia-com-mala-flat {
-  width: 44px; min-width: 44px; height: 59px; max-width: none; border-radius: 5px; flex-shrink: 0; }
+.day-look.da-mala { position: relative; cursor: pointer; box-shadow: inset 0 0 0 2px #E8DFD0; border-radius: 10px; overflow: hidden; }
+.day-look.da-mala:hover { box-shadow: inset 0 0 0 2px #C9B48C; }
+.day-look.da-mala .flatlay-canvas { max-width: none; }
+.da-mala-etiqueta { position: absolute; top: 6px; left: 6px; z-index: 3; background: rgba(250,247,242,.94);
+  color: #A07A45; border: 1px solid #E8DFD0; border-radius: 20px; padding: 1px 7px; font-size: .62rem; font-weight: 600; }
+.da-mala-titulo { font-size: .66rem; font-weight: 600; color: #A07A45; margin-top: 6px; line-height: 1.3; }
+/* Lado a lado, o look ficava com 44px e não dava pra ver nada. Empilhado, ele
+   usa a largura inteira da coluna — que é o que essa faixa merece: é o plano
+   do dia, não um enfeite. */
 .dia-montar-barra { display: flex; gap: 4px; margin-top: 4px; }
 .dia-montar-barra button { flex: 1; }
 .day-look.solta-aqui, .day-empty.solta-aqui, .day-noite.solta-aqui, .day-noite-acoes.solta-aqui {
@@ -6702,16 +6697,42 @@ function malaNoDia(dataIso) {
   return null;
 }
 
-function faixaDaMalaNoDia(col, dataIso) {
-  var m = malaNoDia(dataIso);
-  if (!m) return;
-  var faixa = document.createElement('div');
-  faixa.className = 'dia-com-mala';
-  faixa.title = 'Você viaja neste dia — clique pra abrir a mala';
-  // O viewSavedTrip é chamado de dentro da tela da mala e assume ela aberta;
-  // vindo da semana, é preciso abrir antes. E ela clicou num DIA: abrir a mala
-  // no começo fazia ela ter que procurar o dia que já tinha escolhido.
-  faixa.onclick = (function(idx, diaIdx){ return function(e){
+// Um turno de viagem ocupando o lugar do look do dia. Ela pediu isso: "por que
+// você não lê a mala de sexta e aplica o look na sexta?". Eu tinha feito um
+// resumo miniatura ao lado do dia vazio, e ela não conseguia ver nada.
+// Continua sem copiar: o cartão é desenhado a partir da mala na hora, então
+// mexer lá muda aqui sozinho e não existe versão divergente.
+function cartaoDaMalaNoTurno(col, m, turno) {
+  var tipo = m.dia[turno + 'Tipo'];
+  if (tipo === 'semLook') return false;
+
+  var pecas = (m.dia[turno] || []).map(findPieceById).filter(Boolean);
+  var look = (tipo === 'catalogo') ? tripLookDoCatalogo(m.dia[turno + 'Ref']) : null;
+  if (!look && !pecas.length) return false;
+
+  var caixa = document.createElement('div');
+  caixa.className = 'day-look da-mala' + (turno === 'noite' ? ' da-mala-noite' : '');
+  caixa.title = 'Look da mala "' + (m.mala.name || '') + '" — clique pra abrir';
+
+  if (look) {
+    var img = document.createElement('img');
+    img.src = lookThumb(look); img.alt = ''; img.loading = 'lazy';
+    applyRotation(img, look);
+    caixa.appendChild(img);
+  } else {
+    var fl = document.createElement('div');
+    fl.className = 'flatlay-canvas';
+    renderFlatLay(fl, pecas);
+    caixa.appendChild(fl);
+  }
+
+  var etiqueta = document.createElement('span');
+  etiqueta.className = 'da-mala-etiqueta';
+  etiqueta.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M9 7V4h6v3M3 13.5h18"/></svg> '
+    + (turno === 'noite' ? 'mala · noite' : 'mala');
+  caixa.appendChild(etiqueta);
+
+  caixa.onclick = (function(idx, diaIdx){ return function(e){
     e.stopPropagation();
     document.getElementById('tripOverlay').classList.add('open');
     viewSavedTrip(idx);
@@ -6721,41 +6742,16 @@ function faixaDaMalaNoDia(col, dataIso) {
     }, 240);
   }; })(m.idx, m.diaIdx);
 
-  var titulo = document.createElement('div');
-  titulo.className = 'dia-com-mala-titulo';
-  titulo.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M9 7V4h6v3M3 13.5h18"/></svg> '
-    + tripEsc(m.mala.name || 'Mala')
-    + (m.mala.dest && m.mala.dest.nome ? (' · ' + tripEsc(m.mala.dest.nome)) : '');
-  faixa.appendChild(titulo);
+  col.appendChild(caixa);
+  return true;
+}
 
-  ['dia', 'noite'].forEach(function(turno){
-    var tipo = m.dia[turno + 'Tipo'];
-    var linha = document.createElement('div');
-    linha.className = 'dia-com-mala-turno';
-    var rotulo = (turno === 'dia') ? 'de dia' : 'à noite';
-    if (tipo === 'semLook') { linha.textContent = rotulo + ': sem look'; faixa.appendChild(linha); return; }
-    if (tipo === 'catalogo') {
-      var look = tripLookDoCatalogo(m.dia[turno + 'Ref']);
-      if (!look) return;
-      linha.innerHTML = '<span>' + rotulo + '</span>';
-      var img = document.createElement('img');
-      img.src = lookThumb(look); img.loading = 'lazy';
-      applyRotation(img, look);
-      linha.appendChild(img);
-      faixa.appendChild(linha);
-      return;
-    }
-    var pecas = (m.dia[turno] || []).map(findPieceById).filter(Boolean);
-    if (!pecas.length) return;
-    linha.innerHTML = '<span>' + rotulo + '</span>';
-    var fl = document.createElement('div');
-    fl.className = 'flatlay-canvas dia-com-mala-flat';
-    renderFlatLay(fl, pecas);
-    linha.appendChild(fl);
-    faixa.appendChild(linha);
-  });
-
-  col.appendChild(faixa);
+// O nome da mala, uma vez por coluna, acima dos looks.
+function tituloDaMalaNoDia(col, m) {
+  var t = document.createElement('div');
+  t.className = 'da-mala-titulo';
+  t.textContent = (m.mala.name || 'Mala') + (m.mala.dest && m.mala.dest.nome ? (' · ' + m.mala.dest.nome) : '');
+  col.appendChild(t);
 }
 
 function renderWeek() {
@@ -6768,10 +6764,10 @@ function renderWeek() {
     var dh = document.createElement('div'); dh.className = 'day-header'; dh.textContent = day;
     col.appendChild(dh);
 
-    // Dia de viagem: a mala já decidiu, então ela aparece antes do resto.
+    // Dia de viagem: a mala já decidiu o look, então ela ocupa o lugar dele.
     var dataDoDia = new Date(mondayOfCurrentWeek());
     dataDoDia.setDate(dataDoDia.getDate() + DAYS.indexOf(day));
-    faixaDaMalaNoDia(col, isoDate(dataDoDia));
+    var malaDoDia = malaNoDia(isoDate(dataDoDia));
 
     var look = weekLookFor(day);
     // Look montado atribuído a este dia. Ele vive em `montagens`, storage separado
@@ -6860,6 +6856,8 @@ function renderWeek() {
       de.appendChild(casaBtn);
       col.appendChild(de);
       barraDeMontarNoDia(col, day, 'atual', 'dia');
+    } else if (malaDoDia && cartaoDaMalaNoTurno(col, malaDoDia, 'dia')) {
+      // O look de dia veio da mala: nada mais entra aqui.
     } else {
       var de = document.createElement('div'); de.className = 'day-empty';
       de.innerHTML = '<span style="font-size:1.5rem"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M12 7.2a2.1 2.1 0 1 1 2.1-2.1c0 1.1-1 1.5-2.1 2.1v2"/><path d="M12 9.2 3.6 15.3A1.5 1.5 0 0 0 4.5 18h15a1.5 1.5 0 0 0 .9-2.7L12 9.2z"/></svg></span><span class="add-look-hint">Adicionar look</span>'
@@ -6874,7 +6872,12 @@ function renderWeek() {
       barraDeMontarNoDia(col, day, 'atual', 'dia');
     }
 
-    blocoDaNoite(col, day, 'atual');
+    if (malaDoDia && !noiteDoDia(day, 'atual') && cartaoDaMalaNoTurno(col, malaDoDia, 'noite')) {
+      // A noite também veio da mala.
+    } else {
+      blocoDaNoite(col, day, 'atual');
+    }
+    if (malaDoDia) tituloDaMalaNoDia(col, malaDoDia);
 
     // Note textarea
     var nt = document.createElement('textarea');
