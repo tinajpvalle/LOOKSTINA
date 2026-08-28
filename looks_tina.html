@@ -492,8 +492,14 @@ body.week-pick-mode .card-week-btn { display: block; }
 .dia-com-mala-titulo { font-size: .68rem; font-weight: 600; color: #A07A45; margin-bottom: 5px; line-height: 1.3; }
 .dia-com-mala-turno { display: flex; align-items: center; gap: 6px; font-size: .64rem; color: #8C8C88; margin-top: 4px; }
 .dia-com-mala-turno span { flex-shrink: 0; width: 38px; }
-.dia-com-mala-turno img { width: 42px; height: 42px; object-fit: contain; background: #fff; border-radius: 5px; }
-.dia-com-mala-flat { width: 42px; height: 56px; max-width: none; border-radius: 5px; }
+/* Só a foto do catálogo, que é filha direta da linha. Sem o ">" esta regra
+   pegava também as peças de dentro do flat lay — que são posicionadas umas
+   sobre as outras — e forçava cada uma a 42x42, encavalando o look todo. */
+.dia-com-mala-turno > img { width: 42px; height: 42px; object-fit: contain; background: #fff; border-radius: 5px; }
+/* Dois nomes de classe pra ganhar do .flatlay-canvas, que vem depois no arquivo
+   e tem width:100% — dentro do flex isso dava largura zero. */
+.dia-com-mala-turno .dia-com-mala-flat {
+  width: 44px; min-width: 44px; height: 59px; max-width: none; border-radius: 5px; flex-shrink: 0; }
 .dia-montar-barra { display: flex; gap: 4px; margin-top: 4px; }
 .dia-montar-barra button { flex: 1; }
 .day-look.solta-aqui, .day-empty.solta-aqui, .day-noite.solta-aqui, .day-noite-acoes.solta-aqui {
@@ -6703,12 +6709,17 @@ function faixaDaMalaNoDia(col, dataIso) {
   faixa.className = 'dia-com-mala';
   faixa.title = 'Você viaja neste dia — clique pra abrir a mala';
   // O viewSavedTrip é chamado de dentro da tela da mala e assume ela aberta;
-  // vindo da semana, é preciso abrir antes.
-  faixa.onclick = (function(idx){ return function(e){
+  // vindo da semana, é preciso abrir antes. E ela clicou num DIA: abrir a mala
+  // no começo fazia ela ter que procurar o dia que já tinha escolhido.
+  faixa.onclick = (function(idx, diaIdx){ return function(e){
     e.stopPropagation();
     document.getElementById('tripOverlay').classList.add('open');
     viewSavedTrip(idx);
-  }; })(m.idx);
+    setTimeout(function(){
+      var cartao = document.querySelectorAll('#tripStep3 .trip-day')[diaIdx];
+      if (cartao) cartao.scrollIntoView({ block: 'start' });
+    }, 240);
+  }; })(m.idx, m.diaIdx);
 
   var titulo = document.createElement('div');
   titulo.className = 'dia-com-mala-titulo';
