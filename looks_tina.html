@@ -3933,7 +3933,7 @@ function notaDePar(a, b) {
 // de cada categoria entrar no look, em vez de "sempre" ou "nunca". Com poucos
 // looks salvos a conta seria instável, então abaixo de 8 vale um padrão.
 var RECEITA_CACHE = null;
-function esquecerReceita() { RECEITA_CACHE = null; }
+function esquecerReceita() { RECEITA_CACHE = null; FORMULAS_CACHE = null; TIPO_CACHE = {}; }
 
 var RECEITA_PADRAO = { Tops: 1, Bottoms: 1, Shoes: 0.95, Bags: 0.5, Outerwear: 0.25, Accessories: 0.1, Jewelry: 0.05 };
 var RECEITA_ORDEM = ['Tops', 'Bottoms', 'Shoes', 'Outerwear', 'Bags', 'Accessories', 'Jewelry'];
@@ -8125,6 +8125,197 @@ var CATEGORIA_DA_PALAVRA = {
   'colar': 'Jewelry', 'brinco': 'Jewelry', 'pulseira': 'Jewelry'
 };
 
+// ── O tipo da peça: a fórmula do look ──
+// A estrutura que ela enxerga num look não é "parte de cima + parte de baixo",
+// é "saia com camisa" ou "calça com colete". O app só conhecia as 7 categorias,
+// e dentro de Bottoms saia e calça eram a mesma coisa — por isso a inspiração
+// parecia copiar só a cor. Aqui o tipo vira leitura de primeira classe.
+//
+// Lê SÓ o nome da peça, nunca etiquetaDaPeca(): a etiqueta começa com a
+// categoria em português ("blusa: red striped t shirt"), então buscar "blusa"
+// nela daria camisa pra todas as 108 peças de cima de uma vez.
+// Ordem importa e é do mais específico pro mais genérico: contemTermo só exige
+// começo de palavra, então "t shirt" também casa com "shirt" — camiseta tem que
+// ser testada antes de camisa, mule antes de sapato, short antes de calça.
+var TIPOS_DE_PECA = {
+  Tops: [
+    ['colete',   ['vest','gilet','colete']],
+    ['camiseta', ['t shirt','tshirt','tee','camiseta','baby look']],
+    ['moletom',  ['sweatshirt','hoodie','moletom','fleece','quarter zip']],
+    // 'cami' aqui lia a palavra CAMISA como regata: contemTermo só exige
+    // começo de palavra, e 'cami' começa 'camisa'. Só 'camisole' inteiro.
+    ['regata',   ['tank','sleeveless','camisole','regata']],
+    ['polo',     ['polo']],
+    ['cardigan', ['cardigan','cardiga']],
+    ['trico',    ['knit','sweater','turtleneck','jumper','pullover','pulover','trico','tricot','sueter','gola alta','malha']],
+    ['body',     ['bodysuit','bustier','corset','corselet','body']],
+    ['camisa',   ['shirt','button','blouse','camisa','blusa']],
+    ['top',      ['cropped','crop','top']]
+  ],
+  Bottoms: [
+    ['saia',     ['skirt','saia']],
+    ['short',    ['short','bermuda']],
+    ['macacao',  ['jumpsuit','overall','romper','macacao']],
+    ['calca',    ['pant','sweatpant','trouser','jean','denim','chino','legging','culotte','wide leg','calca']],
+    ['vestido',  ['dress','vestido']]
+  ],
+  Outerwear: [
+    ['colete',    ['vest','gilet','colete']],
+    ['blazer',    ['blazer']],
+    ['cardigan',  ['cardigan','cardiga']],
+    ['kimono',    ['kimono']],
+    ['casaco',    ['coat','jacket','parka','trench','anorak','fleece','quarter zip','casaco','jaqueta','sobretudo']]
+  ],
+  Shoes: [
+    ['tenis',    ['sneaker','trainer','tenis']],
+    ['bota',     ['boot','bota','coturno']],
+    ['mule',     ['mule','clog','tamanco']],
+    ['sandalia', ['sandal','slide','espadrille','rasteira','sandalia','flip']],
+    ['salto',    ['heel','pump','stiletto','salto','scarpin']],
+    ['sapato',   ['loafer','ballerina','ballet','oxford','moccasin','mocassim','derby','sapatilha','flat','sapato','shoe']]
+  ],
+  Bags: [
+    ['clutch',  ['clutch','pouch','pochete','carteira']],
+    ['tote',    ['tote','sacola']],
+    ['mochila', ['backpack','mochila']],
+    ['bolsa',   ['bag','handbag','purse','satchel','crossbody','hobo','baguette','shoulder','bolsa']]
+  ],
+  Accessories: [
+    ['cinto',  ['belt','cinto']],
+    ['lenco',  ['scarf','lenco','echarpe']],
+    ['oculos', ['sunglass','glasses','oculos']],
+    ['chapeu', ['hat','cap','chapeu','bone']]
+  ],
+  Jewelry: [
+    ['colar',    ['necklace','pendant','colar']],
+    ['brinco',   ['earring','brinco']],
+    ['pulseira', ['bracelet','bangle','pulseira']],
+    ['anel',     ['ring','anel']]
+  ]
+};
+
+var NOME_DO_TIPO = {
+  colete: 'colete', camiseta: 'camiseta', moletom: 'moletom', regata: 'regata',
+  polo: 'polo', trico: 'tricô', body: 'body', camisa: 'camisa', top: 'top',
+  saia: 'saia', short: 'short', macacao: 'macacão', calca: 'calça', vestido: 'vestido',
+  blazer: 'blazer', cardigan: 'cardigã', kimono: 'kimono', casaco: 'casaco',
+  tenis: 'tênis', bota: 'bota', mule: 'mule', sandalia: 'sandália', salto: 'salto', sapato: 'sapato',
+  clutch: 'clutch', tote: 'tote', mochila: 'mochila', bolsa: 'bolsa',
+  cinto: 'cinto', lenco: 'lenço', oculos: 'óculos', chapeu: 'chapéu',
+  colar: 'colar', brinco: 'brinco', pulseira: 'pulseira', anel: 'anel'
+};
+
+function nomeDoTipo(t) { return NOME_DO_TIPO[t] || t || ''; }
+
+var TIPO_CACHE = {};
+function esquecerTipos() { TIPO_CACHE = {}; }
+
+function tipoDaPeca(p) {
+  if (!p) return null;
+  if (p.id && TIPO_CACHE[p.id] !== undefined) return TIPO_CACHE[p.id];
+  var lista = TIPOS_DE_PECA[p.category];
+  var achado = null;
+  if (lista) {
+    var alvo = textoParaBusca(p.name || '');
+    lista.some(function(par){
+      if (par[1].some(function(t){ return contemTermo(alvo, t.trim()); })) { achado = par[0]; return true; }
+      return false;
+    });
+  }
+  if (p.id) TIPO_CACHE[p.id] = achado;
+  return achado;
+}
+
+// A fórmula do look nas palavras dela: "camisa + calça + sapato + bolsa".
+// Peça sem tipo reconhecido entra pela categoria, pra fórmula nunca sair com
+// buraco silencioso.
+var ORDEM_DA_FORMULA = ['Outerwear', 'Tops', 'Bottoms', 'Shoes', 'Bags', 'Accessories', 'Jewelry'];
+
+function slotsDoLook(ids) {
+  return (ids || []).map(findPieceById).filter(Boolean)
+    .slice()
+    .sort(function(a, b){ return ORDEM_DA_FORMULA.indexOf(a.category) - ORDEM_DA_FORMULA.indexOf(b.category); })
+    .map(function(p){ return { cat: p.category, tipo: tipoDaPeca(p) }; });
+}
+
+// Peça sem tipo reconhecido aparece pela categoria, pra fórmula nunca sair com
+// buraco silencioso.
+function textoDoSlot(sl) {
+  return sl.tipo ? nomeDoTipo(sl.tipo) : (CATEGORIA_EM_PT[sl.cat] || '').toLowerCase();
+}
+
+function formulaDoLook(ids) {
+  return slotsDoLook(ids).map(textoDoSlot).join(' + ');
+}
+
+// As fórmulas que ela de fato usa, contadas nos looks que ela montou. É o
+// repertório dela — vale como palpite quando a foto não tem receita escrita.
+var FORMULAS_CACHE = null;
+function esquecerFormulas() { FORMULAS_CACHE = null; }
+
+function formulasDela() {
+  if (FORMULAS_CACHE) return FORMULAS_CACHE;
+  var conta = {};
+  (montagens || []).forEach(function(m){
+    var slots = slotsDoLook(m.pieceIds || []);
+    if (slots.length < 3) return;
+    var chave = slots.map(textoDoSlot).join(' + ');
+    if (!conta[chave]) conta[chave] = { slots: slots, texto: chave, n: 0 };
+    conta[chave].n++;
+  });
+  FORMULAS_CACHE = Object.keys(conta).map(function(k){ return conta[k]; })
+    .sort(function(a, b){ return b.n - a.n; });
+  return FORMULAS_CACHE;
+}
+
+// O tipo que ela mais usa naquela categoria — pra completar fórmula sem inventar.
+function tipoMaisComum(cat) {
+  var conta = {};
+  (montagens || []).forEach(function(m){
+    (m.pieceIds || []).map(findPieceById).filter(Boolean).forEach(function(p){
+      if (p.category !== cat) return;
+      var t = tipoDaPeca(p); if (!t) return;
+      conta[t] = (conta[t] || 0) + 1;
+    });
+  });
+  var melhor = null;
+  Object.keys(conta).forEach(function(t){ if (!melhor || conta[t] > conta[melhor]) melhor = t; });
+  return melhor;
+}
+
+// A palavra que ela escreve na receita ("rasteira", "tricô", "blusa") vira tipo
+// pela mesma lista das peças — assim receita e armário falam a mesma língua.
+function tipoDaPalavra(w) {
+  var cat = CATEGORIA_DA_PALAVRA[w];
+  if (!cat || !TIPOS_DE_PECA[cat]) return null;
+  var achado = null;
+  TIPOS_DE_PECA[cat].some(function(par){
+    if (par[1].some(function(t){ return contemTermo(w, t.trim()); })) { achado = par[0]; return true; }
+    return false;
+  });
+  return achado;
+}
+
+// Sorteia uma fórmula entre as que ela repete, proporcional ao quanto repete.
+// É o palpite de estilo pra foto que ainda não tem receita escrita.
+function formulaDaVez() {
+  var lista = formulasDela().filter(function(f){ return f.n >= 2; });
+  var total = lista.reduce(function(a, f){ return a + f.n; }, 0);
+  var sorteio = Math.random() * total, escolhida = null;
+  lista.some(function(f){ sorteio -= f.n; if (sorteio <= 0) { escolhida = f.slots; return true; } return false; });
+  // Armário novo, sem repertório ainda: o quarteto de sempre.
+  return escolhida || [{ cat: 'Tops' }, { cat: 'Bottoms' }, { cat: 'Shoes' }, { cat: 'Bags' }];
+}
+
+function categoriaDoTipo(t) {
+  var achada = null;
+  Object.keys(TIPOS_DE_PECA).some(function(cat){
+    if (TIPOS_DE_PECA[cat].some(function(par){ return par[0] === t; })) { achada = cat; return true; }
+    return false;
+  });
+  return achada;
+}
+
 // Cada pedaço separado por vírgula é uma peça da foto.
 // Devolve o nome da cor quando a palavra é cor — aceitando o feminino, que é
 // como ela escreve ("camisa branca", "calça preta").
@@ -8165,8 +8356,36 @@ function lerReceita(texto) {
     // receita é escrita como se fala, concordando com a peça.
     var cor = null;
     palavras.forEach(function(w){ if (!cor) cor = corDaPalavra(w); });
-    return { categoria: categoria, termos: palavras, cor: cor, texto: pedaco.trim() };
+    // O tipo é o que ela quis dizer com "saia" e não "calça". Sem isso o slot
+    // guardava só a categoria, e saia e calça eram indistinguíveis.
+    var tipo = null;
+    palavras.forEach(function(w){ if (!tipo) tipo = tipoDaPalavra(w); });
+    return { categoria: categoria, tipo: tipo, termos: palavras, cor: cor, texto: pedaco.trim() };
   }).filter(Boolean);
+}
+
+// A receita descreve o que dá pra ver na foto, não o look inteiro. "colete
+// tricô verde, calça couro marrom, sandália" montava um colete flutuando sem
+// nada por baixo, porque só virava slot o que estava escrito. Aqui o que o look
+// precisa pra existir — cima, baixo e sapato — entra faltando, com o tipo que
+// ela mais usa e a cor vindo da paleta da foto.
+function completarReceita(slots) {
+  if (!slots.length) return slots;
+  var tem = function(cat){ return slots.some(function(sl){ return sl.categoria === cat; }); };
+  // Vestido e macacão ocupam Bottoms mas vestem o corpo todo: não pedem camisa.
+  var pecaInteira = slots.some(function(sl){ return sl.tipo === 'vestido' || sl.tipo === 'macacao'; });
+  var completos = slots.slice();
+  function faltando(cat) {
+    completos.push({ categoria: cat, tipo: tipoMaisComum(cat), termos: [], cor: null, texto: '', decidiEu: true });
+  }
+  if (!tem('Tops') && !pecaInteira) faltando('Tops');
+  if (!tem('Bottoms')) faltando('Bottoms');
+  if (!tem('Shoes')) faltando('Shoes');
+  // Na ordem de vestir, senão o que eu completo aparece jogado no fim
+  // ("colete + calça + sandália + camiseta").
+  return completos.sort(function(a, b){
+    return ORDEM_DA_FORMULA.indexOf(a.categoria) - ORDEM_DA_FORMULA.indexOf(b.categoria);
+  });
 }
 
 // Quanto uma peça dela atende ao pedaço da receita.
@@ -8199,28 +8418,27 @@ function notaDaPecaNaReceita(peca, slot, perfisDaPaleta) {
 }
 
 function pecasPelaReceita(insp, evitar) {
-  var slots = lerReceita(insp.receita);
+  var slots = completarReceita(lerReceita(insp.receita));
   if (!slots.length) return null;
   var evita = evitar || [];
   var perfisDaPaleta = (insp.palette || []).map(perfilDaCor).filter(Boolean);
   var ids = [];
 
   slots.forEach(function(slot){
-    var candidatas = allPecas().filter(function(p){
-      if (pecaArquivada(p.id)) return false;
-      if (p.category !== slot.categoria) return false;
-      return ids.indexOf(p.id) === -1;
-    });
-    // A palavra da peça filtra, não só pontua: pedindo "sandália rasteira" ela
-    // não quer receber tênis, ainda que tênis também seja Shoes. Só afrouxa se
-    // sobrar pouca coisa — aí a nota resolve.
-    var tipos = slot.termos.filter(function(w){ return CATEGORIA_DA_PALAVRA[w]; });
-    if (tipos.length) {
-      var doTipo = candidatas.filter(function(p){
-        var alvo = textoParaBusca(etiquetaDaPeca(p));
-        return tipos.some(function(w){ return variacoesDaPalavra(w).some(function(v){ return contemTermo(alvo, v); }); });
-      });
-      if (doTipo.length >= 3) candidatas = doTipo;
+    var livre = function(p){ return !pecaArquivada(p.id) && ids.indexOf(p.id) === -1; };
+    // O TIPO decide onde procurar, não a gaveta. Os 3 coletes dela estão
+    // catalogados como parte de cima, mas a palavra "colete" aponta pra gaveta
+    // dos casacos: a busca ia no lugar errado, não achava nada, e "calça com
+    // colete" devolvia um casaco qualquer.
+    // E o tipo manda mesmo quando sobra pouco: antes ele só filtrava se
+    // restassem 3 candidatas, e ela tem 4 saias — pedir saia devolvia calça em
+    // silêncio. Era isso que fazia o look inspirado parecer copiar só a cor.
+    // A gaveta só volta a valer quando o tipo não existe no armário.
+    var candidatas = slot.tipo
+      ? allPecas().filter(function(p){ return livre(p) && tipoDaPeca(p) === slot.tipo; })
+      : [];
+    if (!candidatas.length) {
+      candidatas = allPecas().filter(function(p){ return livre(p) && p.category === slot.categoria; });
     }
 
     var frescas = candidatas.filter(function(p){ return evita.indexOf(p.id) === -1; });
@@ -8230,8 +8448,15 @@ function pecasPelaReceita(insp, evitar) {
     var comNota = candidatas.map(function(p){
       return { p: p, n: notaDaPecaNaReceita(p, slot, perfisDaPaleta) };
     }).sort(function(x, y){ return y.n - x.n; });
-    var teto = comNota[0].n;
-    var faixa = comNota.filter(function(x){ return teto - x.n <= 0.6; });
+    var teto = comNota[0].n, piso = comNota[comNota.length - 1].n;
+    // A faixa de empate era fixa em 0,6. Nas vagas que eu completo não há
+    // palavra escrita, só a cor pontua, e a nota inteira vale ~1,2 — 0,6
+    // deixava passar 25 das 32 camisetas e quem escolhia de verdade era o
+    // rodízio. Foi assim que saiu camiseta rosa numa foto preto/vinho/marrom.
+    // Agora a faixa acompanha o quanto as notas se espalham: onde a nota separa
+    // pouco, ela aperta.
+    var largura = Math.max(0.15, (teto - piso) * 0.25);
+    var faixa = comNota.filter(function(x){ return teto - x.n <= largura; });
     if (faixa.length < 3) faixa = comNota.slice(0, 3);
     var escolhida = weightedRandomPiece(faixa.map(function(x){ return x.p; }), fatorDeRodizioDaPeca);
     if (escolhida) ids.push(escolhida.id);
@@ -8261,8 +8486,23 @@ function pecasInspiradasEm(insp, evitar) {
   // uma foto toda neutra virava look verde com bolsa vinho.
   var paletaSoNeutra = perfisDaPaleta.every(function(x){ return x.neutra; });
 
-  function candidatas(cat) {
-    var lista = allPecas().filter(function(p){ return p.category === cat; });
+  // A fórmula do look sai do repertório dela, não de um quarteto fixo. Antes era
+  // sempre Tops+Bottoms+Shoes+Bags: uma foto de colete nunca virava look de
+  // colete, e todo look inspirado saía com bolsa. Agora o esqueleto varia como
+  // os looks dela variam, e cada vaga carrega o tipo (saia, colete, rasteira).
+  var formula = formulaDaVez();
+  var ids = [];
+
+  function candidatas(slot) {
+    var lista = allPecas().filter(function(p){
+      if (pecaArquivada(p.id)) return false;   // peça arquivada aparecia aqui
+      if (ids.indexOf(p.id) !== -1) return false;
+      return p.category === slot.cat;
+    });
+    if (slot.tipo) {
+      var doTipo = lista.filter(function(p){ return tipoDaPeca(p) === slot.tipo; });
+      if (doTipo.length) lista = doTipo;
+    }
     var frescas = lista.filter(function(p){ return evita.indexOf(p.id) === -1; });
     return frescas.length ? frescas : lista;
   }
@@ -8281,21 +8521,20 @@ function pecasInspiradasEm(insp, evitar) {
   //    costuma estar; se nada chegar perto, tenta embaixo; se ainda assim não
   //    houver nada parecido, o look vira todo neutro em vez de forçar uma cor
   //    que ela não tem.
-  var pecaDestaque = null, catDestaque = null;
+  var pecaDestaque = null, slotDestaque = null;
   if (destaque && !paletaSoNeutra) {
-    ['Tops', 'Bottoms'].some(function(cat){
-      var achada = melhorPor(candidatas(cat), function(p){
+    formula.filter(function(sl){ return sl.cat === 'Tops' || sl.cat === 'Bottoms'; }).some(function(sl){
+      var achada = melhorPor(candidatas(sl), function(p){
         return proximidadeDeCor((perfilDaCor(p.color) || {}).rgb, destaque.rgb);
       });
       if (achada && proximidadeDeCor((perfilDaCor(achada.color) || {}).rgb, destaque.rgb) >= 0.78) {
-        pecaDestaque = achada; catDestaque = cat; return true;
+        pecaDestaque = achada; slotDestaque = sl; return true;
       }
       return false;
     });
   }
 
   var perfilDestaque = pecaDestaque ? perfilDaCor(pecaDestaque.color) : null;
-  var ids = [];
   if (pecaDestaque) ids.push(pecaDestaque.id);
 
   // 2) O resto acompanha: combinar com a peça de destaque pesa o dobro de estar
@@ -8306,9 +8545,9 @@ function pecasInspiradasEm(insp, evitar) {
   var fortesNoLook = [];
   if (perfilDestaque && !perfilDestaque.neutra) fortesNoLook.push(perfilDestaque);
 
-  ['Tops', 'Bottoms', 'Shoes', 'Bags'].forEach(function(cat){
-    if (cat === catDestaque) return;
-    var escolhida = melhorPor(candidatas(cat), function(p){
+  formula.forEach(function(sl){
+    if (sl === slotDestaque) return;
+    var escolhida = melhorPor(candidatas(sl), function(p){
       var perfil = perfilDaCor(p.color);
       var naPaleta = proximidadeDaPaleta(perfil, perfisDaPaleta);
       if (paletaSoNeutra) return naPaleta * 3 + (perfil && perfil.neutra ? 1 : 0);
@@ -8478,15 +8717,30 @@ function renderInspiracoes() {
     }; })(it.id, receita);
     body.appendChild(receita);
 
+    // A fórmula, nas palavras dela. Antes dizia "monta por: partes de cima ·
+    // partes de baixo", que é o nome das gavetas — não dava pra ver se eu tinha
+    // lido saia ou calça, colete ou casaco. É a estrutura do look que ela quer
+    // conferir aqui, então é a estrutura que aparece.
+    var resumo = document.createElement('div');
+    resumo.style.cssText = 'font-size:.68rem;color:#A8A8A4;margin:-4px 0 8px;';
     var lidas = lerReceita(it.receita);
     if (lidas.length) {
-      var resumo = document.createElement('div');
-      resumo.style.cssText = 'font-size:.68rem;color:#A8A8A4;margin:-4px 0 8px;';
-      resumo.textContent = 'monta por: ' + lidas.map(function(sl){
-        return (NOME_CATEGORIA[sl.categoria] || sl.categoria).toLowerCase();
-      }).join(' · ');
-      body.appendChild(resumo);
+      var completa = completarReceita(lidas);
+      resumo.appendChild(document.createTextNode('fórmula: '));
+      completa.forEach(function(sl, i){
+        if (i) resumo.appendChild(document.createTextNode(' + '));
+        var sp = document.createElement('span');
+        sp.textContent = sl.tipo ? nomeDoTipo(sl.tipo) : (CATEGORIA_EM_PT[sl.categoria] || '').toLowerCase();
+        if (sl.decidiEu) {
+          sp.style.cssText = 'opacity:.6;font-style:italic;';
+          sp.title = 'Não estava escrito na receita — completei pro look ficar de pé.';
+        }
+        resumo.appendChild(sp);
+      });
+    } else {
+      resumo.textContent = 'sem receita — vou seguir uma fórmula dos seus looks';
     }
+    body.appendChild(resumo);
 
     // As paletas guardadas foram lidas com o nomeador de cores da época. Quem já
     // tem inspiração salva precisa de um jeito de reler sem apagar e subir de novo.
