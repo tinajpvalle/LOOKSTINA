@@ -1549,7 +1549,7 @@ function lsSet(key, value) {
 // Se o servidor não responder (ex: site aberto direto do GitHub Pages, sem
 // backend, ou sem internet), tudo falha silenciosamente e o app continua
 // funcionando 100% localmente, como sempre funcionou.
-var SYNC_KEYS = ['looks_tina_catalog_v1', 'looks_tina_montados_v1', 'looks_tina_pecas_avulsas_v1', 'looks_tina_proxsemana_v1', 'looks_tina_pecas_arquivadas_v1', 'looks_tina_proxsemana_dias_v1', 'looks_tina_proxsemana_noite_v1', 'looks_tina_inspiracoes_v1', 'looks_tina_preferencias_v1', 'looks_tina_combinacoes_v1', 'looks_tina_regras_v1', 'looks_tina_trips_v1', 'looks_tina_weekhistory_v1'];
+var SYNC_KEYS = ['looks_tina_catalog_v1', 'looks_tina_montados_v1', 'looks_tina_pecas_avulsas_v1', 'looks_tina_proxsemana_v1', 'looks_tina_pecas_arquivadas_v1', 'looks_tina_proxsemana_dias_v1', 'looks_tina_proxsemana_noite_v1', 'looks_tina_inspiracoes_v1', 'looks_tina_preferencias_v1', 'looks_tina_combinacoes_v1', 'looks_tina_regras_v1', 'looks_tina_trips_v1', 'looks_tina_weekhistory_v1', 'looks_tina_recusas_v1'];
 // Um aparelho que abre o app sem nada salvo começa com o catálogo embutido (851
 // looks) e a lista de montados vazia. Se ele mandar isso pro servidor antes de
 // ler o que está lá, apaga o que existe — foi o que aconteceu em 17/08/2026,
@@ -1749,6 +1749,17 @@ function pullRemoteUpdates() {
         combinacoes = JSON.parse(res.value) || {};
         lsSet('looks_tina_combinacoes_v1', res.value);
         if (typeof renderStats === 'function' && document.getElementById('statsContent')) renderStats();
+      } catch (e) {}
+    }
+  });
+  syncGet(RECUSAS_KEY).then(function(res) {
+    liberarEnvio(RECUSAS_KEY, !!(res && res.value != null));
+    if (!res || res.value == null) { if (temAlgoAqui(recusas.pecas)) saveRecusas(); return; }
+    if (servidorVeioVazio(res.value) && temAlgoAqui(recusas.pecas)) { saveRecusas(); return; }
+    if (res.value !== JSON.stringify(recusas)) {
+      try {
+        recusas = JSON.parse(res.value) || { pares: {}, pecas: {}, total: 0 };
+        lsSet(RECUSAS_KEY, res.value);
       } catch (e) {}
     }
   });
@@ -3913,6 +3924,12 @@ function notaDePar(a, b) {
     motivos.push(juntas > 1 ? ('você já usou as duas juntas ' + juntas + ' vezes') : 'você já usou as duas juntas');
   }
 
+  var contra = pesoDaRecusa(a, b, juntas);
+  if (contra) {
+    n -= contra;
+    if (contra >= 1) motivos.push('você costuma trocar esse par');
+  }
+
   var voto = combinacoes[[tripEtiqueta(a), tripEtiqueta(b)].sort().join('  +  ')];
   if (voto && (voto.sim + voto.nao)) {
     var q = ((voto.sim - voto.nao) / (voto.sim + voto.nao)) * 3;
@@ -5353,6 +5370,10 @@ var HISTORICO_SUGESTOES_MAX = 10;
 
 function guardarSugestaoAtual() {
   if (!suggestionSlots.length) return;
+  // Trocar a sugestão é recusá-la. Só as peças que ela NÃO travou: as travadas
+  // são escolha dela, não têm culpa do que veio em volta.
+  registrarRecusa(suggestionSlots.map(function(s){ return s.pieceId; })
+    .filter(function(i){ return i && suggestionLockedIds.indexOf(i) === -1; }));
   historicoSugestoes.push({
     slots: suggestionSlots.map(function(s){ return { category: s.category, pieceId: s.pieceId }; }),
     travadas: suggestionLockedIds.slice()
@@ -8651,6 +8672,7 @@ function gerarOutroLookInspirado() {
   if (!insp) { showSavedToast('A inspiração desse look foi apagada.'); return; }
   var novos = pecasInspiradasEm(insp, m.pieceIds || []);
   if (!novos || novos.length < 2) { showSavedToast('Não achei outras peças pra essa paleta.'); return; }
+  registrarRecusa(m.pieceIds || []);
   var hist = historicoInspirados[m.id] = historicoInspirados[m.id] || [];
   hist.push({ pecas: (m.pieceIds || []).slice(), nome: m.name });
   if (hist.length > HISTORICO_INSPIRADOS_MAX) hist.shift();
@@ -11494,6 +11516,65 @@ function regrasScore(tags) {
 // gostei reforça as peças e a combinação; não gostei pergunta quem foi, e sem
 // resposta a nota fica só na combinação.
 
+// ── O não dela ──
+// Todo "gerar outro" joga um look inteiro fora, e isso evaporava: o app só sabia
+// o que ela ACEITA. Pior, o que ela aceita são quase todos looks que o próprio
+// app montou (64 dos 69 salvos), então o aprendizado era eco. A recusa é o único
+// sinal que é genuinamente dela e não custa nada — é um clique que ela já dá.
+//
+// Pesa leve de propósito. Recusar às vezes é "hoje não" ou "quero ver outro",
+// não "nunca". Se virasse veto, o app aprenderia medo.
+var RECUSAS_KEY = 'looks_tina_recusas_v1';
+var recusas = safeParse(lsGet(RECUSAS_KEY), null) || { pares: {}, pecas: {}, total: 0 };
+
+function saveRecusas() {
+  var json = JSON.stringify(recusas);
+  lsSet(RECUSAS_KEY, json);
+  syncPut(RECUSAS_KEY, json);
+}
+
+function registrarRecusa(ids) {
+  var lista = (ids || []).map(String).filter(function(i){ return findPieceById(i); });
+  if (lista.length < 2) return;
+  if (!recusas.pares) recusas.pares = {};
+  if (!recusas.pecas) recusas.pecas = {};
+  recusas.total = (recusas.total || 0) + 1;
+  lista.forEach(function(i){ recusas.pecas[i] = (recusas.pecas[i] || 0) + 1; });
+  for (var i = 0; i < lista.length; i++) {
+    for (var j = i + 1; j < lista.length; j++) {
+      var k = chaveDoPar(lista[i], lista[j]);
+      recusas.pares[k] = (recusas.pares[k] || 0) + 1;
+    }
+  }
+  saveRecusas();
+}
+
+// Quanto o par pesa contra. Só conta o que ela recusa MAIS do que guarda: uma
+// peça que ela usa muito apareceria em muitas recusas só por aparecer muito.
+function pesoDaRecusa(a, b, juntas) {
+  var nao = ((typeof recusas === 'object' && recusas && recusas.pares) || {})[chaveDoPar(a.id, b.id)] || 0;
+  if (!nao) return 0;
+  var liquido = nao - (juntas || 0) * 1.5;   // guardar vale mais que recusar
+  // Um "gerar outro" sozinho não diz nada: ela pode só estar vendo opções, e o
+  // clique acusa as 10 duplas do look de uma vez. Duas recusas são um indício,
+  // quatro são um padrão. Uma só não muda nada.
+  if (liquido < 2) return 0;
+  return Math.min(1.5, (liquido - 1) * 0.4);
+}
+
+// O que ela mais troca fora — pra ela poder conferir o que o app entendeu, e
+// discordar. Um número aprendido que ela não pode ver é um palpite escondido.
+function pecasMaisRecusadas(quantas) {
+  var usos = usosEmLooks();
+  return Object.keys(recusas.pecas || {}).map(function(id){
+    var p = findPieceById(id);
+    if (!p) return null;
+    return { peca: p, nao: recusas.pecas[id], sim: usos[String(id)] || 0 };
+  }).filter(function(x){ return x && x.nao > x.sim; })
+    .sort(function(a, b){ return (b.nao - b.sim) - (a.nao - a.sim); })
+    .slice(0, quantas || 8);
+}
+
 function saveCombinacoes() {
   var json = JSON.stringify(combinacoes);
   lsSet('looks_tina_combinacoes_v1', json);
@@ -12211,6 +12292,8 @@ function remontarLookAutomatico(id) {
   corPedidaNoMontador = null;
 
   if (!ids) { showSavedToast('Não achei outra combinação diferente dessa — tente de novo.'); return; }
+  // A peça que ela pediu (baseId) não entra na recusa: ela escolheu.
+  registrarRecusa((m.pieceIds || []).filter(function(i){ return String(i) !== String(m.baseId); }));
   if (!historicoAutoMontados[id]) historicoAutoMontados[id] = [];
   historicoAutoMontados[id].push((m.pieceIds || []).slice());
   if (historicoAutoMontados[id].length > 20) historicoAutoMontados[id].shift();
@@ -17331,6 +17414,22 @@ function renderConsultoria() {
    + sust.emUmLookSo + ' aparecem em um único look.</div>';
   html += bloco('AS QUE SUSTENTAM O ARMÁRIO', listaSust,
     'As peças mais combinadas. Se uma delas sai de cena, dezenas de looks saem junto.');
+
+  // ── o que ela troca fora ──
+  // Um número aprendido que ela não pode ver é um palpite escondido. Aqui ela
+  // confere o que o app entendeu do "gerar outro" — e discorda, se for o caso.
+  var trocadas = pecasMaisRecusadas(8);
+  if (trocadas.length) {
+    var listaTroca = '<div style="display:flex;flex-direction:column;gap:5px;">' + trocadas.map(function(x){
+      return '<div style="display:flex;justify-content:space-between;gap:10px;font-size:.82rem;">'
+        + '<span>' + tripEsc(tripNomeCurto(x.peca)) + '</span>'
+        + '<span style="color:#A8A8A4;white-space:nowrap;">' + x.nao + 'x trocada'
+        + (x.sim ? (' · ' + x.sim + ' em look seu') : '') + '</span></div>';
+    }).join('') + '</div>';
+    html += bloco('O QUE VOCÊ TROCA FORA', listaTroca,
+      'Contado dos seus "gerar outro" — ' + (recusas.total || 0) + ' até agora. '
+      + 'Pesa leve na próxima sugestão: trocar às vezes é "hoje não", não "nunca".');
+  }
 
   // ── as que nunca saíram ──
   var paradas = pecasQueNuncaSairam();
