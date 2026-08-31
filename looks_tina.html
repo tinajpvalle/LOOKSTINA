@@ -495,8 +495,15 @@ body.week-pick-mode .card-week-btn { display: block; }
 /* Lado a lado, o look ficava com 44px e não dava pra ver nada. Empilhado, ele
    usa a largura inteira da coluna — que é o que essa faixa merece: é o plano
    do dia, não um enfeite. */
-.dia-montar-barra { display: flex; gap: 4px; margin-top: 4px; }
-.dia-montar-barra button { flex: 1; }
+#formulaChips { display: flex; flex-direction: column; gap: 5px; }
+.formula-chip { display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+  width: 100%; text-align: left; padding: 9px 11px; border: 1px solid var(--line);
+  border-radius: var(--r-md); background: var(--bg-1); cursor: pointer; }
+.formula-chip:hover { border-color: var(--accent); }
+.formula-chip-txt { font-size: .84rem; }
+.formula-chip-de { font-size: .68rem; color: var(--txt-2); flex-shrink: 0; }
+.dia-montar-barra { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.dia-montar-barra button { flex: 1 1 44%; }
 .day-look.solta-aqui, .day-empty.solta-aqui, .day-noite.solta-aqui, .day-noite-acoes.solta-aqui {
   outline: 2px solid var(--accent); outline-offset: -2px;
 }
@@ -1431,6 +1438,22 @@ body.compare-mode .card-compare-btn { display: flex; }
       <div class="cor-bar" id="pecaBaseCores"></div>
       <input type="text" id="pecaBaseBusca" class="trip-busca" autocomplete="off" oninput="escolhaDePecaBaseBuscou()">
       <div class="trip-picker-grid" id="pecaBaseGrid" style="padding-bottom:0;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Montar por uma fórmula: ela diz a forma, eu escolho as peças -->
+<div class="overlay" id="formulaOverlay" onclick="if(event.target===this) fecharEscolhaDeFormula()">
+  <div class="modal trip-modal">
+    <button class="close-btn" onclick="fecharEscolhaDeFormula()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"/></svg></button>
+    <div class="modal-body">
+      <h3 id="formulaTitulo" style="margin-bottom:4px;">Montar como?</h3>
+      <div style="font-size:.82rem;color:var(--txt-2);margin-bottom:10px;">Diga a forma do look e eu escolho as pe&ccedil;as.</div>
+      <input type="text" id="formulaBusca" class="trip-busca" autocomplete="off"
+             placeholder="saia com camisa e sapato" onkeydown="formulaDigitou(event)">
+      <button class="btn btn-ghost" style="width:100%;margin:6px 0 14px;" onclick="montarComEssaFormula(document.getElementById('formulaBusca').value)">Montar</button>
+      <div style="font-size:.74rem;color:var(--txt-2);margin-bottom:6px;">Ou toque numa destas:</div>
+      <div id="formulaChips"></div>
     </div>
   </div>
 </div>
@@ -5651,7 +5674,12 @@ var DIMENSOES = [
                'geométrica','geométrico','estampada','estampado','lisa','liso','vichy','tartan',
                'paisley','risca de giz',
                'striped','stripe','stripes','plaid','checked','check','gingham','polka dot',
-               'leopard','printed','graphic print','patterned','solid','houndstooth']],
+               'leopard','printed','graphic print','patterned','solid','houndstooth',
+               // Faltavam, e são as estampas do armário dela: "Yellow Graphic T Shirt" e
+               // "Green Ikat Sleeveless Vest" passavam como peça lisa. A regra que ela mais
+               // repete é a de não misturar estampa, e o app não enxergava essas.
+               'graphic','ikat','print','monogram','camo','camouflage','argyle','chevron',
+               'polka','oncinha','animalier','abstract','motif','tie-dye','floral print']],
   ['manga', ['manga longa','manga curta','sem manga','regata','alcinha','gola alta','gola v','decote',
              'tomara que caia','frente única','ombro a ombro','capuz','polo',
              'long sleeve','short sleeve','sleeveless','tank','cami','spaghetti strap',
@@ -7361,7 +7389,12 @@ function barraDeMontarNoDia(col, day, alvo, turno) {
   b.textContent = 'por uma peça';
   b.title = 'Você escolhe a peça, eu monto o resto em volta';
   b.onclick = (function(d, al, t){ return function(e){ e.stopPropagation(); abrirEscolhaDePecaBase(d, al, t); }; })(day, alvo, turno);
-  barra.appendChild(a); barra.appendChild(b);
+  var c = document.createElement('button');
+  c.className = 'day-noite-add';
+  c.textContent = 'por uma fórmula';
+  c.title = 'Você diz a forma do look ("saia com camisa e sapato"), eu escolho as peças';
+  c.onclick = (function(d, al, t){ return function(e){ e.stopPropagation(); abrirEscolhaDeFormula(d, al, t); }; })(day, alvo, turno);
+  barra.appendChild(a); barra.appendChild(b); barra.appendChild(c);
   col.appendChild(barra);
 }
 
@@ -8117,12 +8150,12 @@ var CATEGORIA_DA_PALAVRA = {
   // parecido — e ela pode trocar depois no montador.
   'vestido': 'Bottoms',
   'casaco': 'Outerwear', 'jaqueta': 'Outerwear', 'blazer': 'Outerwear', 'colete': 'Outerwear',
-  'cardigan': 'Outerwear', 'kimono': 'Outerwear', 'trench': 'Outerwear',
+  'cardigan': 'Outerwear', 'cardiga': 'Outerwear', 'kimono': 'Outerwear', 'trench': 'Outerwear',
   'sapato': 'Shoes', 'sandalia': 'Shoes', 'tenis': 'Shoes', 'bota': 'Shoes',
   'rasteira': 'Shoes', 'mocassim': 'Shoes', 'loafer': 'Shoes', 'salto': 'Shoes', 'mule': 'Shoes',
-  'bolsa': 'Bags', 'clutch': 'Bags', 'tote': 'Bags', 'pochete': 'Bags',
-  'cinto': 'Accessories', 'lenco': 'Accessories', 'oculos': 'Accessories',
-  'colar': 'Jewelry', 'brinco': 'Jewelry', 'pulseira': 'Jewelry'
+  'bolsa': 'Bags', 'clutch': 'Bags', 'tote': 'Bags', 'pochete': 'Bags', 'mochila': 'Bags',
+  'cinto': 'Accessories', 'lenco': 'Accessories', 'oculos': 'Accessories', 'chapeu': 'Accessories',
+  'colar': 'Jewelry', 'brinco': 'Jewelry', 'pulseira': 'Jewelry', 'anel': 'Jewelry'
 };
 
 // ── O tipo da peça: a fórmula do look ──
@@ -8346,7 +8379,9 @@ function lerReceita(texto) {
   // Separava só por vírgula, e ela escreve como fala: "camisa azul e casaco
   // vermelho" virava UMA peça (a camisa), com o casaco sumindo sem aviso. O
   // " e " e o " com " agora separam também.
-  return String(texto || '').replace(/\s+(e|com)\s+/gi, ',').split(',').map(function(pedaco){
+  // O "+" entra junto com " e " / " com ": é a notação que os cartões e as
+  // fórmulas mostram na tela, então o que ela lê é o que ela pode digitar.
+  return String(texto || '').replace(/\s*\+\s*/g, ',').replace(/\s+(e|com)\s+/gi, ',').split(',').map(function(pedaco){
     var palavras = textoParaBusca(pedaco).split(' ').filter(Boolean);
     if (!palavras.length) return null;
     var categoria = null;
@@ -11899,6 +11934,190 @@ function renderEscolhaDePecaBase() {
       + (uso[String(p.id)] ? '<div class="trip-shoe-marca">em ' + uso[String(p.id)] + ' look(s) seus</div>' : '')
       + '</div>';
   }).join('');
+}
+
+// ── Montar por uma fórmula que ela pediu ──
+// "saia com camisa e sapato". A estrutura vem dela; quem escolhe dentro de cada
+// vaga é o gosto dela — as peças que já saíram juntas, os pares que ela votou,
+// as regras que escreveu. Mesmo leitor da receita da inspiração: lerReceita já
+// separa por " e " e " com ", que é como ela fala.
+//
+// Sem isso, pedir saia era impossível: o construtor sorteia, e saia aparece em
+// 1 dos 68 looks dela. Nenhum sorteio ia chegar lá.
+function pecasPelaFormula(slots, evitar) {
+  var evita = evitar || [];
+  var ids = [], escolhidas = [];
+  slots.forEach(function(slot){
+    var livre = function(p){ return !pecaArquivada(p.id) && ids.indexOf(p.id) === -1; };
+    var candidatas = slot.tipo
+      ? allPecas().filter(function(p){ return livre(p) && tipoDaPeca(p) === slot.tipo; })
+      : [];
+    if (!candidatas.length) {
+      candidatas = allPecas().filter(function(p){ return livre(p) && p.category === slot.categoria; });
+    }
+    var frescas = candidatas.filter(function(p){ return evita.indexOf(p.id) === -1; });
+    if (frescas.length) candidatas = frescas;
+    if (!candidatas.length) return;
+
+    var escolhida;
+    if (!escolhidas.length && !slot.cor) {
+      // A primeira peça não tem com o que combinar ainda. Quem escolhe é o
+      // rodízio, e é o que ela quer: pedindo saia, as 4 saias entram na roda em
+      // vez de sair sempre a mesma.
+      escolhida = weightedRandomPiece(candidatas, fatorDeRodizioDaPeca);
+    } else {
+      var comNota = candidatas.map(function(p){
+        var n = notaDaPecaNoLook(p, escolhidas);
+        if (slot.cor) {
+          n += proximidadeDeCor((perfilDaCor(slot.cor) || {}).rgb, (perfilDaCor(p.color) || {}).rgb) * 3;
+        }
+        return { p: p, n: n };
+      }).sort(function(a, b){ return b.n - a.n; });
+      var teto = comNota[0].n, piso = comNota[comNota.length - 1].n;
+      var largura = Math.max(0.15, (teto - piso) * 0.25);
+      var faixa = comNota.filter(function(x){ return teto - x.n <= largura; });
+      if (faixa.length < 3) faixa = comNota.slice(0, 3);
+      escolhida = weightedRandomPiece(faixa.map(function(x){ return x.p; }), fatorDeRodizioDaPeca);
+    }
+    if (escolhida) { ids.push(escolhida.id); escolhidas.push(escolhida); }
+  });
+  return ids;
+}
+
+// As fórmulas que valem oferecer: as das fotos que ela salvou (as formas que ela
+// curte) e as que ela repete nos próprios looks. As das fotos vêm primeiro de
+// propósito — saia aparece em 3 das 17 inspirações e em 1 dos 68 looks dela.
+function formulasSugeridas() {
+  // Quantos looks dela usam cada tipo. Serve pra medir o quanto uma fórmula é
+  // novidade pra ela.
+  var usoDoTipo = {};
+  (montagens || []).forEach(function(m){
+    var vistos = {};
+    slotsDoLook(m.pieceIds || []).forEach(function(sl){
+      if (!sl.tipo || vistos[sl.tipo]) return;
+      vistos[sl.tipo] = 1;
+      usoDoTipo[sl.tipo] = (usoDoTipo[sl.tipo] || 0) + 1;
+    });
+  });
+
+  function juntar(slots) {
+    return slots.slice()
+      .sort(function(a, b){
+        var ca = a.cat || a.categoria, cb = b.cat || b.categoria;
+        return ORDEM_DA_FORMULA.indexOf(ca) - ORDEM_DA_FORMULA.indexOf(cb);
+      })
+      .map(function(s){ return s.tipo ? nomeDoTipo(s.tipo) : null; }).filter(Boolean).join(' + ');
+  }
+  // O tipo mais raro da fórmula: é ele que decide se vale oferecer. Saia sai em
+  // 1 dos 68 looks dela e colete em nenhum — são essas que ela nunca vai
+  // encontrar sozinha.
+  function raridade(slots) {
+    return Math.min.apply(null, slots.filter(function(s){ return s.tipo; })
+      .map(function(s){ return usoDoTipo[s.tipo] || 0; }).concat([999]));
+  }
+
+  var vistas = {}, dasFotos = [], dela = [];
+  (inspiracoes || []).forEach(function(it){
+    var slots = lerReceita(it.receita);
+    var txt = juntar(slots);
+    if (!txt || txt.indexOf(' + ') === -1 || vistas[txt]) return;
+    vistas[txt] = 1;
+    dasFotos.push({ texto: txt, de: 'foto', raro: raridade(slots) });
+  });
+  dasFotos.sort(function(a, b){ return a.raro - b.raro; });
+
+  formulasDela().forEach(function(f){
+    var txt = juntar(f.slots);
+    if (!txt || txt.indexOf(' + ') === -1 || vistas[txt]) return;
+    vistas[txt] = 1;
+    dela.push({ texto: txt, de: 'seus', n: f.n });
+  });
+
+  return dasFotos.slice(0, 6).concat(dela.slice(0, 4));
+}
+
+var formulaAlvo = null;
+
+function abrirEscolhaDeFormula(day, alvo, turno) {
+  formulaAlvo = { day: day, alvo: alvo || 'atual', turno: (turno === 'noite') ? 'noite' : 'dia' };
+  document.getElementById('formulaTitulo').textContent =
+    'Montar como? · ' + day
+    + (formulaAlvo.turno === 'noite' ? ' à noite' : '')
+    + (formulaAlvo.alvo === 'proxima' ? ' da próxima semana' : '');
+  var campo = document.getElementById('formulaBusca');
+  campo.value = '';
+  renderFormulasSugeridas();
+  document.getElementById('formulaOverlay').classList.add('open');
+  setTimeout(function(){ campo.focus(); }, 60);
+}
+
+function fecharEscolhaDeFormula() {
+  document.getElementById('formulaOverlay').classList.remove('open');
+  formulaAlvo = null;
+}
+
+function renderFormulasSugeridas() {
+  var grid = document.getElementById('formulaChips');
+  if (!grid) return;
+  var lista = formulasSugeridas();
+  grid.innerHTML = lista.map(function(f){
+    // "você repete Nx" seria mentira: 64 dos 69 looks salvos dela foram o app
+    // que montou. O rótulo diz o que o número é de verdade.
+    var etiqueta = f.de === 'foto' ? 'de uma foto sua' : (f.n + 'x nos looks salvos');
+    return '<button class="formula-chip" onclick="montarComEssaFormula(' + JSON.stringify(f.texto).replace(/"/g, '&quot;') + ')">'
+      + '<span class="formula-chip-txt">' + tripEsc(f.texto) + '</span>'
+      + '<span class="formula-chip-de">' + etiqueta + '</span></button>';
+  }).join('');
+}
+
+function formulaDigitou(e) {
+  if (e && e.key === 'Enter') montarComEssaFormula(document.getElementById('formulaBusca').value);
+}
+
+function montarComEssaFormula(texto) {
+  if (!formulaAlvo) return;
+  var alvo = formulaAlvo;
+  var slots = completarReceita(lerReceita(texto));
+  if (!slots.length) {
+    showSavedToast('Não entendi a fórmula. Tente "saia com camisa e sapato".');
+    return;
+  }
+  fecharEscolhaDeFormula();
+  montarPelaFormulaNoDia(texto, slots, alvo.day, alvo.alvo, alvo.turno);
+}
+
+function montarPelaFormulaNoDia(texto, slots, day, alvo, turno) {
+  var jaExistem = montagens.map(function(m){ return (m.pieceIds || []).slice().sort().join('|'); });
+  var ids = null;
+  for (var i = 0; i < 14 && !ids; i++) {
+    var tentativa = pecasPelaFormula(slots, []);
+    var ps = tentativa.map(findPieceById).filter(Boolean);
+    if (ps.length < 2) continue;
+    if (lookBateEmRegra(ps)) continue;
+    if (quantasEstampas(ps) > 1) continue;          // ela reclamou disso cinco vezes
+    if (jaExistem.indexOf(ps.map(function(p){ return p.id; }).sort().join('|')) !== -1) continue;
+    ids = tentativa;
+  }
+  if (!ids) {
+    showSavedToast('Não consegui montar "' + texto + '" sem repetir um look que você já tem.');
+    return;
+  }
+  var novo = {
+    id: 'm_' + Date.now() + '_' + Math.floor(Math.random() * 100000),
+    name: formulaDoLook(ids) + ' — ' + day,
+    pieceIds: ids,
+    createdAt: new Date().toISOString(),
+    source: 'auto',
+    formulaPedida: texto,
+    baseId: null, corPedida: null,
+    weekday: null, weekdayNext: null, weekdayNoite: null, weekdayNoiteNext: null
+  };
+  novo[campoMontadoDe(alvo, turno)] = chaveDoDia(day);
+  montagens.push(novo);
+  saveMontagens();
+  renderWeek();
+  if (typeof renderGrid === 'function') renderGrid();
+  showSavedToast('Montei ' + formulaDoLook(ids) + ' pra ' + day + (turno === 'noite' ? ' à noite' : '') + '.');
 }
 
 function montarComEssaPeca(pieceId) {
