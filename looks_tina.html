@@ -14255,22 +14255,30 @@ function sudokuAprovar() {
 
 function sudokuDistribuirPelosDias() {
   var combos = sudokuCombinacoes(sudokuSel);
-  var O = sudokuSel.grupos.Outerwear;
   tripUso = {};
+  // Cada TURNO ganha uma combinação própria, não cada dia. Ela não quer repetir
+  // a mesma calça de dia e à noite — e não precisa: 14 dias são 28 turnos, e o
+  // método dá 27 combinações. Uma só se repete na viagem inteira.
+  // O quadrado latino de sudokuCombinacoes muda cima, baixo e 3ª peça a cada
+  // passo, então turnos vizinhos nunca dividem peça de roupa: nem dia com
+  // noite, nem a noite de um dia com a manhã do seguinte.
+  function montar(c, f, turno, i) {
+    // O sapato alterna por DIA, não só entre dia e noite. Sem isso os looks de
+    // dia num clima quente repetiam: sem a 3ª peça sobram só 3×3 = 9 pares
+    // cima+baixo, e o dia 10 saía igual ao dia 1. Alternando, viram 18.
+    var s = sudokuSapatos.length;
+    var sapato = s ? sudokuSapatos[(i + (turno === 'noite' ? 1 : 0)) % s] : null;
+    var ids = [c.top.id, c.bottom.id];
+    if (sapato) ids.push(sapato.id);
+    // De dia a 3ª peça só entra no frio; à noite entra sempre, que é quando esfria.
+    if (turno === 'noite' || tripFrio(f.profile)) ids.push(c.outer.id);
+    if (sudokuBolsa) ids.push(sudokuBolsa.id);
+    ids.forEach(function(id){ tripUso[id] = (tripUso[id] || 0) + 1; });
+    return ids;
+  }
   tripDays = tripForecast.map(function(f, i){
-    var c = combos[i % combos.length];
-    var frio = tripFrio(f.profile);
-    var sapatoDia = sudokuSapatos[i % Math.max(1, sudokuSapatos.length)];
-    var sapatoNoite = sudokuSapatos[(i + 1) % Math.max(1, sudokuSapatos.length)];
-    // De dia a 3ª peça só entra no frio; à noite entra sempre, e é outra —
-    // é a camada que muda o look sem trocar de roupa.
-    var outroOuter = O[(O.indexOf(c.outer) + 1) % O.length];
-    var dia = [c.top.id, c.bottom.id, sapatoDia.id];
-    if (frio) dia.push(c.outer.id);
-    if (sudokuBolsa) dia.push(sudokuBolsa.id);
-    var noite = [c.top.id, c.bottom.id, sapatoNoite.id, outroOuter.id];
-    if (sudokuBolsa) noite.push(sudokuBolsa.id);
-    dia.concat(noite).forEach(function(id){ tripUso[id] = (tripUso[id] || 0) + 1; });
+    var dia = montar(combos[(i * 2) % combos.length], f, 'dia', i);
+    var noite = montar(combos[(i * 2 + 1) % combos.length], f, 'noite', i);
     return {
       date: f.date, day: f.day, dateLabel: f.dateLabel, temp: f.temp, cond: f.cond,
       profile: f.profile, estimated: f.estimated,
