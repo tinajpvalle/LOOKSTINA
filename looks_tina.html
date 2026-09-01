@@ -431,6 +431,11 @@ body.week-pick-mode .card-week-btn { display: block; }
 .trip-picker-vazio { grid-column: 1/-1; font-size: .8rem; color: var(--txt-3); padding: 18px 4px; }
 .montado-peca-x { position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--line-input); background: var(--surface); color: var(--txt-2); cursor: pointer; font-size: .7rem; line-height: 1; display: flex; align-items: center; justify-content: center; font-family: inherit; }
 .montado-peca-x:hover { background: var(--ink); border-color: var(--ink); color: var(--surface); }
+.montado-peca-trocar { position: absolute; top: 6px; left: 6px; height: 24px; padding: 0 9px;
+  border-radius: 12px; border: 1px solid var(--line-input); background: var(--surface);
+  color: var(--txt-2); cursor: pointer; font-size: .68rem; line-height: 1; display: flex;
+  align-items: center; font-family: inherit; }
+.montado-peca-trocar:hover { background: var(--ink); border-color: var(--ink); color: var(--surface); }
 .montado-add-cat { font-size: .72rem; padding: 4px 10px; }
 .trip-shoe-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding-bottom: 96px; }
 .trip-shoe-card { position: relative; border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; cursor: pointer; background: var(--surface); }
@@ -4331,6 +4336,76 @@ function montadoAtual() {
 // por categoria que falta, e quem escolhe sou eu. Look montado não tem clima de
 // destino, então a nota olha o que já está no look — o voto dela naquele par, a
 // paleta e a compatibilidade — mais o rodízio, pra não vir sempre a mesma.
+// Trocar UMA peça do look, no lugar. Dava pra tirar (✕) e pra acrescentar, mas
+// não pra trocar: tirar a bolsa e pedir outra devolvia qualquer bolsa, e ela
+// perdia a posição da peça no look. Agora ela aponta a que não quer e recebe
+// outra do MESMO tipo — bolsa por bolsa, sandália por sandália, não bolsa por
+// mochila. A categoria só entra se o tipo não render candidata.
+function trocarPecaDoMontado(pid) {
+  var m = montadoAtual();
+  if (!m) return;
+  var idx = (m.pieceIds || []).map(String).indexOf(String(pid));
+  if (idx === -1) return;
+  var saindo = findPieceById(pid);
+  if (!saindo) return;
+  var noLook = (m.pieceIds || []).filter(function(i){ return String(i) !== String(pid); })
+    .map(findPieceById).filter(Boolean);
+
+  var tipo = tipoDaPeca(saindo);
+  // As que ela acabou de tirar deste look não voltam já. Sem isso, tocando
+  // "trocar" três vezes a mesma bolsa reaparecia na terceira — ela tira porque
+  // não quer, e a peça volta dois cliques depois.
+  var agora = (m.pieceIds || []).map(String);
+  var recemTiradas = {};
+  (historicoAutoMontados[m.id] || []).slice(-4).forEach(function(antes){
+    (antes || []).map(String).forEach(function(i){ if (agora.indexOf(i) === -1) recemTiradas[i] = 1; });
+  });
+  recemTiradas[String(pid)] = 1;
+  var livre = function(p){
+    return String(p.id) !== String(pid)
+      && agora.indexOf(String(p.id)) === -1
+      && !pecaArquivada(p.id) && !tripEhDeCasa(p);
+  };
+  var pool = tipo ? allPecas().filter(function(p){ return livre(p) && tipoDaPeca(p) === tipo; }) : [];
+  if (!pool.length) pool = allPecas().filter(function(p){ return livre(p) && p.category === saindo.category; });
+  // As recém-tiradas só voltam se não sobrar mais nada — ela tem 2 mules, e
+  // sumir com as duas deixaria o botão morto.
+  var frescas = pool.filter(function(p){ return !recemTiradas[String(p.id)]; });
+  if (frescas.length) pool = frescas;
+  if (!pool.length) {
+    showSavedToast('Não tenho outra ' + (nomeDoTipo(tipo) || 'peça') + ' pra pôr no lugar.');
+    return;
+  }
+
+  var melhor = null, melhorNota = -Infinity;
+  pool.forEach(function(p){
+    if (pecaProibidaComAsOutras(p, noLook)) return;
+    var nota = tripNotaAprendida(p, noLook) * 3.5
+      + tripNotaPaleta(p, noLook) * 2.5
+      + tripMediaCompat(p, noLook) * 2
+      + fatorDeRodizioDaPeca(p) * 0.8
+      + Math.random() * 1.2;
+    if (noLook.some(function(q){ return tripQuaseIgual(q, p); })) nota -= 4;
+    // Duas estampas é a regra que ela mais repetiu.
+    if (temEstampa(p) && noLook.some(temEstampa)) nota -= 3.5;
+    if (nota > melhorNota) { melhorNota = nota; melhor = p; }
+  });
+  if (!melhor) { showSavedToast('Tudo desse tipo briga com alguma regra sua neste look.'); return; }
+
+  // Trocar é um "não" mais preciso que o "gerar outro": ela apontou ESTA peça,
+  // com as outras ficando. Só os pares dela contra as que ficaram.
+  registrarRecusaDaPeca(pid, noLook.map(function(p){ return p.id; }));
+
+  if (!historicoAutoMontados[m.id]) historicoAutoMontados[m.id] = [];
+  historicoAutoMontados[m.id].push((m.pieceIds || []).slice());
+  m.pieceIds[idx] = melhor.id;                       // no lugar, pra não embaralhar o look
+  contarPecaNoMontador(melhor.id); anotarPecaMostrada(melhor.id); salvarRodizioDePecas();
+  saveMontagens();
+  openMontadoDetail(m.id);
+  renderLooksMontados();
+  showSavedToast(tripNomeCurto(saindo) + ' saiu, ' + tripNomeCurto(melhor) + ' entrou. Toca de novo pra ver outra.');
+}
+
 function sugerirPecaParaMontado(cat) {
   var m = montadoAtual();
   if (!m) return;
@@ -4590,6 +4665,12 @@ function openMontadoDetail(id) {
         x.title = 'Tirar esta peça do look';
         x.onclick = (function(pid){ return function(e){ e.stopPropagation(); removerPecaDoMontado(pid); }; })(p.id);
         card.appendChild(x);
+        var tr = document.createElement('button');
+        tr.className = 'montado-peca-trocar';
+        tr.textContent = 'trocar';
+        tr.title = 'Põe outra ' + (nomeDoTipo(tipoDaPeca(p)) || 'peça') + ' no lugar desta';
+        tr.onclick = (function(pid){ return function(e){ e.stopPropagation(); trocarPecaDoMontado(pid); }; })(p.id);
+        card.appendChild(tr);
       }
       grid.appendChild(card);
     });
@@ -11664,6 +11745,22 @@ function registrarRecusa(ids) {
   saveRecusas();
 }
 
+// Recusa dirigida: ela trocou ESTA peça e manteve as outras. Vale mais que o
+// "gerar outro", que acusa as dez duplas do look de uma vez — aqui ela apontou.
+function registrarRecusaDaPeca(pid, outras) {
+  var lista = (outras || []).map(String).filter(function(i){ return findPieceById(i); });
+  if (!findPieceById(pid) || !lista.length) return;
+  if (!recusas.pares) recusas.pares = {};
+  if (!recusas.pecas) recusas.pecas = {};
+  recusas.total = (recusas.total || 0) + 1;
+  recusas.pecas[String(pid)] = (recusas.pecas[String(pid)] || 0) + 1;
+  lista.forEach(function(i){
+    var k = chaveDoPar(String(pid), i);
+    recusas.pares[k] = (recusas.pares[k] || 0) + 1;
+  });
+  saveRecusas();
+}
+
 // Quanto o par pesa contra. Só conta o que ela recusa MAIS do que guarda: uma
 // peça que ela usa muito apareceria em muitas recusas só por aparecer muito.
 function pesoDaRecusa(a, b, juntas) {
@@ -18307,7 +18404,7 @@ function applySuggestions() {
     <div style="text-align:center;margin-bottom:20px;">
       <button class="btn btn-ghost" onclick="ampliarLookMontado()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><circle cx="10.6" cy="10.6" r="6.6"/><path d="M15.4 15.4 20.5 20.5M10.6 7.8v5.6M7.8 10.6h5.6"/></svg> Ampliar look</button>
     </div>
-    <div style="font-size:.72rem;color:#A8A8A4;margin-bottom:6px;">Peças do look — toca no ✕ pra tirar</div>
+    <div style="font-size:.72rem;color:#A8A8A4;margin-bottom:6px;">Peças do look — "trocar" põe outra no lugar, ✕ tira</div>
     <div id="montadoAddBar" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px;"></div>
     <div id="montadoPicker" style="display:none;margin-bottom:16px;">
       <div class="trip-cat-bar" id="montadoPickerCats"></div>
