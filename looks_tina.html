@@ -756,7 +756,8 @@ body.week-pick-mode .card-week-btn { display: block; }
 .sudoku-trocar:hover { border-color: var(--accent); color: #1A1A1A; }
 .sudoku-extras { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; align-items: flex-end; }
 .sudoku-extras-rot { font-size: .7rem; color: #A8A8A4; width: 100%; }
-.sudoku-extra { width: 74px; font-size: .62rem; line-height: 1.2; color: #6E6E6A; }
+.sudoku-extra { width: 74px; font-size: .62rem; line-height: 1.2; color: #6E6E6A;
+  display: flex; flex-direction: column; gap: 3px; align-items: flex-start; }
 .sudoku-extra img { width: 100%; aspect-ratio: 1/1; object-fit: contain; display: block; }
 .trip-repeticao { display: flex; align-items: center; gap: 5px; flex-wrap: wrap;
   width: 100%; margin: -6px 0 14px; padding: 0 2px; }
@@ -13975,9 +13976,9 @@ function sudokuNotaDoConjunto(pecas) {
       soma += v; n++;
     }
   }
-  // Peça neutra conta a favor: cada peça do conjunto aparece em 9 dos 27 looks,
-  // então uma cor gritante ali pesa nove vezes. É o "9 peças BEM escolhidas" do
-  // método — não é sobre gosto, é sobre quantas vezes a peça vai sair.
+  // (o bônus que eu dava por peça neutra saiu daqui — era ele, junto com o
+  // "maximize o pior par", que deixava a mala sem graça. O número fica só pra
+  // mostrar na tela.)
   var neutras = pecas.filter(function(p){
     var perfil = perfilDaCor(p.color);
     return perfil && perfil.neutra;
@@ -13986,10 +13987,22 @@ function sudokuNotaDoConjunto(pecas) {
   return { pior: pior, media: soma / n, neutras: neutras };
 }
 
+// "Tudo funciona com tudo" é um PISO, não uma coisa pra maximizar. Enquanto eu
+// maximizava o pior par, o conjunto saía covarde: peça marcante é ótima com
+// umas coisas e ruim com outras, então o piso dela é baixo e ela era eliminada;
+// neutro tem piso alto e teto nenhum. Davam 7 neutras em 9 e ela disse que a
+// mala ficou sem graça.
+// A média mostra que eu estava errado: neutro+cor tira 1,75, dois neutros 1,36.
+// Então: primeiro nenhum par pode ser ruim, e entre os conjuntos que passam,
+// vence o mais interessante — não o mais seguro.
+var SUDOKU_PISO = 1.0;
+
 function sudokuMelhorQue(a, b) {
   if (!b) return true;
-  if (a.pior !== b.pior) return a.pior > b.pior;
-  return (a.media + (a.neutras || 0) * 0.2) > (b.media + (b.neutras || 0) * 0.2);
+  var passa = a.pior >= SUDOKU_PISO, passaB = b.pior >= SUDOKU_PISO;
+  if (passa !== passaB) return passa;
+  if (!passa) return a.pior > b.pior;   // se nenhum limpa o piso, o menos ruim
+  return a.media > b.media;
 }
 
 // Dentro de um grupo as 3 peças têm que ser DIFERENTES entre si. Sem isto o
@@ -14196,6 +14209,41 @@ function sudokuTrocar(cat, idx) {
   showSavedToast(tripNomeCurto(melhor) + ' entrou no lugar.');
 }
 
+// Sapato e bolsa também se trocam. Eles saem em TODOS os 28 looks, então errar
+// aqui pesa mais do que errar numa das 9 — e ela não tinha como consertar.
+function sudokuTrocarExtra(i) {
+  var ehBolsa = (i === -1);
+  var saindo = ehBolsa ? sudokuBolsa : sudokuSapatos[i];
+  if (!saindo) return;
+  var cat = ehBolsa ? 'Bags' : 'Shoes';
+  (sudokuRecusadas[cat] = sudokuRecusadas[cat] || []).push(saindo.id);
+  registrarRecusa([saindo.id].concat(sudokuSel.pecas.map(function(p){ return p.id; })));
+
+  var fixos = sudokuSel.pecas.concat(
+    ehBolsa ? sudokuSapatos : sudokuSapatos.filter(function(p){ return p !== saindo; }),
+    (!ehBolsa && sudokuBolsa) ? [sudokuBolsa] : []);
+  var perfil = tripPerfilDominante();
+  var pool = piecesByCategory(cat).filter(function(p){
+    if (p.archived || pecaArquivada(p.id)) return false;
+    if (tripEhDeCasa(p) || temEstampa(p)) return false;     // sai em todos os looks
+    if (tripClimaScore(p, perfil) < 0) return false;
+    if (fixos.indexOf(p) !== -1) return false;
+    if ((sudokuRecusadas[cat] || []).indexOf(p.id) !== -1) return false;
+    if (fixos.some(function(q){ return tripQuaseIgual(q, p); })) return false;
+    if (pecaProibidaComAsOutras(p, fixos)) return false;
+    return true;
+  });
+  var melhor = null, melhorNota = null;
+  pool.forEach(function(p){
+    var nota = sudokuNotaDoConjunto(fixos.concat([p]));
+    if (sudokuMelhorQue(nota, melhorNota)) { melhorNota = nota; melhor = p; }
+  });
+  if (!melhor) { showSavedToast('Não tenho outro que funcione com as nove.'); return; }
+  if (ehBolsa) sudokuBolsa = melhor; else sudokuSapatos[i] = melhor;
+  renderSudoku();
+  showSavedToast(tripNomeCurto(melhor) + ' entrou no lugar.');
+}
+
 function sudokuCelula(cat, idx, rotulo) {
   var p = sudokuSel.grupos[cat][idx];
   if (!p) return '<div class="sudoku-cel"></div>';
@@ -14223,9 +14271,12 @@ function renderSudoku() {
   var extras = document.getElementById('sudokuExtras');
   var mais = sudokuSapatos.concat(sudokuBolsa ? [sudokuBolsa] : []);
   extras.innerHTML = '<div class="sudoku-extras-rot">E mais, que o método não conta mas a viagem pede:</div>'
-    + mais.map(function(p){
+    + mais.map(function(p, i){
+        var ehBolsa = (p === sudokuBolsa);
         return '<div class="sudoku-extra"><img src="' + tripEsc(p.img) + '" alt="">'
-          + '<span>' + tripEsc(tripNomeCurto(p)) + '</span></div>';
+          + '<span>' + tripEsc(tripNomeCurto(p)) + '</span>'
+          + '<button class="sudoku-trocar" onclick="sudokuTrocarExtra(' + (ehBolsa ? -1 : i) + ')">trocar</button>'
+          + '</div>';
       }).join('');
 
   document.getElementById('sudokuResumo').textContent =
