@@ -736,6 +736,15 @@ body.week-pick-mode .card-week-btn { display: block; }
 .insp-palette { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-bottom: 6px; }
 .insp-dot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(0,0,0,.12); display: inline-block; }
 .insp-palette-txt { font-size: .66rem; color: #A8A8A4; }
+.trip-sudoku-card { display: flex; align-items: center; gap: 11px; width: 100%; text-align: left;
+  padding: 12px 13px; margin: 0 0 14px; border: 1px solid var(--line); border-radius: var(--r-md);
+  background: var(--bg-1); cursor: pointer; font-family: inherit; color: inherit; }
+.trip-sudoku-card:hover { border-color: var(--accent); }
+.trip-sudoku-icone { flex-shrink: 0; color: #8C8C88; display: flex; }
+.trip-sudoku-txt { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.trip-sudoku-txt strong { font-size: .86rem; font-weight: 600; }
+.trip-sudoku-txt small { font-size: .7rem; color: var(--txt-2); line-height: 1.35; }
+.trip-sudoku-seta { flex-shrink: 0; color: #A8A8A4; font-size: 1.1rem; }
 .sudoku-grade { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .sudoku-cel { border: 1px solid var(--line); border-radius: var(--r-md); padding: 6px;
   display: flex; flex-direction: column; gap: 4px; background: #fff; min-height: 150px; }
@@ -750,7 +759,7 @@ body.week-pick-mode .card-week-btn { display: block; }
 .sudoku-extra { width: 74px; font-size: .62rem; line-height: 1.2; color: #6E6E6A; }
 .sudoku-extra img { width: 100%; aspect-ratio: 1/1; object-fit: contain; display: block; }
 .trip-repeticao { display: flex; align-items: center; gap: 5px; flex-wrap: wrap;
-  width: 100%; margin-top: 7px; }
+  width: 100%; margin: -6px 0 14px; padding: 0 2px; }
 .trip-rep-rot { font-size: .7rem; color: #A8A8A4; }
 .trip-rep-btn { font-size: .7rem; padding: 3px 8px; border: 1px solid #E0E0DB;
   border-radius: 999px; background: #fff; color: #1A1A1A; cursor: pointer; }
@@ -1421,6 +1430,19 @@ body.compare-mode .card-compare-btn { display: flex; }
       <div id="tripStep2" style="display:none;">
         <div class="trip-step-line">Passo 2 · o que vai na mala</div>
         <p class="trip-lead" id="tripShoeLead">Buscando a previsão do destino…</p>
+        <button type="button" class="trip-sudoku-card" id="tripSudokuBtn" onclick="tripAbrirSudoku()">
+          <span class="trip-sudoku-icone">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3">
+              <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/>
+            </svg>
+          </span>
+          <span class="trip-sudoku-txt">
+            <strong>Mala Sudoku &middot; 9 pe&ccedil;as</strong>
+            <small>3 de cima, 3 de baixo, 3 casacos que combinam todos entre si &mdash; 27 looks. Eu indico as 9, voc&ecirc; aprova.</small>
+          </span>
+          <span class="trip-sudoku-seta">&rarr;</span>
+        </button>
+        <div id="tripRepeticao" class="trip-repeticao"></div>
         <div class="trip-fonte-bar" id="tripFonteBar">
           <button type="button" class="trip-fonte-pill active" data-f="pecas" onclick="tripSetFonte('pecas')">Peças</button>
           <button type="button" class="trip-fonte-pill" data-f="meus" onclick="tripSetFonte('meus')">Meus looks</button>
@@ -1453,10 +1475,8 @@ body.compare-mode .card-compare-btn { display: flex; }
        rolagem não é achado (foi o que ela relatou na tela de peças). -->
   <div class="trip-float-bar" id="tripShoeBar" style="display:none;">
     <div class="trip-float-txt" id="tripShoeCount"></div>
-    <div id="tripRepeticao" class="trip-repeticao"></div>
     <div style="display:flex;gap:6px;flex-shrink:0;">
       <button class="btn-back" onclick="tripBackToStep1()">←</button>
-      <button class="btn-back" id="tripSudokuBtn" onclick="tripAbrirSudoku()" title="9 peças que combinam todas entre si — 27 looks">Sudoku</button>
       <button class="btn-next" id="tripBuildBtn" onclick="tripBuild()">Montar mala →</button>
     </div>
   </div>
