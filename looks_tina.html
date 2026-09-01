@@ -736,6 +736,13 @@ body.week-pick-mode .card-week-btn { display: block; }
 .insp-palette { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-bottom: 6px; }
 .insp-dot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(0,0,0,.12); display: inline-block; }
 .insp-palette-txt { font-size: .66rem; color: #A8A8A4; }
+.trip-repeticao { display: flex; align-items: center; gap: 5px; flex-wrap: wrap;
+  width: 100%; margin-top: 7px; }
+.trip-rep-rot { font-size: .7rem; color: #A8A8A4; }
+.trip-rep-btn { font-size: .7rem; padding: 3px 8px; border: 1px solid #E0E0DB;
+  border-radius: 999px; background: #fff; color: #1A1A1A; cursor: pointer; }
+.trip-rep-btn.on { background: #1A1A1A; color: #fff; border-color: #1A1A1A; }
+.trip-rep-conta { font-size: .68rem; color: #A8A8A4; width: 100%; }
 .insp-dot-dela { box-shadow: 0 0 0 2px #fff, 0 0 0 3px #1A1A1A; }
 .insp-dot-tirar { cursor: pointer; }
 .insp-dot-tirar:hover { opacity: .45; }
@@ -1433,6 +1440,7 @@ body.compare-mode .card-compare-btn { display: flex; }
        rolagem não é achado (foi o que ela relatou na tela de peças). -->
   <div class="trip-float-bar" id="tripShoeBar" style="display:none;">
     <div class="trip-float-txt" id="tripShoeCount"></div>
+    <div id="tripRepeticao" class="trip-repeticao"></div>
     <div style="display:flex;gap:6px;flex-shrink:0;">
       <button class="btn-back" onclick="tripBackToStep1()">←</button>
       <button class="btn-next" id="tripBuildBtn" onclick="tripBuild()">Montar mala →</button>
@@ -12889,6 +12897,16 @@ function markTodaySuggestionWorn() {
 var tripName = '';
 var tripStartVal = '';
 var tripNumDays = 0;
+// Quantos dias cada peça cobre. Ela pediu: "14 dias em NY repetindo calças 3
+// dias, camisas 3 dias e casacos 3 dias" — e confirmou que a mesma peça sai de
+// dia e à noite, nos mesmos 3 dias.
+// Em viagem curta repetir não economiza nada, então o padrão só liga a partir
+// de uma semana: até 6 dias cada peça sai um dia, como sempre foi.
+var tripDiasPorPeca = null;   // null = o padrão pelo tamanho da viagem
+function tripDiasPorPecaAtual() {
+  if (tripDiasPorPeca) return tripDiasPorPeca;
+  return tripNumDays >= 7 ? 3 : 1;
+}
 var tripDest = null;        // {nome, label, lat, lon, tz}
 var tripForecast = [];      // um item por dia: {date, day, dateLabel, temp, cond, profile, estimated}
 var tripShoeIds = [];       // os sapatos que ela escolheu
@@ -13381,6 +13399,47 @@ function tripPecasEmTodosOsLooks() {
   }).map(findPieceById).filter(Boolean);
 }
 
+// Quantos dias cada peça cobre, e a mala que sai disso. Ela vê a conta antes de
+// montar: era o que faltava — o app já repetia as blusas ~3 vezes numa viagem
+// de 14 dias e nunca disse.
+function tripEscolherDiasPorPeca(n) {
+  tripDiasPorPeca = n;
+  tripRenderEscolhaBar();
+}
+
+function tripMalaPrevista() {
+  var dias = tripNumDays;
+  var slots = Math.max(0, dias * 2 - (tripMeus.length + tripCatalogo.length));
+  if (slots < 1) return null;
+  var frio = (tripForecast || []).some(function(f){ return tripFrio(f.profile) || f.profile === 'ameno'; });
+  var partes = [
+    [tripAlvoDaCategoria('Tops', slots), 'blusa', 'blusas'],
+    [tripAlvoDaCategoria('Bottoms', slots), 'calça', 'calças'],
+    frio ? [tripAlvoDaCategoria('Outerwear', slots), 'casaco', 'casacos'] : null,
+    [tripAlvoDaCategoria('Shoes', slots), 'sapato', 'sapatos']
+  ].filter(Boolean);
+  return {
+    texto: partes.map(function(x){ return x[0] + ' ' + (x[0] === 1 ? x[1] : x[2]); }).join(' · '),
+    total: partes.reduce(function(t, x){ return t + x[0]; }, 0)
+  };
+}
+
+function tripRenderRepeticao() {
+  var caixa = document.getElementById('tripRepeticao');
+  if (!caixa) return;
+  if (tripNumDays < 3 || tripForecast.length !== tripNumDays) { caixa.innerHTML = ''; return; }
+  var atual = tripDiasPorPecaAtual();
+  var prev = tripMalaPrevista();
+  var opcoes = [1, 2, 3, 4].map(function(n){
+    return '<button class="trip-rep-btn' + (n === atual ? ' on' : '') + '" '
+      + 'onclick="tripEscolherDiasPorPeca(' + n + ')">'
+      + (n === 1 ? 'não repete' : n + ' dias') + '</button>';
+  }).join('');
+  caixa.innerHTML = '<span class="trip-rep-rot">Cada peça sai:</span>' + opcoes
+    + (prev ? '<span class="trip-rep-conta">' + tripEsc(prev.texto)
+        + ' — ' + prev.total + ' peças na mala</span>' : '');
+}
+
 function tripRenderEscolhaBar() {
   var slots = tripNumDays * 2;
   var looks = tripMeus.length + tripCatalogo.length;
@@ -13394,7 +13453,7 @@ function tripRenderEscolhaBar() {
   var faltam = Math.max(0, slots - looks);
   var dica;
   if (carregando) dica = '';
-  else if (!partes.length) dica = 'escolhe peças, looks seus, ou os dois';
+  else if (!partes.length) dica = 'pode montar assim: eu escolho tudo. Ou marque o que você quer levar.';
   else if (faltam === 0) dica = 'seus looks já cobrem os ' + slots + ' looks da viagem';
   else if (tripPecas.length) dica = tripAvisoDeRepeticao(faltam) || ('eu monto os ' + faltam + ' que faltam com as suas peças');
   // (o aviso de blusa saiu daqui: agora eu busco sozinho em vez de avisar)
@@ -13404,8 +13463,14 @@ function tripRenderEscolhaBar() {
     ? 'Buscando o clima do destino…'
     : (tripEsc(txt) + '<small>' + tripEsc(dica) + '</small>');
 
+  tripRenderRepeticao();
+
+  // Antes o botão só ligava depois de ela escolher alguma coisa — a regra era
+  // "nada entra na mala sem ela ter escolhido". Ela pediu o contrário: "eu
+  // quero que vc sugira e monte os looks". Agora dá pra montar do zero, e o que
+  // eu trouxer continua marcado "eu pus", pra ela tirar o que não quiser.
   var btn = document.getElementById('tripBuildBtn');
-  btn.disabled = carregando || (!tripPecas.length && !looks);
+  btn.disabled = carregando;
   btn.style.opacity = btn.disabled ? '.4' : '';
 }
 
@@ -13683,11 +13748,16 @@ function tripMenosUsadas(lista, uso, evitar) {
   return pool.length ? pool : candidatas;
 }
 
-function tripMontarLook(f, turno, uso, evitarIds) {
+function tripMontarLook(f, turno, uso, evitarIds, manter) {
   var noite = (turno === 'noite');
   var perfil = f.profile;
   var evitar = evitarIds || [];
-  var escolhidas = [];
+  // `manter`: a roupa que já está no corpo. À noite ela continua com a mesma
+  // camisa e a mesma calça do dia — foi o que ela pediu ao dizer "posso usar 3x
+  // em dias diferentes": a peça cobre o dia inteiro. O que muda pra noite é
+  // sapato, bolsa, casaco e joia.
+  var escolhidas = (manter || []).slice();
+  var jaTem = function(cat){ return escolhidas.some(function(p){ return p.category === cat; }); };
 
   var sapatos = tripShoeIds.map(findPieceById).filter(Boolean);
   var sapato = tripEscolherDoLook(sapatos, uso, [], perfil, (sapatos.length > 1 ? evitar : null), noite)
@@ -13697,12 +13767,14 @@ function tripMontarLook(f, turno, uso, evitarIds) {
   // Calça segue a mesma regra de rodízio da blusa: a menos usada até aqui, e
   // nunca a que está saindo. A diferença está em quantas se leva — ver
   // tripAlvoDaCategoria.
-  var todasAsCalcas = tripCapsulaPorCategoria('Bottoms');
-  var poolCalca = tripMenosUsadas(todasAsCalcas, uso, evitar);
-  var bottom = tripEscolherDoLook(poolCalca, uso, escolhidas, perfil, evitar, noite)
-            || tripEscolherDoLook(poolCalca, uso, escolhidas, perfil, null, noite)
-            || tripEscolherDoLook(todasAsCalcas, uso, escolhidas, perfil, null, noite);
-  if (bottom) escolhidas.push(bottom);
+  if (!jaTem('Bottoms')) {
+    var todasAsCalcas = tripCapsulaPorCategoria('Bottoms');
+    var poolCalca = tripMenosUsadas(todasAsCalcas, uso, evitar);
+    var bottom = tripEscolherDoLook(poolCalca, uso, escolhidas, perfil, evitar, noite)
+              || tripEscolherDoLook(poolCalca, uso, escolhidas, perfil, null, noite)
+              || tripEscolherDoLook(todasAsCalcas, uso, escolhidas, perfil, null, noite);
+    if (bottom) escolhidas.push(bottom);
+  }
 
   // Blusa diferente a cada look — pedido dela, e é a peça que não se repete numa
   // viagem. A escolha sai sempre entre as menos usadas até agora: enquanto
@@ -13710,12 +13782,14 @@ function tripMontarLook(f, turno, uso, evitarIds) {
   // menor uso. Só "a que nunca saiu" não bastava — com duas blusas pra seis
   // looks a conta ficava 4x contra 2x, porque as outras notas atropelavam o
   // desconto de uso. Assim fica 3x e 3x.
-  var todasAsBlusas = tripCapsulaPorCategoria('Tops');
-  var pool = tripMenosUsadas(todasAsBlusas, uso, evitar);
-  var top = tripEscolherDoLook(pool, uso, escolhidas, perfil, evitar, noite)
-         || tripEscolherDoLook(pool, uso, escolhidas, perfil, null, noite)
-         || tripEscolherDoLook(todasAsBlusas, uso, escolhidas, perfil, null, noite);
-  if (top) escolhidas.push(top);
+  if (!jaTem('Tops')) {
+    var todasAsBlusas = tripCapsulaPorCategoria('Tops');
+    var pool = tripMenosUsadas(todasAsBlusas, uso, evitar);
+    var top = tripEscolherDoLook(pool, uso, escolhidas, perfil, evitar, noite)
+           || tripEscolherDoLook(pool, uso, escolhidas, perfil, null, noite)
+           || tripEscolherDoLook(todasAsBlusas, uso, escolhidas, perfil, null, noite);
+    if (top) escolhidas.push(top);
+  }
 
   // Casaco: no frio sempre; no clima de meia estação, só à noite, que é quando esfria.
   var outers = tripCapsulaPorCategoria('Outerwear');
@@ -13735,7 +13809,13 @@ function tripMontarLook(f, turno, uso, evitarIds) {
     if (acs.length && tripFrio(perfil) && Math.random() < 0.55) escolhidas.push(acs[0]);
   }
 
-  escolhidas.forEach(function(p){ uso[p.id] = (uso[p.id] || 0) + 1; });
+  // A roupa que veio do dia não conta uso de novo: ela já contou de manhã, e
+  // contar duas vezes faria o rodízio achar que a peça saiu o dobro.
+  var vieram = manter || [];
+  escolhidas.forEach(function(p){
+    if (vieram.indexOf(p) !== -1) return;
+    uso[p.id] = (uso[p.id] || 0) + 1;
+  });
   return escolhidas.map(function(p){ return p.id; });
 }
 
@@ -13815,14 +13895,41 @@ function tripQuantosVouMontar() {
 // Quantas peças de cada categoria dão conta de N looks sem ficar repetitivo.
 // Blusa é a que se troca: no máximo duas saídas cada. Calça e sapato repetem sem
 // problema numa viagem — é para isso que a mala serve.
+// Casaco só entra sozinho onde o clima pede: numa viagem de verão seria peso
+// morto na mala.
+// Em quantos dias da viagem o casaco realmente sai: no frio todo dia, no ameno
+// só à noite (que ainda conta como dia com casaco), no quente nenhum.
+function tripDiasComCasaco(seNaoTiverPrevisao) {
+  if (!(tripForecast || []).length) return seNaoTiverPrevisao || 0;
+  return tripForecast.filter(function(f){
+    return tripFrio(f.profile) || f.profile === 'ameno';
+  }).length;
+}
+
+function tripCategoriasPraCompletar() {
+  // Sapato primeiro: blusa e calça são pontuadas contra o sapato da mala, então
+  // escolher o sapato depois seria escolher no escuro.
+  var cats = ['Shoes', 'Tops', 'Bottoms'];
+  if ((tripForecast || []).some(function(f){ return tripFrio(f.profile) || f.profile === 'ameno'; })) {
+    cats.push('Outerwear');
+  }
+  return cats;
+}
+
 function tripAlvoDaCategoria(cat, nMontar) {
-  // Uma blusa por look: ela pediu que nunca se repita. Com teto, pra uma viagem
-  // longa não virar a mala inteira de blusa.
-  if (cat === 'Tops') return Math.max(2, Math.min(nMontar, 10));
-  // (Tops e Bottoms são preenchidos sozinhos em tripMontarPlano; o resto só pelo botão.)
-  // Uma calça por dia: repetir de dia e à noite do mesmo dia é normal numa
-  // viagem, três dias seguidos com a mesma não é.
-  if (cat === 'Bottoms') return Math.max(2, Math.min(Math.ceil(nMontar / 2), 7));
+  // Quantas peças a mala precisa, contada em DIAS. Antes era "no máximo 10
+  // blusas e 7 calças", e o teto travava em 7 dias: a mala de 14 dias saía
+  // idêntica à de 7, com as blusas repetindo ~3 vezes sem ninguém ter decidido
+  // isso. Agora a repetição é o número, e ela vê a conta.
+  var dias = Math.max(1, Math.ceil(nMontar / 2));   // nMontar são turnos: dia + noite
+  var porPeca = Math.max(1, tripDiasPorPecaAtual());
+  if (cat === 'Tops' || cat === 'Bottoms') return Math.max(2, Math.ceil(dias / porPeca));
+  // Casaco entra sozinho agora. Antes só ia se ela marcasse na mão — uma mala
+  // pra Nova York no frio saía sem nenhum.
+  // A conta dele é sobre os dias que PEDEM casaco, não sobre a viagem inteira:
+  // num clima ameno o casaco só sai à noite, e dimensionar por 14 dias levava 5
+  // casacos pra oito dias de uso — dois deles saíam uma vez só.
+  if (cat === 'Outerwear') return Math.max(1, Math.ceil(tripDiasComCasaco(dias) / porPeca));
   if (cat === 'Shoes') return nMontar >= 4 ? 2 : 1;
   return 0;
 }
@@ -13832,7 +13939,7 @@ function tripAlvoDaCategoria(cat, nMontar) {
 function tripCategoriasMagras() {
   var n = tripQuantosVouMontar();
   if (n < 1) return [];
-  return ['Tops','Bottoms','Shoes'].filter(function(cat){
+  return tripCategoriasPraCompletar().filter(function(cat){
     return tripCapsulaPorCategoria(cat).length < tripAlvoDaCategoria(cat, n);
   });
 }
@@ -13931,7 +14038,7 @@ function tripAtualizarPlano() {
     // 'semLook' não entra na conta nem é remontado
   });
   if (vouMontar > 0) {
-    ['Tops','Bottoms'].forEach(function(cat){
+    tripCategoriasPraCompletar().forEach(function(cat){
       var falta = tripAlvoDaCategoria(cat, vouMontar) - tripCapsulaPorCategoria(cat).length;
       if (falta <= 0) return;
       var naMala = tripCapsule.map(findPieceById).filter(Boolean);
@@ -14000,8 +14107,10 @@ function tripMontarPlano() {
   // montar, eu completo — marcado "eu pus", e o que ela tirou não volta.
   var slotsDela = Object.keys(escolhidos.porSlot).length;
   var vouMontar = Math.max(0, tripForecast.length * 2 - slotsDela);
+  // Mala do zero: sem nenhuma peça marcada, vouMontar já é tudo — mas antes o
+  // botão nem chegava aqui.
   if (vouMontar > 0) {
-    ['Tops','Bottoms'].forEach(function(cat){
+    tripCategoriasPraCompletar().forEach(function(cat){
       var falta = tripAlvoDaCategoria(cat, vouMontar) - tripCapsulaPorCategoria(cat).length;
       if (falta <= 0) return;
       var naMala = tripCapsule.map(findPieceById).filter(Boolean);
@@ -14012,6 +14121,10 @@ function tripMontarPlano() {
       });
     });
   }
+
+  // De novo, agora que o preenchimento automático pode ter trazido sapato: sem
+  // isto o sapato que eu mesmo escolhi não entrava em look nenhum.
+  tripAtualizarSapatos();
 
   tripDistribuirPelosDias(escolhidos.porSlot);
 
@@ -14043,7 +14156,7 @@ function tripDistribuirPelosDias(porSlot) {
     if (porSlot[k].tipo === 'meu') feitos.push(tripLookDoMontado(porSlot[k].id));
   });
 
-  function doSlot(f, i, turno, evitar) {
+  function doSlot(f, i, turno, evitar, manter) {
     if (tirados[i + '|' + turno]) return { ids: [], tipo: 'semLook', ref: null };
     var esc = porSlot[i + '|' + turno];
     if (esc && esc.tipo === 'meu') {
@@ -14053,7 +14166,7 @@ function tripDistribuirPelosDias(porSlot) {
     }
     if (esc && esc.tipo === 'catalogo') return { ids: [], tipo: 'catalogo', ref: esc.id };
     if (!podeMontar) return { ids: [], tipo: 'vazio', ref: null };
-    return { ids: tripMontarLookDiferente(f, turno, tripUso, evitar, feitos), tipo: 'montado', ref: null };
+    return { ids: tripMontarLookDiferente(f, turno, tripUso, evitar, feitos, manter), tipo: 'montado', ref: null };
   }
 
   tripDays = tripForecast.map(function(f, i){
@@ -14064,7 +14177,16 @@ function tripDistribuirPelosDias(porSlot) {
     var a = doSlot(f, i, 'dia', ultimoLook.slice());
     d.dia = a.ids; d.diaTipo = a.tipo; d.diaRef = a.ref;
     if (a.ids.length) feitos.push(a.ids);
-    var b = doSlot(f, i, 'noite', d.dia.concat(ultimoLook));
+    // À noite ela sai com a mesma camisa e a mesma calça do dia — é isso que
+    // faz "cada peça sai 3 dias" ser verdade em vez de conta de padaria. O que
+    // troca é sapato, bolsa, casaco e joia. Quando ela mandou não repetir
+    // (diasPorPeca = 1) a noite volta a ser um look inteiro novo.
+    var vestida = (tripDiasPorPecaAtual() > 1 && a.tipo === 'montado')
+      ? d.dia.map(findPieceById).filter(function(p){
+          return p && (p.category === 'Tops' || p.category === 'Bottoms');
+        })
+      : null;
+    var b = doSlot(f, i, 'noite', (vestida ? ultimoLook : d.dia.concat(ultimoLook)), vestida);
     d.noite = b.ids; d.noiteTipo = b.tipo; d.noiteRef = b.ref;
     if (b.ids.length) feitos.push(b.ids);
     ultimoLook = b.ids.length ? b.ids.slice() : d.dia.slice();
@@ -14100,7 +14222,8 @@ function tripCompletarDoArmario() {
     + '. Estão marcadas "eu pus" na lista.');
 }
 function tripBuild() {
-  if (!tripPecas.length && !tripMeus.length && !tripCatalogo.length) return;
+  // Antes daqui saía sem fazer nada quando ela não tinha escolhido nada. Ela
+  // pediu pra montar do zero, então agora só o clima é obrigatório.
   // A previsão chega depois da tela da escolha. Sem esta guarda dava pra montar
   // antes de ela chegar, e a mala saía com os dias da viagem anterior.
   if (tripForecast.length !== tripNumDays) {
@@ -14157,14 +14280,17 @@ function tripLooksIguais(a, b) {
 // dentro, então tentar de novo dá outro resultado; o que não dá pra fazer é
 // prometer o impossível — numa mala pequena o número de combinações acaba, e aí
 // devolve a primeira tentativa em vez de travar.
-function tripMontarLookDiferente(f, turno, uso, evitar, proibidos) {
+function tripMontarLookDiferente(f, turno, uso, evitar, proibidos, manter) {
   var primeira = null;
   var bloqueio = (evitar || []).slice();
-  for (var t = 0; t < 10; t++) {
-    var ids = tripMontarLook(f, turno, uso, bloqueio);
+  // Com a roupa do dia mantida, o look da noite é o mesmo corpo com outro
+  // sapato e outra bolsa: não adianta insistir pra sair "diferente".
+  var tentativas = (manter && manter.length) ? 1 : 10;
+  for (var t = 0; t < tentativas; t++) {
+    var ids = tripMontarLook(f, turno, uso, bloqueio, manter);
     if (!primeira) primeira = ids;
     var repetido = (proibidos || []).some(function(o){ return tripLooksIguais(ids, o); });
-    if (!repetido) return ids;
+    if (!repetido || (manter && manter.length)) return ids;
     ids.forEach(function(id){ if (uso[id]) uso[id]--; }); // desfaz a contagem da tentativa descartada
     // Repetir com a mesma proibição devolvia sempre o mesmo look: a nota é
     // concentrada e o sorteio de desempate não vira o resultado. Cada tentativa
@@ -15335,6 +15461,7 @@ function tripEntradaAtual() {
     name: tripName || '',
     startVal: tripStartVal,
     numDays: tripNumDays,
+    diasPorPeca: tripDiasPorPeca,
     dest: tripDest,
     ocasiao: tripOcasiao,
     fonteClima: tripFonteClima,
@@ -15433,6 +15560,7 @@ function viewSavedTrip(idx) {
   tripName = t.name || '';
   tripStartVal = t.startVal;
   tripNumDays = t.numDays;
+  tripDiasPorPeca = t.diasPorPeca || null;
   tripDest = t.dest || null;
   tripOcasiao = t.ocasiao || 'passeio';
   tripFonteClima = t.fonteClima || 'estimativa';
