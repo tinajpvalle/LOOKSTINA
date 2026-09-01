@@ -731,6 +731,14 @@ body.week-pick-mode .card-week-btn { display: block; }
 .insp-palette { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-bottom: 6px; }
 .insp-dot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(0,0,0,.12); display: inline-block; }
 .insp-palette-txt { font-size: .66rem; color: #A8A8A4; }
+.insp-dot-dela { box-shadow: 0 0 0 2px #fff, 0 0 0 3px #1A1A1A; }
+.insp-dot-tirar { cursor: pointer; }
+.insp-dot-tirar:hover { opacity: .45; }
+.insp-cor-editar { font-size: .66rem; color: #8C8C88; background: none; border: none;
+  padding: 0 2px; cursor: pointer; text-decoration: underline; margin-left: auto; }
+.insp-cor-add { display: flex; flex-wrap: wrap; gap: 5px; margin: -2px 0 8px; }
+.insp-dot-add { width: 14px; height: 14px; padding: 0; cursor: pointer; }
+.insp-dot-add:hover { box-shadow: 0 0 0 2px #fff, 0 0 0 3px #1A1A1A; }
 .insp-receita { width: 100%; box-sizing: border-box; border: 1px solid #E0E0DB; border-radius: 8px; padding: 7px 9px; font-family: inherit; font-size: .76rem; line-height: 1.4; resize: vertical; margin-bottom: 8px; background: #fff; color: #1A1A1A; }
 .insp-receita::placeholder { color: #B0B0AC; }
 .insp-btn { width: 100%; box-sizing: border-box; justify-content: center; white-space: normal; text-align: center; line-height: 1.25; }
@@ -8085,6 +8093,59 @@ function removerInspiracao(id) {
   saveInspiracoes(); renderInspiracoes();
 }
 
+// ── A paleta corrigida por ela ──
+// O leitor de cores erra: na foto do casaco de camurça ele leu "verde · preto ·
+// cinza · branco" numa imagem que é marrom, amarelo, cinza e jeans — perdeu o
+// amarelo e inventou um verde. Ela agora acrescenta e tira cor na mão.
+//
+// As correções ficam guardadas SEPARADAS da leitura automática (coresMais /
+// coresMenos), senão o botão "Reler as cores" apagaria o trabalho dela.
+function paletaDaInspiracao(insp) {
+  if (!insp) return [];
+  var fora = insp.coresMenos || [];
+  var lida = (insp.palette || []).filter(function(c){ return fora.indexOf(c) === -1; });
+  var dela = (insp.coresMais || []).filter(function(c){ return lida.indexOf(c) === -1; });
+  // As dela vêm primeiro: corDeDestaqueDaPaleta dá mais peso a quem vem antes,
+  // e cor que ela apontou com o dedo vale mais que cor que eu adivinhei.
+  return dela.concat(lida);
+}
+
+function inspEmEdicaoDeCor(id) { return INSP_EDITANDO_COR === id; }
+var INSP_EDITANDO_COR = null;
+
+function alternarEdicaoDeCor(id) {
+  INSP_EDITANDO_COR = inspEmEdicaoDeCor(id) ? null : id;
+  renderInspiracoes();
+}
+
+function acrescentarCorNaInspiracao(id, cor) {
+  var insp = inspiracoes.find(function(x){ return x.id === id; });
+  if (!insp) return;
+  insp.coresMenos = (insp.coresMenos || []).filter(function(c){ return c !== cor; });
+  insp.coresMais = insp.coresMais || [];
+  if (insp.coresMais.indexOf(cor) === -1 && (insp.palette || []).indexOf(cor) === -1) {
+    insp.coresMais.push(cor);
+  }
+  saveInspiracoes();
+  renderInspiracoes();
+}
+
+function tirarCorDaInspiracao(id, cor) {
+  var insp = inspiracoes.find(function(x){ return x.id === id; });
+  if (!insp) return;
+  insp.coresMais = (insp.coresMais || []).filter(function(c){ return c !== cor; });
+  if ((insp.palette || []).indexOf(cor) !== -1) {
+    insp.coresMenos = insp.coresMenos || [];
+    if (insp.coresMenos.indexOf(cor) === -1) insp.coresMenos.push(cor);
+  }
+  saveInspiracoes();
+  renderInspiracoes();
+}
+
+function rgbDaCorRef(c) {
+  return (CORES_REF.find(function(x){ return x[0] === c; }) || [null, [200,200,200]])[1];
+}
+
 function relerCoresDaInspiracao(id, botao) {
   var insp = inspiracoes.find(function(x){ return x.id === id; });
   if (!insp || !insp.img) return;
@@ -8477,7 +8538,7 @@ function pecasPelaReceita(insp, evitar) {
   var slots = completarReceita(lerReceita(insp.receita));
   if (!slots.length) return null;
   var evita = evitar || [];
-  var perfisDaPaleta = (insp.palette || []).map(perfilDaCor).filter(Boolean);
+  var perfisDaPaleta = paletaDaInspiracao(insp).map(perfilDaCor).filter(Boolean);
   var ids = [];
 
   slots.forEach(function(slot){
@@ -8532,7 +8593,7 @@ function pecasInspiradasEm(insp, evitar) {
   var pelaReceita = pecasPelaReceita(insp, evitar);
   if (pelaReceita) return pelaReceita;
 
-  var paleta = insp.palette || [];
+  var paleta = paletaDaInspiracao(insp);
   if (!paleta.length) return null;
   var evita = evitar || [];
   var perfisDaPaleta = paleta.map(perfilDaCor).filter(Boolean);
@@ -8670,7 +8731,7 @@ function gerarOutroLookInspirado() {
   if (!m || !m.inspiradoEm) return;
   var insp = inspiracoes.find(function(x){ return x.id === m.inspiradoEm; });
   if (!insp) { showSavedToast('A inspiração desse look foi apagada.'); return; }
-  var novos = pecasInspiradasEm(insp, m.pieceIds || []);
+  var novos = pecasInspiradasLimpas(insp, m.pieceIds || []);
   if (!novos || novos.length < 2) { showSavedToast('Não achei outras peças pra essa paleta.'); return; }
   registrarRecusa(m.pieceIds || []);
   var hist = historicoInspirados[m.id] = historicoInspirados[m.id] || [];
@@ -8685,13 +8746,32 @@ function gerarOutroLookInspirado() {
 }
 
 // Monta um look com as peças dela puxando pras cores da inspiração.
+// O caminho da inspiração era o único que montava sem passar pelas guardas que
+// todos os outros passam: a regra escrita dela e o "no máximo uma estampa".
+// Saía camiseta amarela estampada com calça de flor — a reclamação que ela mais
+// repetiu. Tenta algumas vezes; se nada limpo aparecer, entrega o que tem, que
+// é melhor que não montar nada.
+function pecasInspiradasLimpas(insp, evitar) {
+  var primeiro = null;
+  for (var i = 0; i < 10; i++) {
+    var ids = pecasInspiradasEm(insp, evitar);
+    if (!ids || ids.length < 2) return ids;
+    if (!primeiro) primeiro = ids;
+    var ps = ids.map(findPieceById).filter(Boolean);
+    if (lookBateEmRegra(ps)) continue;
+    if (quantasEstampas(ps) > 1) continue;
+    return ids;
+  }
+  return primeiro;
+}
+
 function montarLookInspirado(id) {
   var insp = inspiracoes.find(function(x){ return x.id === id; });
   if (!insp) return;
-  var ids = pecasInspiradasEm(insp, []);
+  var ids = pecasInspiradasLimpas(insp, []);
   if (ids === null) { showSavedToast('Não consegui ler cores dessa foto.'); return; }
   if (ids.length < 2) { showSavedToast('Não achei peças suficientes.'); return; }
-  var alvo = insp.palette || [];
+  var alvo = paletaDaInspiracao(insp);
 
   montagens.push({
     id: 'm_' + Date.now() + '_' + Math.floor(Math.random()*100000),
@@ -8741,20 +8821,55 @@ function renderInspiracoes() {
     img.onclick = (function(src){ return function(){ openZoom(src, [], 0); }; })(it.img);
     card.appendChild(img);
     var body = document.createElement('div'); body.className = 'pc-card-body';
-    if ((it.palette||[]).length) {
+    var cores = paletaDaInspiracao(it);
+    var editando = inspEmEdicaoDeCor(it.id);
+    if (cores.length || editando) {
       var pal = document.createElement('div'); pal.className = 'insp-palette';
-      it.palette.forEach(function(c){
-        var dot = document.createElement('span'); dot.className = 'insp-dot';
-        var rgb = (CORES_REF.find(function(x){ return x[0] === c; })||[null,[200,200,200]])[1];
-        dot.style.background = 'rgb(' + rgb.join(',') + ')';
-        dot.title = c;
+      cores.forEach(function(c){
+        var dot = document.createElement('span');
+        dot.className = 'insp-dot' + ((it.coresMais||[]).indexOf(c) !== -1 ? ' insp-dot-dela' : '');
+        dot.style.background = 'rgb(' + rgbDaCorRef(c).join(',') + ')';
+        dot.title = c + ((it.coresMais||[]).indexOf(c) !== -1 ? ' (você acrescentou)' : '');
+        if (editando) {
+          dot.classList.add('insp-dot-tirar');
+          dot.title = 'Tirar ' + c + ' da paleta';
+          dot.onclick = (function(iid, cc){ return function(){ tirarCorDaInspiracao(iid, cc); }; })(it.id, c);
+        }
         pal.appendChild(dot);
       });
       var txt = document.createElement('span'); txt.className = 'insp-palette-txt';
-      txt.textContent = it.palette.join(' · ') + (it.recortou === false ? ' (cores da foto toda)' : '');
+      txt.textContent = cores.join(' · ') + (it.recortou === false ? ' (cores da foto toda)' : '');
       if (it.recortou === false) txt.title = 'Não consegui isolar a pessoa nessa foto, então a paleta pode ter pego o fundo.';
       pal.appendChild(txt);
+      var lapis = document.createElement('button');
+      lapis.className = 'insp-cor-editar';
+      lapis.textContent = editando ? 'pronto' : 'ajustar';
+      lapis.title = 'Acrescentar ou tirar cor desta paleta';
+      lapis.onclick = (function(iid){ return function(){ alternarEdicaoDeCor(iid); }; })(it.id);
+      pal.appendChild(lapis);
       body.appendChild(pal);
+    }
+
+    // A leitura de cor erra, e sem isto ela não tinha como consertar: numa foto
+    // de casaco marrom com camiseta amarela ele leu "verde · preto · cinza ·
+    // branco". Aqui ela acrescenta o que faltou e tira o que ele inventou.
+    if (editando) {
+      var faltando = CORES_REF.map(function(x){ return x[0]; })
+        .filter(function(c){ return cores.indexOf(c) === -1; });
+      var linha = document.createElement('div'); linha.className = 'insp-cor-add';
+      faltando.forEach(function(c){
+        var b = document.createElement('button');
+        b.className = 'insp-dot insp-dot-add';
+        b.style.background = 'rgb(' + rgbDaCorRef(c).join(',') + ')';
+        b.title = 'Acrescentar ' + c;
+        b.onclick = (function(iid, cc){ return function(){ acrescentarCorNaInspiracao(iid, cc); }; })(it.id, c);
+        linha.appendChild(b);
+      });
+      var dica = document.createElement('div');
+      dica.style.cssText = 'font-size:.66rem;color:#A8A8A4;width:100%;margin-top:4px;';
+      dica.textContent = 'Toque numa bolinha acima pra tirar, ou numa daqui pra acrescentar.';
+      linha.appendChild(dica);
+      body.appendChild(linha);
     }
     var nota = document.createElement('textarea');
     nota.className = 'day-note'; nota.rows = 2; nota.placeholder = 'O que você gostou nesse look...';
