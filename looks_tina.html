@@ -736,6 +736,19 @@ body.week-pick-mode .card-week-btn { display: block; }
 .insp-palette { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-bottom: 6px; }
 .insp-dot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(0,0,0,.12); display: inline-block; }
 .insp-palette-txt { font-size: .66rem; color: #A8A8A4; }
+.sudoku-grade { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.sudoku-cel { border: 1px solid var(--line); border-radius: var(--r-md); padding: 6px;
+  display: flex; flex-direction: column; gap: 4px; background: #fff; min-height: 150px; }
+.sudoku-cel img { width: 100%; aspect-ratio: 3/4; object-fit: contain; display: block; }
+.sudoku-rot { font-size: .6rem; color: #A8A8A4; text-transform: uppercase; letter-spacing: .04em; }
+.sudoku-nome { font-size: .66rem; line-height: 1.25; flex: 1; }
+.sudoku-trocar { font-size: .64rem; color: #8C8C88; background: none; border: 1px solid var(--line);
+  border-radius: 999px; padding: 2px 8px; cursor: pointer; align-self: flex-start; }
+.sudoku-trocar:hover { border-color: var(--accent); color: #1A1A1A; }
+.sudoku-extras { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; align-items: flex-end; }
+.sudoku-extras-rot { font-size: .7rem; color: #A8A8A4; width: 100%; }
+.sudoku-extra { width: 74px; font-size: .62rem; line-height: 1.2; color: #6E6E6A; }
+.sudoku-extra img { width: 100%; aspect-ratio: 1/1; object-fit: contain; display: block; }
 .trip-repeticao { display: flex; align-items: center; gap: 5px; flex-wrap: wrap;
   width: 100%; margin-top: 7px; }
 .trip-rep-rot { font-size: .7rem; color: #A8A8A4; }
@@ -1443,6 +1456,7 @@ body.compare-mode .card-compare-btn { display: flex; }
     <div id="tripRepeticao" class="trip-repeticao"></div>
     <div style="display:flex;gap:6px;flex-shrink:0;">
       <button class="btn-back" onclick="tripBackToStep1()">←</button>
+      <button class="btn-back" id="tripSudokuBtn" onclick="tripAbrirSudoku()" title="9 peças que combinam todas entre si — 27 looks">Sudoku</button>
       <button class="btn-next" id="tripBuildBtn" onclick="tripBuild()">Montar mala →</button>
     </div>
   </div>
@@ -1459,6 +1473,20 @@ body.compare-mode .card-compare-btn { display: flex; }
       <div class="cor-bar" id="pecaBaseCores"></div>
       <input type="text" id="pecaBaseBusca" class="trip-busca" autocomplete="off" oninput="escolhaDePecaBaseBuscou()">
       <div class="trip-picker-grid" id="pecaBaseGrid" style="padding-bottom:0;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Método Sudoku: 9 peças que combinam todas entre si -->
+<div class="overlay" id="sudokuOverlay" onclick="if(event.target===this) fecharSudoku()">
+  <div class="modal trip-modal">
+    <button class="close-btn" onclick="fecharSudoku()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"/></svg></button>
+    <div class="modal-body">
+      <h3 style="margin-bottom:4px;">M&eacute;todo Sudoku</h3>
+      <div id="sudokuResumo" style="font-size:.78rem;color:var(--txt-2);margin-bottom:12px;"></div>
+      <div id="sudokuGrade" class="sudoku-grade"></div>
+      <div id="sudokuExtras" class="sudoku-extras"></div>
+      <button class="btn btn-week" style="width:100%;justify-content:center;margin-top:14px;" onclick="sudokuAprovar()">Aprovar e montar os looks</button>
     </div>
   </div>
 </div>
@@ -13895,6 +13923,343 @@ function tripQuantosVouMontar() {
 // Quantas peças de cada categoria dão conta de N looks sem ficar repetitivo.
 // Blusa é a que se troca: no máximo duas saídas cada. Calça e sapato repetem sem
 // problema numa viagem — é para isso que a mala serve.
+// ── Método Sudoku ──
+// 3 peças de cima, 3 de baixo, 3 terceiras peças (casaco, blazer, cardigã).
+// 3 × 3 × 3 = 27 looks com 9 peças. O método não é sobre quantas vezes cada
+// peça sai — é sobre TUDO funcionar com TUDO. É um critério de escolha
+// diferente do resto da mala: lá eu escolho peça por peça, pontuando contra o
+// que já está dentro; aqui o que vale é o conjunto inteiro.
+//
+// Por isso a nota do conjunto é o MENOR par, não a média: uma única dupla que
+// não fecha derruba o método, porque essa dupla vai aparecer em 3 dos 27 looks.
+var SUDOKU_GRUPOS = [['Tops', 'cima'], ['Bottoms', 'baixo'], ['Outerwear', '3ª peça']];
+var tripModoSudoku = false;
+
+var _sudokuCache = {};
+function sudokuPar(a, b) {
+  var k = chaveDoPar(a.id, b.id);
+  if (_sudokuCache[k] === undefined) _sudokuCache[k] = notaDePar(a, b).n;
+  return _sudokuCache[k];
+}
+
+// A nota do conjunto: o pior par entre categorias diferentes, com a média como
+// desempate. Pares da mesma categoria não contam — duas calças nunca saem
+// juntas, não precisam combinar.
+function sudokuNotaDoConjunto(pecas) {
+  var pior = Infinity, soma = 0, n = 0;
+  for (var i = 0; i < pecas.length; i++) {
+    for (var j = i + 1; j < pecas.length; j++) {
+      if (pecas[i].category === pecas[j].category) continue;
+      var v = sudokuPar(pecas[i], pecas[j]);
+      if (v < pior) pior = v;
+      soma += v; n++;
+    }
+  }
+  // Peça neutra conta a favor: cada peça do conjunto aparece em 9 dos 27 looks,
+  // então uma cor gritante ali pesa nove vezes. É o "9 peças BEM escolhidas" do
+  // método — não é sobre gosto, é sobre quantas vezes a peça vai sair.
+  var neutras = pecas.filter(function(p){
+    var perfil = perfilDaCor(p.color);
+    return perfil && perfil.neutra;
+  }).length;
+  if (!n) return { pior: 0, media: 0, neutras: neutras };
+  return { pior: pior, media: soma / n, neutras: neutras };
+}
+
+function sudokuMelhorQue(a, b) {
+  if (!b) return true;
+  if (a.pior !== b.pior) return a.pior > b.pior;
+  return (a.media + (a.neutras || 0) * 0.2) > (b.media + (b.neutras || 0) * 0.2);
+}
+
+// Dentro de um grupo as 3 peças têm que ser DIFERENTES entre si. Sem isto o
+// método degenera: maximizar o pior par premia peças quase iguais, e a primeira
+// tentativa devolveu 3 calças cinza, duas delas xadrez — "tudo combina com
+// tudo" satisfeito de um jeito que não dá 27 looks, dá 9 iguais.
+// A regra é a mesma que ela repete: uma estampa por vez, e nada de repetir cor.
+function sudokuCabeNoGrupo(p, doGrupo) {
+  var fam = familiaDaCor(corDaPeca(p));
+  return !doGrupo.some(function(q){
+    if (q.category !== p.category) return false;
+    if (temEstampa(p) && temEstampa(q)) return true;          // uma estampa por grupo
+    return fam && familiaDaCor(corDaPeca(q)) === fam;          // e nunca a mesma cor
+  });
+}
+
+function sudokuPool(cat, perfil) {
+  return piecesByCategory(cat).filter(function(p){
+    if (p.archived || pecaArquivada(p.id)) return false;
+    if (tripEhDeCasa(p)) return false;
+    if (tripClimaScore(p, perfil) < 0) return false;
+    return true;
+  });
+}
+
+// Guloso pra formar o conjunto, depois troca peça por peça enquanto melhorar.
+// Não dá pra testar todas as combinações: com 108 blusas, 52 calças e 28
+// casacos seriam trilhões de conjuntos.
+function tripSudokuEscolher(perfil) {
+  _sudokuCache = {};
+  var pools = {};
+  SUDOKU_GRUPOS.forEach(function(g){ pools[g[0]] = sudokuPool(g[0], perfil); });
+  if (SUDOKU_GRUPOS.some(function(g){ return pools[g[0]].length < 3; })) return null;
+
+  var escolhidas = [];
+  function contaDe(cat) { return escolhidas.filter(function(p){ return p.category === cat; }).length; }
+
+  // Semente: a melhor dupla cima+baixo, que é o par que aparece em todo look.
+  var melhorDupla = null;
+  pools.Tops.forEach(function(t){
+    pools.Bottoms.forEach(function(b){
+      var nota = { pior: sudokuPar(t, b), media: sudokuPar(t, b) };
+      if (sudokuMelhorQue(nota, melhorDupla && melhorDupla.nota)) melhorDupla = { pecas: [t, b], nota: nota };
+    });
+  });
+  escolhidas = melhorDupla.pecas.slice();
+
+  // Completa: a cada rodada entra a peça que menos estraga o pior par.
+  var faltam = true;
+  while (faltam) {
+    faltam = false;
+    SUDOKU_GRUPOS.forEach(function(g){
+      var cat = g[0];
+      if (contaDe(cat) >= 3) return;
+      faltam = true;
+      var melhor = null, melhorNota = null;
+      pools[cat].forEach(function(p){
+        if (escolhidas.indexOf(p) !== -1) return;
+        if (escolhidas.some(function(q){ return tripQuaseIgual(q, p); })) return;
+        if (!sudokuCabeNoGrupo(p, escolhidas)) return;
+        if (pecaProibidaComAsOutras(p, escolhidas)) return;
+        var nota = sudokuNotaDoConjunto(escolhidas.concat([p]));
+        if (sudokuMelhorQue(nota, melhorNota)) { melhorNota = nota; melhor = p; }
+      });
+      if (melhor) escolhidas.push(melhor);
+      else {
+        // Nada passa nas regras dela: afrouxa a proibição pra fechar o conjunto.
+        var q = pools[cat].find(function(p){ return escolhidas.indexOf(p) === -1; });
+        if (q) escolhidas.push(q);
+      }
+    });
+  }
+
+  // Troca peça por peça enquanto melhorar o pior par. É aqui que a semente
+  // gulosa deixa de mandar no resultado.
+  var atual = sudokuNotaDoConjunto(escolhidas);
+  for (var volta = 0; volta < 6; volta++) {
+    var mudou = false;
+    for (var i = 0; i < escolhidas.length; i++) {
+      var cat = escolhidas[i].category;
+      var resto = escolhidas.slice(); resto.splice(i, 1);
+      var melhor = escolhidas[i], melhorNota = atual;
+      pools[cat].forEach(function(p){
+        if (escolhidas.indexOf(p) !== -1) return;
+        if (resto.some(function(q){ return tripQuaseIgual(q, p); })) return;
+        if (!sudokuCabeNoGrupo(p, resto)) return;
+        if (pecaProibidaComAsOutras(p, resto)) return;
+        var nota = sudokuNotaDoConjunto(resto.concat([p]));
+        if (sudokuMelhorQue(nota, melhorNota)) { melhorNota = nota; melhor = p; }
+      });
+      if (melhor !== escolhidas[i]) { escolhidas[i] = melhor; atual = melhorNota; mudou = true; }
+    }
+    if (!mudou) break;
+  }
+
+  var porGrupo = {};
+  SUDOKU_GRUPOS.forEach(function(g){
+    porGrupo[g[0]] = escolhidas.filter(function(p){ return p.category === g[0]; }).slice(0, 3);
+  });
+  return { grupos: porGrupo, pecas: escolhidas, nota: atual };
+}
+
+// As 27 combinações, embaralhadas de um jeito que espalha: sem isso os
+// primeiros dias sairiam todos com a mesma parte de cima.
+function sudokuCombinacoes(sel) {
+  var T = sel.grupos.Tops, B = sel.grupos.Bottoms, O = sel.grupos.Outerwear;
+  var out = [];
+  for (var d = 0; d < 27; d++) {
+    var i = d % 3;
+    var j = (Math.floor(d / 3) + i) % 3;      // quadrado latino: cada cima vê cada baixo
+    var k = (Math.floor(d / 9) + i + j) % 3;
+    out.push({ top: T[i], bottom: B[j], outer: O[k] });
+  }
+  return out;
+}
+
+// ── A tela do Sudoku: eu proponho as 9, ela aprova ──
+var sudokuSel = null;       // { grupos, pecas, nota }
+var sudokuSapatos = [];
+var sudokuBolsa = null;
+var sudokuRecusadas = {};   // por categoria: o que ela já trocou fora, não volta
+
+function sudokuOrdemDosGrupos() { return ['Tops', 'Bottoms', 'Outerwear']; }
+
+function tripAbrirSudoku() {
+  if (tripForecast.length !== tripNumDays) {
+    showSavedToast('Só um instante — ainda estou buscando o clima do destino.');
+    return;
+  }
+  sudokuRecusadas = {};
+  var perfil = tripPerfilDominante();
+  sudokuSel = tripSudokuEscolher(perfil);
+  if (!sudokuSel) { showSavedToast('Não tenho peças suficientes pra montar as 9.'); return; }
+  sudokuEscolherSapatos(perfil);
+  document.getElementById('sudokuOverlay').classList.add('open');
+  renderSudoku();
+}
+
+function fecharSudoku() {
+  document.getElementById('sudokuOverlay').classList.remove('open');
+}
+
+// Sapato e bolsa não estão nas 9 do método, mas viagem precisa deles. Escolhidos
+// pra funcionar com o conjunto inteiro, não com um look só.
+function sudokuEscolherSapatos(perfil) {
+  var as9 = sudokuSel.pecas;
+  // Sapato e bolsa saem em TODOS os 28 looks — muito mais que as 9, que saem em
+  // 9 cada. Então aqui estampa está fora e neutro conta: a primeira versão
+  // trouxe uma bolsa estampada, e ela sozinha punha duas estampas em 8 dos 28
+  // looks, junto com a calça listrada. Não é gosto meu, é aritmética.
+  function melhores(cat, quantas, jaTem) {
+    var pool = piecesByCategory(cat).filter(function(p){
+      if (p.archived || pecaArquivada(p.id)) return false;
+      if (tripEhDeCasa(p) || temEstampa(p)) return false;
+      if (tripClimaScore(p, perfil) < 0) return false;
+      return true;
+    });
+    var out = [];
+    for (var k = 0; k < quantas && pool.length; k++) {
+      var melhor = null, melhorNota = null;
+      pool.forEach(function(p){
+        if (out.indexOf(p) !== -1) return;
+        if (out.some(function(q){ return tripQuaseIgual(q, p); })) return;
+        if (pecaProibidaComAsOutras(p, as9.concat(jaTem, out))) return;
+        var nota = sudokuNotaDoConjunto(as9.concat(jaTem, out, [p]));
+        if (sudokuMelhorQue(nota, melhorNota)) { melhorNota = nota; melhor = p; }
+      });
+      if (!melhor) break;
+      out.push(melhor);
+    }
+    return out;
+  }
+  sudokuSapatos = melhores('Shoes', 2, []);
+  sudokuBolsa = melhores('Bags', 1, sudokuSapatos)[0] || null;
+}
+
+// Trocar uma peça: entra a melhor que ainda cabe no grupo e mantém o conjunto
+// funcionando. O que ela recusou não volta.
+function sudokuTrocar(cat, idx) {
+  var grupo = sudokuSel.grupos[cat];
+  var saindo = grupo[idx];
+  (sudokuRecusadas[cat] = sudokuRecusadas[cat] || []).push(saindo.id);
+  registrarRecusa([saindo.id].concat(sudokuSel.pecas.filter(function(p){ return p !== saindo; }).map(function(p){ return p.id; })));
+
+  var resto = sudokuSel.pecas.filter(function(p){ return p !== saindo; });
+  var pool = sudokuPool(cat, tripPerfilDominante()).filter(function(p){
+    if (resto.indexOf(p) !== -1) return false;
+    if ((sudokuRecusadas[cat] || []).indexOf(p.id) !== -1) return false;
+    if (!sudokuCabeNoGrupo(p, resto)) return false;
+    if (pecaProibidaComAsOutras(p, resto)) return false;
+    return true;
+  });
+  var melhor = null, melhorNota = null;
+  pool.forEach(function(p){
+    var nota = sudokuNotaDoConjunto(resto.concat([p]));
+    if (sudokuMelhorQue(nota, melhorNota)) { melhorNota = nota; melhor = p; }
+  });
+  if (!melhor) { showSavedToast('Não tenho outra ' + cat + ' que combine com as outras oito.'); return; }
+  grupo[idx] = melhor;
+  sudokuSel.pecas = resto.concat([melhor]);
+  sudokuSel.nota = melhorNota;
+  sudokuEscolherSapatos(tripPerfilDominante());
+  renderSudoku();
+  showSavedToast(tripNomeCurto(melhor) + ' entrou no lugar.');
+}
+
+function sudokuCelula(cat, idx, rotulo) {
+  var p = sudokuSel.grupos[cat][idx];
+  if (!p) return '<div class="sudoku-cel"></div>';
+  return '<div class="sudoku-cel">'
+    + '<div class="sudoku-rot">' + rotulo + '</div>'
+    + '<img src="' + tripEsc(p.img) + '" alt="' + tripEsc(p.name) + '">'
+    + '<div class="sudoku-nome">' + tripEsc(tripNomeCurto(p)) + '</div>'
+    + '<button class="sudoku-trocar" onclick="sudokuTrocar(\'' + cat + '\',' + idx + ')">trocar</button>'
+    + '</div>';
+}
+
+function renderSudoku() {
+  var grade = document.getElementById('sudokuGrade');
+  if (!grade || !sudokuSel) return;
+  var rot = { Tops: 'cima', Bottoms: 'baixo', Outerwear: '3ª peça' };
+  // O quadrado latino do método: cada linha tem uma de cada tipo.
+  var linhas = [['Tops','Outerwear','Bottoms'], ['Bottoms','Tops','Outerwear'], ['Outerwear','Bottoms','Tops']];
+  var usados = { Tops: 0, Bottoms: 0, Outerwear: 0 };
+  grade.innerHTML = linhas.map(function(linha){
+    return linha.map(function(cat){
+      return sudokuCelula(cat, usados[cat]++, rot[cat]);
+    }).join('');
+  }).join('');
+
+  var extras = document.getElementById('sudokuExtras');
+  var mais = sudokuSapatos.concat(sudokuBolsa ? [sudokuBolsa] : []);
+  extras.innerHTML = '<div class="sudoku-extras-rot">E mais, que o método não conta mas a viagem pede:</div>'
+    + mais.map(function(p){
+        return '<div class="sudoku-extra"><img src="' + tripEsc(p.img) + '" alt="">'
+          + '<span>' + tripEsc(tripNomeCurto(p)) + '</span></div>';
+      }).join('');
+
+  document.getElementById('sudokuResumo').textContent =
+    '9 peças · 27 combinações · ' + (sudokuSel.nota.neutras || 0) + ' neutras. '
+    + 'Trocar qualquer uma mantém as outras oito funcionando.';
+}
+
+// Aprovado: as 9 + sapatos + bolsa viram a mala, e os dias saem das 27.
+function sudokuAprovar() {
+  if (!sudokuSel) return;
+  var todas = sudokuSel.pecas.concat(sudokuSapatos, sudokuBolsa ? [sudokuBolsa] : []);
+  tripModoSudoku = true;
+  tripPacked = {};
+  tripSavedIdx = null;
+  tripJaSugeridas = {};
+  tripHistorico = [];
+  tripPecas = [];
+  tripAutoAdicionadas = todas.map(function(p){ return p.id; });
+  tripCapsule = tripAutoAdicionadas.slice();
+  tripAtualizarSapatos();
+  sudokuDistribuirPelosDias();
+  fecharSudoku();
+  tripRenderResultado();
+  tripShowStep(3);
+  showSavedToast('Mala Sudoku pronta: 9 peças, ' + tripDays.length + ' dias.');
+}
+
+function sudokuDistribuirPelosDias() {
+  var combos = sudokuCombinacoes(sudokuSel);
+  var O = sudokuSel.grupos.Outerwear;
+  tripUso = {};
+  tripDays = tripForecast.map(function(f, i){
+    var c = combos[i % combos.length];
+    var frio = tripFrio(f.profile);
+    var sapatoDia = sudokuSapatos[i % Math.max(1, sudokuSapatos.length)];
+    var sapatoNoite = sudokuSapatos[(i + 1) % Math.max(1, sudokuSapatos.length)];
+    // De dia a 3ª peça só entra no frio; à noite entra sempre, e é outra —
+    // é a camada que muda o look sem trocar de roupa.
+    var outroOuter = O[(O.indexOf(c.outer) + 1) % O.length];
+    var dia = [c.top.id, c.bottom.id, sapatoDia.id];
+    if (frio) dia.push(c.outer.id);
+    if (sudokuBolsa) dia.push(sudokuBolsa.id);
+    var noite = [c.top.id, c.bottom.id, sapatoNoite.id, outroOuter.id];
+    if (sudokuBolsa) noite.push(sudokuBolsa.id);
+    dia.concat(noite).forEach(function(id){ tripUso[id] = (tripUso[id] || 0) + 1; });
+    return {
+      date: f.date, day: f.day, dateLabel: f.dateLabel, temp: f.temp, cond: f.cond,
+      profile: f.profile, estimated: f.estimated,
+      dia: dia, diaTipo: 'montado', diaRef: null,
+      noite: noite, noiteTipo: 'montado', noiteRef: null
+    };
+  });
+}
+
 // Casaco só entra sozinho onde o clima pede: numa viagem de verão seria peso
 // morto na mala.
 // Em quantos dias da viagem o casaco realmente sai: no frio todo dia, no ameno
