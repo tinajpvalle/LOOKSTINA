@@ -736,6 +736,23 @@ body.week-pick-mode .card-week-btn { display: block; }
 .insp-palette { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-bottom: 6px; }
 .insp-dot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(0,0,0,.12); display: inline-block; }
 .insp-palette-txt { font-size: .66rem; color: #A8A8A4; }
+.trip-faixa { margin: 0 0 14px; }
+.trip-faixa-rot { font-size: .68rem; color: #A8A8A4; margin-bottom: 5px; }
+.trip-faixa-tira { display: flex; gap: 5px; overflow-x: auto; padding-bottom: 6px; }
+.trip-faixa-dia { flex: 0 0 62px; display: flex; flex-direction: column; gap: 3px;
+  background: var(--bg-1); border: 1px solid var(--line); border-radius: 8px; padding: 4px;
+  cursor: pointer; font-family: inherit; color: inherit; }
+.trip-faixa-dia:hover { border-color: var(--accent); }
+.trip-faixa-data { font-size: .58rem; line-height: 1.2; color: #A8A8A4; text-align: center; }
+.trip-faixa-data b { color: #1A1A1A; font-size: .64rem; }
+.trip-faixa-cel { display: block; position: relative; }
+.trip-faixa-cel img { width: 100%; aspect-ratio: 3/4; object-fit: cover; border-radius: 4px; display: block; }
+.trip-faixa-cel .wh-montado { display: grid; grid-template-columns: 1fr 1fr; gap: 1px;
+  aspect-ratio: 3/4; border-radius: 4px; overflow: hidden; background: #fff; }
+.trip-faixa-cel .wh-montado img { width: 100%; height: 100%; aspect-ratio: auto; object-fit: contain; border-radius: 0; }
+.trip-faixa-cel .wh-empty { aspect-ratio: 3/4; border: 1px dashed #E0E0DB; border-radius: 4px; }
+.trip-faixa-cel.noite { opacity: .92; }
+.trip-day-piscando { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-md); }
 .trip-sudoku-card { display: flex; align-items: center; gap: 11px; width: 100%; text-align: left;
   padding: 12px 13px; margin: 0 0 14px; border: 1px solid var(--line); border-radius: var(--r-md);
   background: var(--bg-1); cursor: pointer; font-family: inherit; color: inherit; }
@@ -1457,6 +1474,7 @@ body.compare-mode .card-compare-btn { display: flex; }
       <!-- Passo 3: a mala montada -->
       <div id="tripStep3" style="display:none;">
         <div id="tripSubtitle" style="font-size:.78rem;color:var(--txt-2);margin-bottom:10px;"></div>
+        <div class="trip-faixa" id="tripFaixa"></div>
         <div class="trip-day-list" id="tripDayList"></div>
         <div class="trip-pack-list" id="tripPackList"></div>
         <div class="trip-actions">
@@ -15663,9 +15681,59 @@ function tripLigarArrastar(box, idx, turno) {
 // Cada dia tem dois turnos, e cada turno pode ser quatro coisas: um look que ela
 // salvou, uma foto do catálogo que ela escolheu, um look que eu montei com as
 // peças dela, ou nada — quando o que ela escolheu não fecha um look.
+// A viagem inteira numa tira, os dias lado a lado. Ela montou a mala de 17 dias
+// no Excel exatamente assim — dias na horizontal — porque a lista vertical de
+// cartões faz perder o fio: "queria uma forma mais simples de eu nao me perder
+// nos dias". A tira é índice, não editor: tocar num dia rola a lista até ele.
+function tripMiniDoTurno(d, chave) {
+  var tipo = d[chave === 'dia' ? 'diaTipo' : 'noiteTipo'];
+  var ref  = d[chave === 'dia' ? 'diaRef'  : 'noiteRef'];
+  if (tipo === 'catalogo') {
+    var look = tripLookDoCatalogo(ref);
+    if (look) return '<img src="' + tripEsc(lookThumb(look)) + '" alt="" loading="lazy">';
+  }
+  if (tipo === 'meu' || tipo === 'montado') {
+    var ids = (tipo === 'meu')
+      ? ((montagens.find(function(x){ return x.id === ref; }) || {}).pieceIds || [])
+      : (d[chave] || []);
+    var imgs = ids.map(findPieceById).filter(Boolean).slice(0, 4)
+      .map(function(pc){ return '<img src="' + tripEsc(pc.img) + '" alt="">'; });
+    if (imgs.length) return '<div class="wh-montado">' + imgs.join('') + '</div>';
+  }
+  return '<div class="wh-empty"></div>';
+}
+
+function tripRenderFaixa() {
+  var box = document.getElementById('tripFaixa');
+  if (!box) return;
+  // Numa mala curta a lista já cabe na tela; a tira só ajuda quando há muito dia.
+  if (tripDays.length < 5) { box.innerHTML = ''; box.style.display = 'none'; return; }
+  box.style.display = '';
+  box.innerHTML = '<div class="trip-faixa-rot">A viagem inteira — toque num dia pra ir até ele</div>'
+    + '<div class="trip-faixa-tira">'
+    + tripDays.map(function(d, i){
+        return '<button type="button" class="trip-faixa-dia" onclick="tripIrAoDia(' + i + ')">'
+          + '<span class="trip-faixa-data">' + tripEsc(d.day) + '<br><b>' + tripEsc(d.dateLabel) + '</b></span>'
+          + '<span class="trip-faixa-cel">' + tripMiniDoTurno(d, 'dia') + '</span>'
+          + '<span class="trip-faixa-cel noite">' + tripMiniDoTurno(d, 'noite') + '</span>'
+          + '</button>';
+      }).join('')
+    + '</div>';
+}
+
+function tripIrAoDia(i) {
+  var cards = document.querySelectorAll('#tripDayList .trip-day');
+  var alvo = cards[i];
+  if (!alvo) return;
+  alvo.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  alvo.classList.add('trip-day-piscando');
+  setTimeout(function(){ alvo.classList.remove('trip-day-piscando'); }, 1400);
+}
+
 function tripRenderDays() {
   var list = document.getElementById('tripDayList');
   list.innerHTML = '';
+  tripRenderFaixa();
   var falta = tripFaltaPraMontar();
 
   tripDays.forEach(function(d, idx){
@@ -15778,10 +15846,37 @@ function tripRenderDays() {
         }
         box.appendChild(semLook);
       } else if (tipo === 'vazio' || tipo === 'livre') {
+        // O turno vazio não tinha ação nenhuma — só a reclamação do que falta.
+        // Na mala importada do Excel dela o dia 12/09 vinha sem foto e não havia
+        // como pôr nada: "preciso poder adicionar um look no primeiro dia".
+        var podeMontarAqui = !tripFaltaPraMontar().length;
         var vazio = document.createElement('div');
         vazio.className = 'trip-turno-vazio';
-        vazio.innerHTML = 'Sem look aqui.<br><small>Falta ' + tripEsc(tripTextoDoQueFalta()) + ' entre o que você escolheu.</small>';
+        vazio.innerHTML = podeMontarAqui
+          ? 'Sem look aqui.'
+          // Sem cápsula não há o que montar, e listar o que "falta" soa como
+          // erro numa mala feita de fotos. Aqui escolher é o caminho.
+          : 'Sem look aqui.<br><small>Escolha um look seu ou uma foto do catálogo.</small>';
         box.appendChild(vazio);
+        if (!tripViewOnly) {
+          var acoesVazio = document.createElement('div');
+          acoesVazio.className = 'trip-semlook-acoes';
+          if (podeMontarAqui) {
+            var montar = document.createElement('button');
+            montar.className = 'trip-turno-btn';
+            montar.textContent = 'montar aqui';
+            montar.title = 'Eu monto um look com as peças da mala';
+            montar.onclick = (function(i, k){ return function(e){ e.stopPropagation(); tripMontarNoTurno(i, k); }; })(idx, chave);
+            acoesVazio.appendChild(montar);
+          }
+          var escolher = document.createElement('button');
+          escolher.className = 'trip-turno-btn';
+          escolher.textContent = 'escolher look';
+          escolher.title = 'Escolher um look salvo ou uma foto do catálogo';
+          escolher.onclick = (function(i, k){ return function(e){ e.stopPropagation(); tripAbrirEscolhaDeLook(i, k); }; })(idx, chave);
+          acoesVazio.appendChild(escolher);
+          box.appendChild(acoesVazio);
+        }
       } else {
         var canvas = document.createElement('div');
         canvas.style.cursor = 'zoom-in';
