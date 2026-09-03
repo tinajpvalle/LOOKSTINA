@@ -13294,7 +13294,7 @@ function tripRenderEscolha() {
     barra.style.display = 'none';
   }
   var busca = document.getElementById('tripBusca');
-  var quantos = tripFonte === 'catalogo' ? data.filter(function(p){ return !p.archived && (p.tags||[]).length; }).length
+  var quantos = tripFonte === 'catalogo' ? data.filter(function(p){ return !p.archived; }).length
     : (tripFonte === 'meus' ? montagens.filter(function(m){ return (m.pieceIds||[]).length; }).length : allPecas().length);
   busca.placeholder = (tripFonte === 'catalogo' ? 'Buscar entre os ' + quantos + ' looks do catálogo…'
     : (tripFonte === 'meus' ? 'Buscar entre os seus ' + quantos + ' looks…' : 'Buscar entre as ' + quantos + ' peças…'));
@@ -13374,9 +13374,13 @@ function tripRenderPickerMeus(grid) {
 }
 
 function tripRenderPickerCatalogo(grid) {
-  var lista = data.filter(function(p){ return !p.archived && (p.tags||[]).length; });
+  var lista = data.filter(function(p){ return !p.archived; });   // ver acima: escolha visual não exige etiqueta
   if (tripBusca) {
-    lista = lista.filter(function(p){ return (p.tags||[]).join(' ').toLowerCase().indexOf(tripBusca) !== -1; });
+    // O nome entra na busca: look sem etiqueta só tem nome, e era por ele que
+    // ela ia procurar.
+    lista = lista.filter(function(p){
+      return ((p.tags||[]).join(' ') + ' ' + (p.name||'')).toLowerCase().indexOf(tripBusca) !== -1;
+    });
   }
   // Mostrava só 120 dos 877 e ela não achava o look que queria. A aba Catálogo
   // do app já desenha os 877 de uma vez, então aqui também dá: as fotos são
@@ -14956,7 +14960,7 @@ function tripRenderEscolhaDeLook() {
   var busca = document.getElementById('tripEscolhaBusca');
   busca.placeholder = tripEscolhaFonte === 'meus'
     ? ('Buscar entre os seus ' + montagens.filter(function(m){ return (m.pieceIds||[]).length; }).length + ' looks…')
-    : ('Buscar entre os ' + data.filter(function(p){ return !p.archived && (p.tags||[]).length; }).length + ' looks do catálogo…');
+    : ('Buscar entre os ' + data.filter(function(p){ return !p.archived; }).length + ' looks do catálogo…');
   tripRenderEscolhaDeLookGrid();
 }
 
@@ -14999,9 +15003,17 @@ function tripRenderEscolhaDeLookGrid() {
     return;
   }
 
-  var looks = data.filter(function(p){ return !p.archived && (p.tags||[]).length; });
+  // Sem exigir etiqueta: aqui ela escolhe OLHANDO a foto, não precisa que o app
+  // saiba descrever o look. Ela importou um look novo, ainda sem etiqueta, e ele
+  // simplesmente não aparecia — o catálogo dizia 895 e o seletor 894.
+  // (Onde o app precisa raciocinar sozinho sobre o look, a etiqueta continua
+  // sendo exigida: sem ela não há o que pontuar.)
+  var looks = data.filter(function(p){ return !p.archived; });
   if (tripEscolhaBusca) {
-    looks = looks.filter(function(p){ return (p.tags||[]).join(' ').toLowerCase().indexOf(tripEscolhaBusca) !== -1; });
+    looks = looks.filter(function(p){
+      var txt = ((p.tags||[]).join(' ') + ' ' + (p.name||'')).toLowerCase();
+      return txt.indexOf(tripEscolhaBusca) !== -1;
+    });
   }
   looks = looks.slice().sort(byNewestFirst);
   grid.className = 'trip-picker-grid fotos';
