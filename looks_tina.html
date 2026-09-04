@@ -11750,22 +11750,45 @@ function interpretarRegra(texto) {
   var exige = /(sempre|precisa|preciso|tem que|tenho que|obrigat|todo look|toda vez|so use|so uso)/.test(limpo);
   var tipo = (exige && !nega) ? 'exige' : 'proibe';
 
+  // "ou" não separava nada, e por isso "camiseta OU blusa" virava um grupo com as
+  // duas palavras — que grupoEstaNoLook lê como "as duas na mesma etiqueta".
+  // A regra mais importante dela ("look precisa sempre ter uma camiseta ou
+  // blusa") passou a acusar 706 dos 766 looks do dia, 517 deles com blusa na
+  // etiqueta. O "ou" dela virava "e".
+  var qualquer = [];
   var grupos = limpo.split(/\s+(?:com|e|mais)\s+|,/)
     .map(function(pedaco){
-      return pedaco.split(' ').filter(function(w){
-        if (w.length <= 2 || PALAVRAS_VAZIAS.indexOf(w) !== -1) return false;
-        return vocabulario[w] || !!SINONIMOS_DE_PECA[w];
+      var alternativas = pedaco.split(/\s+ou\s+/);
+      var palavras = [];
+      alternativas.forEach(function(alt){
+        alt.split(' ').forEach(function(w){
+          if (w.length <= 2 || PALAVRAS_VAZIAS.indexOf(w) !== -1) return;
+          if (vocabulario[w] || SINONIMOS_DE_PECA[w]) palavras.push(w);
+        });
       });
+      qualquer.push(alternativas.length > 1);
+      return palavras;
     })
-    .filter(function(g){ return g.length; });
+    .filter(function(g, i){ if (!g.length) qualquer[i] = null; return g.length; });
+  qualquer = qualquer.filter(function(x){ return x !== null; });
 
   if (!grupos.length) return null;
   if (tipo === 'proibe' && grupos.length < 2) return null; // proibir uma peça só seria arquivar
-  return { texto: texto.trim(), tipo: tipo, grupos: grupos, criadaEm: new Date().toISOString() };
+  return { texto: texto.trim(), tipo: tipo, grupos: grupos, qualquer: qualquer,
+           criadaEm: new Date().toISOString() };
 }
 
 // Regra guardada antes de existir o tipo era sempre proibição.
 regrasEscritas.forEach(function(r){ if (!r.tipo) r.tipo = 'proibe'; });
+// E as guardadas antes de o "ou" existir: o texto dela continua lá, então dá
+// pra reinterpretar sem pedir nada. Só mexe em quem não tem o campo.
+regrasEscritas.forEach(function(r){
+  if (r.qualquer || !r.texto) return;
+  var nova = interpretarRegra(r.texto);
+  if (nova && nova.grupos.length === r.grupos.length && (nova.qualquer||[]).some(Boolean)) {
+    r.grupos = nova.grupos; r.qualquer = nova.qualquer;
+  }
+});
 
 function guardarRegraEscrita(texto) {
   var regra = interpretarRegra(texto);
@@ -11800,21 +11823,24 @@ function contemTermo(texto, termo) {
   return false;
 }
 
-function grupoEstaNoLook(grupo, etiquetas) {
+// `qualquer`: as palavras do grupo vieram de um "ou" dela — basta uma. Sem isso
+// o grupo é conjunção: todas as palavras na MESMA etiqueta, que é o certo pra
+// "calça listrada" (duas palavras descrevendo uma peça só).
+function grupoEstaNoLook(grupo, etiquetas, qualquer) {
   return etiquetas.some(function(et){
-    return grupo.every(function(w){
-      return variacoesDaPalavra(w).some(function(v){ return contemTermo(et, v); });
-    });
+    var casa = function(w){ return variacoesDaPalavra(w).some(function(v){ return contemTermo(et, v); }); };
+    return qualquer ? grupo.some(casa) : grupo.every(casa);
   });
 }
 
 // Devolve true quando o look CONTRARIA a regra.
 function regraBateNoLook(regra, tags) {
   var etiquetas = (tags || []).map(textoParaBusca);
+  var qual = regra.qualquer || [];
   if (regra.tipo === 'exige') {
-    return regra.grupos.some(function(g){ return !grupoEstaNoLook(g, etiquetas); });
+    return regra.grupos.some(function(g, i){ return !grupoEstaNoLook(g, etiquetas, qual[i]); });
   }
-  return regra.grupos.every(function(g){ return grupoEstaNoLook(g, etiquetas); });
+  return regra.grupos.every(function(g, i){ return grupoEstaNoLook(g, etiquetas, qual[i]); });
 }
 
 // Regra escrita é declaração dela, não estatística. Como desconto de nota ela
