@@ -12767,8 +12767,16 @@ function sugerirLookParaDia(day, alvo, turno) {
   if (!base.length) base = data.filter(function(p){ return !p.archived && (p.tags||[]).length; });
   base = semOsProibidos(base);
 
+  // Rodízio: o botão do dia não tinha nenhum. O "Montar com IA" da semana dá +6
+  // a look nunca sugerido, e por isso alcança o catálogo inteiro; aqui a nota
+  // ignorava isso e devolvia sempre a mesma foto — em 10 cliques vieram 8 looks
+  // montados e a MESMA foto duas vezes, nenhuma delas inédita.
+  // E tirar de vez quem apareceu nas últimas semanas, como a semana já faz.
+  var vistosAgora = idsVistosRecentemente();
+  base = evitarVistosRecentes(base, vistosAgora);
+
   var cands = shuffledCopy(base).map(function(p){
-    return { look: p, s: notaParaODia(p.tags || [], profile, p) + (noite ? notaDeNoite(p.tags) : 0) };
+    return { look: p, s: notaParaODia(p.tags || [], profile, p) + bonusDeRodizio(p) + (noite ? notaDeNoite(p.tags) : 0) };
   });
 
   // Looks montados entram no mesmo páreo. Sem lastWorn nem wornCount, o
@@ -12792,7 +12800,7 @@ function sugerirLookParaDia(day, alvo, turno) {
     // Bônus por ser feito à mão: são poucos contra 851 do catálogo, e vários
     // empatam na nota máxima — sem isso eles quase nunca sairiam sorteados. Um
     // look que ela montou peça por peça diz mais de intenção do que uma foto.
-    cands.push({ montado: m, s: notaParaODia(tags, profile, m) + 2.5 + (noite ? notaDeNoite(tags) : 0) });
+    cands.push({ montado: m, s: notaParaODia(tags, profile, m) + bonusDeRodizio(m) + 2.5 + (noite ? notaDeNoite(tags) : 0) });
   });
 
   if (!cands.length) { showSavedToast('Nenhum look disponível pra sugerir.'); return; }
@@ -12831,6 +12839,10 @@ function sugerirLookParaDia(day, alvo, turno) {
     setWeekLookFor(day, esc.look.id, info.alvo, turno);
     saveToStorage();
   }
+  // Sem isto o rodízio nunca aprendia com este botão: o "Montar com IA" registra
+  // o que sugere, o botão do dia não registrava nada.
+  guardarSugestoes([esc.montado ? esc.montado.id : esc.look.id]);
+
   renderGrid(); renderWeek();
   showSavedToast((esc.montado ? 'Look montado' : 'Sugestão') + ' na ' + (noite ? 'noite' : 'dia') + ' de ' + day +
     (info.alvo === 'proxima' ? ' da próxima semana' : '') + '.');
