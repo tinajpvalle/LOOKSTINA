@@ -736,6 +736,11 @@ body.week-pick-mode .card-week-btn { display: block; }
 .insp-palette { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-bottom: 6px; }
 .insp-dot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(0,0,0,.12); display: inline-block; }
 .insp-palette-txt { font-size: .66rem; color: #A8A8A4; }
+.assign-mover { display: block; width: 100%; font-size: .6rem; color: #8C8C88; background: none;
+  border: 1px solid var(--line); border-radius: 999px; padding: 2px 0; margin-top: 4px; cursor: pointer; }
+.assign-mover:hover { border-color: var(--accent); color: #1A1A1A; }
+.assign-mover.armado { background: #1A1A1A; color: #fff; border-color: #1A1A1A; }
+.assign-day.assign-destino { outline: 2px dashed var(--accent); outline-offset: -2px; cursor: pointer; }
 .trip-faixa { margin: 0 0 14px; }
 .trip-faixa-rot { font-size: .68rem; color: #A8A8A4; margin-bottom: 5px; }
 .trip-faixa-tira { display: flex; gap: 5px; overflow-x: auto; padding-bottom: 6px; }
@@ -17012,7 +17017,14 @@ function proceedToStep2() {
     }
   });
 
-  // --- PASS 2: build navigation pools (no usedIds filter — cycleAssignLook handles dedup in real-time) ---
+  // --- PASS 2: as alternativas de cada dia (as setas ‹ ›) ---
+  // Cada dia montava a sua lista com a MESMA ordenação, e ninguém descontava o
+  // que já tinha sido oferecido: dias de clima parecido saíam com 8 das 9
+  // alternativas iguais — 30 looks distintos em 54 vagas. "estão repetindo mto
+  // nos dias... nos proximos looks em todos os dias eles se repetem".
+  // Agora o que já foi oferecido a um dia sai da vez do próximo. Cada dia ainda
+  // pega os melhores do que sobra.
+  var jaOferecidos = {};
   FORECAST.forEach(function(f){
     var ta = tempAssign[f.day]; if(!ta) return;
     var best = ta.best;
@@ -17036,17 +17048,17 @@ function proceedToStep2() {
     function scoreNav(p) { return scoreForPool(p) - (vistos[p.id] ? 5 : 0); }
 
     var altsWithPiece = data.filter(function(p){
-      if(p.archived || p.id === best.id) return false;
+      if(p.archived || p.id === best.id || jaOferecidos[p.id]) return false;
       if(outerPiece) return (p.tags||[]).some(function(t){ return t.trim()===outerPiece; });
       return (p.tags||[]).some(function(t){ return piecesArr.indexOf(t.trim())!==-1; });
-    }).sort(function(a,b){ return scoreNav(b)-scoreNav(a); });
+    }).sort(function(a,b){ return scoreNav(b)-scoreNav(a); }).slice(0, 8);
 
     // Pad with weather-scored looks only if very few piece matches
     if(altsWithPiece.length < 5) {
       var altIds = new Set(altsWithPiece.map(function(p){ return p.id; }));
       altIds.add(best.id);
       var pad = data.filter(function(p){
-        return !p.archived && !altIds.has(p.id) && (p.tags||[]).length>0;
+        return !p.archived && !altIds.has(p.id) && !jaOferecidos[p.id] && (p.tags||[]).length>0;
       }).sort(function(a,b){ return scoreNav(b)-scoreNav(a); }).slice(0, 8 - altsWithPiece.length);
       altsWithPiece = altsWithPiece.concat(pad);
     }
@@ -17057,6 +17069,8 @@ function proceedToStep2() {
       curTags: best.tags||[], piece: pieceLabel,
       allPool: [best].concat(altsWithPiece), poolIdx: 0
     };
+    jaOferecidos[best.id] = 1;
+    altsWithPiece.forEach(function(p){ jaOferecidos[p.id] = 1; });
   });
 
   guardarSugestoes(Object.keys(assignedLooks).map(function(d){ return assignedLooks[d].curId; }));
@@ -17194,6 +17208,14 @@ function renderAssignGrid() {
     hdr.innerHTML = f.day + ' <span style="font-weight:400;color:#666666;font-size:.6rem">' + f.date + '</span>';
     col.appendChild(hdr);
 
+    // Com um dia armado, qualquer outra coluna vira destino.
+    if (assignMovendo && assignMovendo !== f.day) {
+      col.classList.add('assign-destino');
+      col.onclick = (function(d){ return function(){ assignMover(d); }; })(f.day);
+    } else {
+      col.onclick = null;
+    }
+
     var wx = document.createElement('div'); wx.className = 'assign-day-wx';
     wx.innerHTML = f.cond + '<br><span class="assign-day-temp">' + f.temp + '</span>';
     col.appendChild(wx);
@@ -17275,6 +17297,13 @@ function renderAssignGrid() {
       var label = document.createElement('div'); label.className='assign-look-piece';
       label.textContent = a.piece.split(':').slice(1).join(':').trim();
       col.appendChild(label);
+
+      var mv = document.createElement('button');
+      mv.className = 'assign-mover' + (assignMovendo === f.day ? ' armado' : '');
+      mv.textContent = assignMovendo === f.day ? 'cancelar' : 'mover';
+      mv.title = 'Trocar este look com o de outro dia';
+      mv.onclick = (function(d){ return function(e){ e.stopPropagation(); assignMover(d); }; })(f.day);
+      col.appendChild(mv);
       // Reason hint
       var curLook = data.find(function(p){ return p.id === a.curId; });
       if(curLook) {
@@ -17312,6 +17341,31 @@ function renderAssignGrid() {
     }
     grid.appendChild(col);
   });
+}
+
+// Mover por toque no painel de sugestões. Arrastar já funcionava, mas só com
+// mouse: no celular não havia como trocar um dia com o outro. "porque nao
+// consigo mover o look de um dia sugerido da semana que vem para... um dia da
+// semana que vem?" — era isso.
+// Mesmo gesto do resto do app: toca em "mover", o dia fica armado, toca no
+// outro dia e os dois trocam de lugar.
+var assignMovendo = null;
+
+function assignMover(day) {
+  if (assignMovendo === day) { assignMovendo = null; renderAssignGrid(); return; }
+  if (assignMovendo) {
+    var tmp = assignedLooks[assignMovendo];
+    if (assignedLooks[day] === undefined) delete assignedLooks[assignMovendo];
+    else assignedLooks[assignMovendo] = assignedLooks[day];
+    if (tmp === undefined) delete assignedLooks[day]; else assignedLooks[day] = tmp;
+    var de = assignMovendo; assignMovendo = null;
+    renderAssignGrid();
+    showSavedToast(de + ' e ' + day + ' trocaram de look.');
+    return;
+  }
+  assignMovendo = day;
+  renderAssignGrid();
+  showSavedToast('Agora toque no dia pra onde vai.');
 }
 
 function removeAssignedLook(day) {
