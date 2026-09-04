@@ -12718,6 +12718,12 @@ function montarDoArmarioNoDia(day, alvo, turno, baseId, cor) {
     : ('Montei um look do seu armário pra ' + day + (turno === 'noite' ? ' à noite' : '') + '.'));
 }
 
+// O que o "outra" já mostrou em cada dia nesta sessão, pra não repetir na
+// sequência. Some ao recarregar, que é o certo: no dia seguinte tudo volta a
+// valer.
+var mostradosNoDia = {};
+function idDaSugestao(c) { return c.montado ? ('m:' + c.montado.id) : ('l:' + c.look.id); }
+
 function sugerirLookParaDia(day, alvo, turno) {
   turno = (turno === 'noite') ? 'noite' : 'dia';
   var noite = (turno === 'noite');
@@ -12765,9 +12771,29 @@ function sugerirLookParaDia(day, alvo, turno) {
 
   if (!cands.length) { showSavedToast('Nenhum look disponível pra sugerir.'); return; }
   cands.sort(function(a,b){ return b.s - a.s; });
-  // sorteia entre os que estão perto do topo, pra não devolver sempre o mesmo
-  var faixa = cands.filter(function(c){ return c.s >= cands[0].s - 2; });
+
+  // A faixa era fixa: "no máximo 2 pontos abaixo do topo". Medido com o
+  // catálogo dela, isso deixava TRÊS candidatos de 70 elegíveis — clicar
+  // "outra" revessava entre os mesmos três. A nota do topo é 19 e a do décimo
+  // 15,65, então 2 pontos cortam quase tudo.
+  // Agora a faixa acompanha o quanto as notas se espalham, com um piso de oito
+  // candidatos: onde a nota separa pouco, ela abre.
+  var teto = cands[0].s;
+  var piso = cands[Math.min(cands.length - 1, 19)].s;
+  var largura = Math.max(2, (teto - piso) * 0.6);
+  var faixa = cands.filter(function(c){ return c.s >= teto - largura; });
+  if (faixa.length < 8) faixa = cands.slice(0, Math.min(8, cands.length));
+
+  // E não repetir o que acabou de mostrar neste dia. Sem isto, mesmo com faixa
+  // grande o sorteio devolve o mesmo look duas, três vezes seguidas.
+  var memoria = mostradosNoDia[info.chave] || [];
+  var frescos = faixa.filter(function(c){ return memoria.indexOf(idDaSugestao(c)) === -1; });
+  if (frescos.length) faixa = frescos;
+
   var esc = faixa[Math.floor(Math.random() * faixa.length)];
+  memoria.push(idDaSugestao(esc));
+  while (memoria.length > 8) memoria.shift();
+  mostradosNoDia[info.chave] = memoria;
 
   if (noite) limparNoiteDoDia(day, info.alvo);
   else clearWeekOccupants(day, info.alvo); // sugerir substitui o que estava no dia
