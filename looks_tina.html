@@ -7590,6 +7590,21 @@ function barraDeMontarNoDia(col, day, alvo, turno) {
 
 function alvoDeTrocaSemana(el, day, alvo, turno) {
   ligarSoltarNoTurno(el, day, alvo, turno);   // vale sempre, com ou sem look armado
+
+  // Look armado no painel de sugestões: os dias da semana viram destino também,
+  // pra ela poder tirar um look da semana sugerida e pôr num dia de verdade.
+  if (typeof assignMovendo !== 'undefined' && assignMovendo) {
+    el.classList.add('destino-troca');
+    el.onclick = null;
+    el.addEventListener('click', (function(d, al, t){ return function(e){
+      var btn = e.target && e.target.closest ? e.target.closest('button') : null;
+      if (btn && el.contains(btn)) return;
+      e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation();
+      assignMoverParaSemana(d, al, t);
+    }; })(day, alvo, turno), true);
+    return;
+  }
+
   if (!semanaMovendo) return;   // o turno não limita mais: dá pra ir de noite pra dia
   var slot = { day: day, alvo: alvo, turno: turno };
   if (semanaMesmoSlot(semanaMovendo, slot)) return;
@@ -17351,21 +17366,53 @@ function renderAssignGrid() {
 // outro dia e os dois trocam de lugar.
 var assignMovendo = null;
 
+// Levar um look sugerido pra um dia de verdade da semana — inclusive de OUTRA
+// semana. "quero mover do dia 12 para esse domingo dia 06": o painel monta a
+// semana que vem, e ela queria um daqueles looks neste domingo. Não havia
+// caminho: "Aplicar na minha semana" leva tudo de uma vez, ou nada.
+function assignMoverParaSemana(day, alvo, turno) {
+  var de = assignMovendo;
+  var a = de && assignedLooks[de];
+  if (!a) { assignMovendo = null; return; }
+  var occ = null;
+  if (a.montadoId) {
+    var m = montagens.find(function(x){ return x.id === a.montadoId; });
+    if (m) occ = { look: null, montado: m };
+  } else if (a.curId) {
+    var look = data.find(function(x){ return x.id === a.curId; });
+    if (look) occ = { look: look, montado: null };
+  }
+  if (!occ) { assignMovendo = null; renderAssignGrid(); return; }
+
+  limparSlotDaSemana(day, alvo, turno);
+  porNoSlotDaSemana(day, alvo, turno, occ);
+  delete assignedLooks[de];
+  assignMovendo = null;
+
+  saveToStorage(); saveMontagens();
+  renderAssignGrid(); renderWeek();
+  if (typeof renderGrid === 'function') renderGrid();
+  showSavedToast('Look de ' + de + ' foi pra ' + day
+    + (turno === 'noite' ? ' à noite' : '')
+    + (alvo === 'proxima' ? ' da próxima semana' : '') + '.');
+}
+
 function assignMover(day) {
-  if (assignMovendo === day) { assignMovendo = null; renderAssignGrid(); return; }
+  if (assignMovendo === day) { assignMovendo = null; renderAssignGrid(); renderWeek(); return; }
   if (assignMovendo) {
     var tmp = assignedLooks[assignMovendo];
     if (assignedLooks[day] === undefined) delete assignedLooks[assignMovendo];
     else assignedLooks[assignMovendo] = assignedLooks[day];
     if (tmp === undefined) delete assignedLooks[day]; else assignedLooks[day] = tmp;
     var de = assignMovendo; assignMovendo = null;
-    renderAssignGrid();
+    renderAssignGrid(); renderWeek();
     showSavedToast(de + ' e ' + day + ' trocaram de look.');
     return;
   }
   assignMovendo = day;
   renderAssignGrid();
-  showSavedToast('Agora toque no dia pra onde vai.');
+  renderWeek();   // os dias da semana também viram destino
+  showSavedToast('Toque em outro dia sugerido, ou num dia da sua semana abaixo.');
 }
 
 function removeAssignedLook(day) {
