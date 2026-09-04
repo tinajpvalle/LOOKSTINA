@@ -11410,7 +11410,12 @@ function detectWeekSeason() {
 }
 
 function diversityPenalty(tags, usedTagFreq) {
-  var outerRe = /^(casaco|jaqueta|blazer|colete|moletom|suéter|cardigan|kimono|calça|saia|vestido|sapato|sandália|bota|tênis|bolsa)/i;
+  // Parte de cima pesava 1, contra 3 de casaco e calça — num placar em que
+  // pieceMatchScore vale 6 e o clima 3, penalidade 1 não decide nada. Foi por
+  // isso que a semana dela veio com a mesma camiseta vermelha na segunda e na
+  // terça: a repetição era vista, mas custava quase nada. Parte de cima é o que
+  // mais se olha num look; agora pesa igual.
+  var outerRe = /^(casaco|jaqueta|blazer|colete|moletom|suéter|sueter|cardigan|kimono|calça|saia|vestido|macacão|camiseta|camisa|blusa|top|regata|tricô|trico|polo|body|sapato|sandália|bota|tênis|bolsa)/i;
   var penalty = 0;
   (tags||[]).forEach(function(t){
     var freq = usedTagFreq[t.trim()] || 0;
@@ -11466,6 +11471,12 @@ function noveltyScore(p, range) {
 // Peça de destaque: a que faz o look ser reconhecido como "aquele look". Duas
 // combinações diferentes com o mesmo casaco xadrez continuam parecendo a mesma
 // coisa na grade da semana.
+// Tentei pôr as partes de cima aqui e PIOROU (2 semanas repetidas em 4, contra
+// 1 em 4). semRepetirDestaque é um filtro duro com válvula de escape: quanto
+// mais categorias proibidas, mais cedo a lista de candidatos esvazia e o código
+// libera geral. Alargar a proibição derruba a proibição.
+// A parte de cima entrou na penalidade graduada (diversityPenalty), que não tem
+// esse precipício.
 var CAT_DESTAQUE = /^(casaco|jaqueta|blazer|colete|moletom|suéter|sueter|cardigan|kimono|calça|saia|vestido|macacão)/i;
 
 function pecasDeDestaque(tags) {
@@ -11481,6 +11492,35 @@ function pecasDeDestaque(tags) {
 // look. Sem essa isenção a regra se anulava justamente aí: todo look do pool
 // tinha a peça pedida, o filtro zerava e caía no `pool` inteiro, sem nenhuma
 // exigência de variedade.
+// Preferir em vez de proibir. semRepetirDestaque é um filtro duro com válvula de
+// escape ("se sobrou nada, pode repetir") — e num placar onde outros termos
+// valem 3 e 6, penalidade não segura nada. Os dois falham do mesmo jeito: a
+// semana dela veio com a mesma camiseta na segunda e na terça.
+// Aqui a repetição vira degrau: fica só o grupo de looks que repete MENOS
+// alguma peça já usada. Sem precipício — se todo mundo repete uma vez, todos
+// continuam candidatos, e nunca sobra o dia vazio.
+var CAT_REPETE = /^(casaco|jaqueta|blazer|colete|moletom|suéter|sueter|cardigan|kimono|calça|saia|vestido|macacão|camiseta|camisa|blusa|top|regata|tricô|trico|polo|body|sapato|sandália|bota|tênis)/i;
+
+function quantoRepete(tags, usedTagFreq) {
+  var n = 0;
+  (tags || []).forEach(function(t){
+    var s = t.trim();
+    if (!CAT_REPETE.test(s)) return;
+    n += (usedTagFreq[s] || 0);
+  });
+  return n;
+}
+
+function osQueMenosRepetem(pool, usedTagFreq) {
+  if (!pool.length) return pool;
+  var menor = Infinity;
+  pool.forEach(function(p){
+    var n = quantoRepete(p.tags, usedTagFreq);
+    if (n < menor) menor = n;
+  });
+  return pool.filter(function(p){ return quantoRepete(p.tags, usedTagFreq) === menor; });
+}
+
 function semRepetirDestaque(pool, usadas, isentas) {
   if (!usadas || !usadas.length) return pool;
   var ignora = isentas || [];
@@ -16957,9 +16997,11 @@ function proceedToStep2() {
     }
 
     var best = pickWithVariety(
-      evitarVistosRecentes(
-        semRepetirDestaque(semOsProibidos(apenasOsQueServemPraODia(pool, f.profile)), destaquesUsados, piecesArr),
-        vistos), score, 10);
+      osQueMenosRepetem(
+        evitarVistosRecentes(
+          semRepetirDestaque(semOsProibidos(apenasOsQueServemPraODia(pool, f.profile)), destaquesUsados, piecesArr),
+          vistos),
+        usedTagFreq), score, 10);
     if(best) {
       usedIds.add(best.id);
       pecasDeDestaque(best.tags).forEach(function(t){ destaquesUsados.push(t); });
@@ -17067,9 +17109,11 @@ function regenerateAssignedDay(day) {
     pool = data.filter(function(p){ return !p.archived && !usedIds.has(p.id) && (p.tags||[]).length>0; });
   }
   var best = pickWithVariety(
-    evitarVistosRecentes(
-      semRepetirDestaque(semOsProibidos(apenasOsQueServemPraODia(pool, f.profile)), destaquesUsados, piecesArr),
-      idsVistosRecentemente()), score, 10);
+    osQueMenosRepetem(
+      evitarVistosRecentes(
+        semRepetirDestaque(semOsProibidos(apenasOsQueServemPraODia(pool, f.profile)), destaquesUsados, piecesArr),
+        idsVistosRecentemente()),
+      usedTagFreq), score, 10);
   if (!best) return;
   guardarSugestoes([best.id]);
 
