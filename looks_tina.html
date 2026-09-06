@@ -10811,7 +10811,16 @@ function exportData() {
 
 // Keyboard
 document.addEventListener('keydown', function(e){
-  if(e.key==='Escape'){ hideTagSuggestions(); closeViewModal(); closeEditModal(); closeTodaySuggestion(); closeTripWizard(); closeWeekTemplates(); }
+  if (e.key !== 'Escape') return;
+  // Esc fechava TUDO de uma vez, inclusive a mala por baixo: ela apertava pra
+  // sair da foto ampliada e ia parar na semana, perdendo onde estava.
+  // Agora fecha uma camada por vez, de cima pra baixo.
+  var zoom = document.getElementById('zoomOverlay');
+  if (zoom && zoom.style.display !== 'none' && zoom.style.display !== '') { zoom.style.display = 'none'; return; }
+  var lookZoom = document.getElementById('lookZoomOverlay');
+  if (lookZoom && lookZoom.classList.contains('open')) { fecharZoomDoLook(); return; }
+  hideTagSuggestions(); closeViewModal(); closeEditModal(); closeTodaySuggestion();
+  closeTripWizard(); closeWeekTemplates();
 });
 
 init();
@@ -17712,9 +17721,19 @@ function openZoom(src, tags, rotation, lookId) {
       + 'transition:transform .15s ease-out;will-change:transform;';
     ligarZoomDeVerdade(zimg, ov);
     ov.appendChild(zimg);
+    var zvoltar = document.createElement('button');
+    zvoltar.id = 'zoomVoltar';
+    zvoltar.style.cssText = 'position:absolute;top:16px;left:16px;background:rgba(255,255,255,.16);'
+      + 'color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:8px;padding:8px 14px;'
+      + 'cursor:pointer;font-size:.82rem;font-family:inherit;display:flex;align-items:center;gap:6px;';
+    zvoltar.innerHTML = '&larr; voltar';
+    zvoltar.title = 'Voltar pra onde você estava';
+    zvoltar.onclick = function(e){ e.stopPropagation(); ov.style.display = 'none'; };
+    ov.appendChild(zvoltar);
+
     var zdica = document.createElement('div');
     zdica.style.cssText = 'margin-top:10px;color:rgba(255,255,255,.55);font-size:.7rem;';
-    zdica.textContent = 'Toque na foto pra ampliar · arraste pra mover · toque fora pra fechar';
+    zdica.textContent = 'Toque na foto pra ampliar · arraste pra mover · "voltar" ou Esc pra sair';
     ov.appendChild(zdica);
     var ztags = document.createElement('div');
     ztags.id = 'zoomTags';
