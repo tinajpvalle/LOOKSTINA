@@ -17603,6 +17603,101 @@ function cycleAssignLook(day, dir) {
 
 // lookId opcional: com ele o zoom oferece arquivar, que é o momento em que ela
 // olha o look grande e decide que não quer mais ver aquilo nas sugestões.
+// A foto do zoom era limitada a 90vw × 80vh e parava por aí — não dava pra
+// chegar perto de um detalhe. Agora: tocar amplia, arrastar move, roda do mouse
+// e pinça também. Tocar fora continua fechando.
+var ZOOM_MAX = 6;
+function ligarZoomDeVerdade(img, overlay) {
+  var st = { escala: 1, x: 0, y: 0, giro: 0, arrastando: false, ox: 0, oy: 0, pinca: 0 };
+  img._zoomSt = st;
+
+  function aplicar(comAnimacao) {
+    img.style.transition = comAnimacao ? 'transform .15s ease-out' : 'none';
+    img.style.transform = 'translate(' + st.x + 'px,' + st.y + 'px) scale(' + st.escala + ')'
+      + (st.giro ? ' rotate(' + st.giro + 'deg)' : '');
+    img.style.cursor = st.escala > 1 ? (st.arrastando ? 'grabbing' : 'grab') : 'zoom-in';
+  }
+  img._zoomAplicar = aplicar;
+
+  // Sem limite, ela arrasta a foto pra fora da tela e não acha mais.
+  function segurarNaTela() {
+    var r = img.getBoundingClientRect();
+    var limX = Math.max(0, (r.width  - window.innerWidth)  / 2 + 40);
+    var limY = Math.max(0, (r.height - window.innerHeight) / 2 + 40);
+    st.x = Math.max(-limX, Math.min(limX, st.x));
+    st.y = Math.max(-limY, Math.min(limY, st.y));
+  }
+
+  function zoomPara(novo, cx, cy) {
+    novo = Math.max(1, Math.min(ZOOM_MAX, novo));
+    if (novo === st.escala) return;
+    if (novo === 1) { st.x = 0; st.y = 0; }
+    else if (cx != null) {
+      // Amplia em volta do ponto tocado, não do centro da foto.
+      var r = img.getBoundingClientRect();
+      var meioX = r.left + r.width / 2, meioY = r.top + r.height / 2;
+      var f = novo / st.escala;
+      st.x = (st.x - (cx - meioX)) * f + (cx - meioX);
+      st.y = (st.y - (cy - meioY)) * f + (cy - meioY);
+    }
+    st.escala = novo;
+    segurarNaTela();
+    aplicar(true);
+  }
+
+  img.addEventListener('click', function(e){
+    e.stopPropagation();                      // não fechar o overlay ao tocar na foto
+    if (st.arrastou) { st.arrastou = false; return; }
+    zoomPara(st.escala > 1 ? 1 : 2.5, e.clientX, e.clientY);
+  });
+
+  img.addEventListener('wheel', function(e){
+    e.preventDefault(); e.stopPropagation();
+    zoomPara(st.escala * (e.deltaY < 0 ? 1.18 : 1/1.18), e.clientX, e.clientY);
+  }, { passive: false });
+
+  img.addEventListener('pointerdown', function(e){
+    if (st.escala <= 1) return;
+    st.arrastando = true; st.arrastou = false;
+    st.ox = e.clientX - st.x; st.oy = e.clientY - st.y;
+    img.setPointerCapture(e.pointerId);
+    aplicar(false);
+  });
+  img.addEventListener('pointermove', function(e){
+    if (!st.arrastando) return;
+    var nx = e.clientX - st.ox, ny = e.clientY - st.oy;
+    if (Math.abs(nx - st.x) > 2 || Math.abs(ny - st.y) > 2) st.arrastou = true;
+    st.x = nx; st.y = ny;
+    segurarNaTela(); aplicar(false);
+  });
+  ['pointerup','pointercancel','pointerleave'].forEach(function(ev){
+    img.addEventListener(ev, function(){ st.arrastando = false; aplicar(false); });
+  });
+
+  // Pinça no celular.
+  img.addEventListener('touchmove', function(e){
+    if (e.touches.length !== 2) return;
+    e.preventDefault();
+    var dx = e.touches[0].clientX - e.touches[1].clientX;
+    var dy = e.touches[0].clientY - e.touches[1].clientY;
+    var d = Math.hypot(dx, dy);
+    if (st.pinca) {
+      zoomPara(st.escala * (d / st.pinca),
+        (e.touches[0].clientX + e.touches[1].clientX) / 2,
+        (e.touches[0].clientY + e.touches[1].clientY) / 2);
+    }
+    st.pinca = d;
+  }, { passive: false });
+  img.addEventListener('touchend', function(){ st.pinca = 0; });
+}
+
+function zoomVoltarAoTamanho(img, rotation) {
+  var st = img._zoomSt;
+  if (!st) { img.style.transform = rotation ? 'rotate(' + rotation + 'deg)' : ''; return; }
+  st.escala = 1; st.x = 0; st.y = 0; st.giro = rotation || 0; st.arrastando = false; st.pinca = 0;
+  img._zoomAplicar(false);
+}
+
 function openZoom(src, tags, rotation, lookId) {
   var ov = document.getElementById('zoomOverlay');
   if(!ov) {
@@ -17612,8 +17707,15 @@ function openZoom(src, tags, rotation, lookId) {
     ov.onclick = function(){ ov.style.display='none'; };
     var zimg = document.createElement('img');
     zimg.id = 'zoomImg';
-    zimg.style.cssText = 'max-width:90vw;max-height:80vh;object-fit:contain;border-radius:10px;box-shadow:0 8px 40px rgba(0,0,0,.6);';
+    zimg.style.cssText = 'max-width:90vw;max-height:80vh;object-fit:contain;border-radius:10px;'
+      + 'box-shadow:0 8px 40px rgba(0,0,0,.6);cursor:zoom-in;touch-action:none;'
+      + 'transition:transform .15s ease-out;will-change:transform;';
+    ligarZoomDeVerdade(zimg, ov);
     ov.appendChild(zimg);
+    var zdica = document.createElement('div');
+    zdica.style.cssText = 'margin-top:10px;color:rgba(255,255,255,.55);font-size:.7rem;';
+    zdica.textContent = 'Toque na foto pra ampliar · arraste pra mover · toque fora pra fechar';
+    ov.appendChild(zdica);
     var ztags = document.createElement('div');
     ztags.id = 'zoomTags';
     ztags.style.cssText = 'margin-top:14px;display:flex;flex-wrap:wrap;gap:6px;justify-content:center;max-width:700px;';
@@ -17625,8 +17727,9 @@ function openZoom(src, tags, rotation, lookId) {
     ov.appendChild(zbtns);
     document.body.appendChild(ov);
   }
-  document.getElementById('zoomImg').src = src;
-  document.getElementById('zoomImg').style.transform = rotation ? 'rotate(' + rotation + 'deg)' : '';
+  var zi = document.getElementById('zoomImg');
+  zi.src = src;
+  zoomVoltarAoTamanho(zi, rotation);   // abre sempre no tamanho que cabe
   var zt = document.getElementById('zoomTags');
   zt.innerHTML = '';
   (tags||[]).forEach(function(t){
