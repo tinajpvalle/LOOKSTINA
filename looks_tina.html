@@ -7351,6 +7351,21 @@ function renderNextWeekGrid() {
     var look = weekLookFor(day, 'proxima');
     var dayKey = (WEEKDAYS.find(function(x){ return x.label === day; }) || {}).key;
     var montado = dayKey ? montagens.find(function(m){ return m.weekdayNext === dayKey; }) : null;
+    // A mala só era consultada na semana atual. A viagem dela é de 12 a 28/09 e
+    // a próxima semana (14 a 20) cai inteira dentro dela — e vinha vazia, sete
+    // dias de "Adicionar look". Aqui vale a mesma ordem da semana atual: a mala
+    // antes do "em casa", porque viajando ela não está em casa.
+    var malaDoDia = malaNoDia(isoDate(d));
+
+    if (look || montado) {
+      // o que ela escolheu à mão manda; os ramos abaixo cuidam disso
+    } else if (malaDoDia && cartaoDaMalaNoTurno(col, malaDoDia, 'dia')) {
+      if (!weekLookFor(day, 'proxima', 'noite')) cartaoDaMalaNoTurno(col, malaDoDia, 'noite');
+      tituloDaMalaNoDia(col, malaDoDia);
+      barraDeMontarNoDia(col, day, 'proxima', 'dia');
+      grid.appendChild(col);
+      return;
+    }
 
     if (casaNoDia(day, 'proxima') && !look && !montado) {
       var dc = document.createElement('div'); dc.className = 'day-empty';
