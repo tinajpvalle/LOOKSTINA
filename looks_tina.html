@@ -6903,16 +6903,24 @@ function renderAvisoUsoRegistrado() {
 // continua sendo a dona, então mudar lá muda aqui sozinho.
 function malaNoDia(dataIso) {
   if (!dataIso) return null;
+  // Duas malas podem cobrir o mesmo dia — ela tem a de NY do Sudoku e a do
+  // Excel, as duas começando em 12/09. Antes ganhava a PRIMEIRA da lista, que é
+  // arbitrário: a semana dela mostrava a do Sudoku enquanto a que ela estava
+  // usando era a do Excel. Agora ganha a salva mais recentemente, que é a que
+  // ela mexeu por último.
+  var achadas = [];
   for (var i = 0; i < (savedTrips || []).length; i++) {
     var t = savedTrips[i];
     if (!t || !t.startVal || !(t.days || []).length) continue;
     var ini = new Date(t.startVal + 'T00:00:00');
     for (var d = 0; d < t.days.length; d++) {
       var dia = new Date(ini); dia.setDate(ini.getDate() + d);
-      if (isoDate(dia) === dataIso) return { mala: t, idx: i, dia: t.days[d], diaIdx: d };
+      if (isoDate(dia) === dataIso) { achadas.push({ mala: t, idx: i, dia: t.days[d], diaIdx: d }); break; }
     }
   }
-  return null;
+  if (!achadas.length) return null;
+  achadas.sort(function(a, b){ return String(b.mala.savedAt || '').localeCompare(String(a.mala.savedAt || '')); });
+  return achadas[0];
 }
 
 // Um turno de viagem ocupando o lugar do look do dia. Ela pediu isso: "por que
