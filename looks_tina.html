@@ -1199,6 +1199,7 @@ body.compare-mode .card-compare-btn { display: flex; }
         <div class="setup-day-row" id="setupWeekRow">
           <button type="button" class="setup-day-pill active" id="setupWeek0" onclick="setWizardWeek(0)">Esta semana</button>
           <button type="button" class="setup-day-pill" id="setupWeek1" onclick="setWizardWeek(1)">Próxima semana</button>
+          <button type="button" class="setup-day-pill" id="setupWeek2" onclick="setWizardWeek(2)">Daqui a 2 semanas</button>
         </div>
         <div id="setupWeekRange" style="font-size:.72rem;color:#A8A8A4;margin-top:6px;"></div>
       </div>
@@ -1288,6 +1289,18 @@ body.compare-mode .card-compare-btn { display: flex; }
     </div>
     <p class="next-week-hint">Deixe a semana que vem pronta sem mexer na de agora. Na segunda-feira ela vira a semana atual sozinha.</p>
     <div class="week-grid" id="nextWeekGrid"></div>
+  </div>
+
+  <!-- Terceira semana: mesma coisa, mais uma pra frente -->
+  <div id="nextWeek2Section">
+    <div class="next-week-head">
+      <h3><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg> Daqui a duas semanas</h3>
+      <span class="next-week-range" id="nextWeek2Range"></span>
+      <button class="btn btn-ghost" onclick="montarSemana2IA()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><circle cx="7.8" cy="7.6" r="2.8"/><path d="M7.8 2.4v1.4M3.6 3.4l1 1M2.4 7.6h1.4M12 3.4l-1 1"/><path d="M9.4 19.4a3.7 3.7 0 0 1 .6-7.4 4.8 4.8 0 0 1 9.1 1.4 3.1 3.1 0 0 1-.6 6h-9.1z"/></svg> Montar com IA</button>
+      <button class="btn btn-ghost" onclick="clearNextWeek2()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14"/></svg> Limpar</button>
+    </div>
+    <p class="next-week-hint">Some quando virar a semana que vem — o que estiver aqui desce um degrau sozinho.</p>
+    <div class="week-grid" id="nextWeek2Grid"></div>
   </div>
 </div>
 
@@ -1642,7 +1655,8 @@ function lsSet(key, value) {
 // Se o servidor não responder (ex: site aberto direto do GitHub Pages, sem
 // backend, ou sem internet), tudo falha silenciosamente e o app continua
 // funcionando 100% localmente, como sempre funcionou.
-var SYNC_KEYS = ['looks_tina_catalog_v1', 'looks_tina_montados_v1', 'looks_tina_pecas_avulsas_v1', 'looks_tina_proxsemana_v1', 'looks_tina_pecas_arquivadas_v1', 'looks_tina_proxsemana_dias_v1', 'looks_tina_proxsemana_noite_v1', 'looks_tina_inspiracoes_v1', 'looks_tina_preferencias_v1', 'looks_tina_combinacoes_v1', 'looks_tina_regras_v1', 'looks_tina_trips_v1', 'looks_tina_weekhistory_v1', 'looks_tina_recusas_v1'];
+var SYNC_KEYS = ['looks_tina_catalog_v1', 'looks_tina_montados_v1', 'looks_tina_pecas_avulsas_v1', 'looks_tina_proxsemana_v1', 'looks_tina_pecas_arquivadas_v1', 'looks_tina_proxsemana_dias_v1', 'looks_tina_proxsemana_noite_v1', 'looks_tina_inspiracoes_v1', 'looks_tina_preferencias_v1', 'looks_tina_combinacoes_v1', 'looks_tina_regras_v1', 'looks_tina_trips_v1', 'looks_tina_weekhistory_v1', 'looks_tina_recusas_v1',
+  'looks_tina_prox2_v1', 'looks_tina_prox2_noite_v1', 'looks_tina_prox2_dias_v1'];
 // Um aparelho que abre o app sem nada salvo começa com o catálogo embutido (851
 // looks) e a lista de montados vazia. Se ele mandar isso pro servidor antes de
 // ler o que está lá, apaga o que existe — foi o que aconteceu em 17/08/2026,
@@ -1845,6 +1859,21 @@ function pullRemoteUpdates() {
       } catch (e) {}
     }
   });
+  [[NEXT2_KEY, function(v){ nextWeek2Plan = v; }, function(){ return nextWeek2Plan; }, saveNextWeek2Plan],
+   [NEXT2_NOITE_KEY, function(v){ nextWeek2Noite = v; }, function(){ return nextWeek2Noite; }, saveNextWeek2Noite],
+   [NEXT2_DIAS_KEY, function(v){ nextWeek2Dias = v; }, function(){ return nextWeek2Dias; }, saveNextWeek2Dias]
+  ].forEach(function(par){
+    var chave = par[0], poe = par[1], pega = par[2], salva = par[3];
+    syncGet(chave).then(function(res) {
+      liberarEnvio(chave, !!(res && res.value != null));
+      if (!res || res.value == null) { if (temAlgoAqui(pega())) salva(); return; }
+      if (servidorVeioVazio(res.value) && temAlgoAqui(pega())) { salva(); return; }
+      if (res.value !== JSON.stringify(pega())) {
+        try { poe(JSON.parse(res.value) || {}); lsSet(chave, res.value); renderWeek(); } catch (e) {}
+      }
+    });
+  });
+
   syncGet(RECUSAS_KEY).then(function(res) {
     liberarEnvio(RECUSAS_KEY, !!(res && res.value != null));
     if (!res || res.value == null) { if (temAlgoAqui(recusas.pecas)) saveRecusas(); return; }
@@ -7131,7 +7160,8 @@ function renderWeek() {
 
     wg.appendChild(col);
   });
-  renderNextWeekGrid();
+  renderNextWeekGrid('proxima', 'nextWeekGrid', 'nextWeekRange', 1);
+  renderNextWeekGrid('proxima2', 'nextWeek2Grid', 'nextWeek2Range', 2);
 }
 
 // Próxima semana
@@ -7157,12 +7187,23 @@ function saveNextWeekPlan() {
 // look pro trabalho e outro pro jantar —, então cada dia tem dois espaços.
 // O da noite mora em campos paralelos, pra não mexer no que já estava salvo.
 function campoDoTurno(turno) { return (turno === 'noite') ? 'weekdayNoite' : 'weekday'; }
-function planoDoTurno(turno) { return (turno === 'noite') ? nextWeekNoite : nextWeekPlan; }
-function salvarPlanoDoTurno(turno) { return (turno === 'noite') ? saveNextWeekNoite() : saveNextWeekPlan(); }
+// Três semanas: a atual mora no próprio look, e as duas seguintes em mapas à
+// parte. Tudo passa por estes quatro primitivos, então acrescentar a terceira
+// não precisou espalhar 'proxima2' pela tela inteira.
+function ehPlanejada(alvo) { return alvo === 'proxima' || alvo === 'proxima2'; }
+function planoDoTurno(turno, alvo) {
+  if (alvo === 'proxima2') return (turno === 'noite') ? nextWeek2Noite : nextWeek2Plan;
+  return (turno === 'noite') ? nextWeekNoite : nextWeekPlan;
+}
+function salvarPlanoDoTurno(turno, alvo) {
+  if (alvo === 'proxima2') return (turno === 'noite') ? saveNextWeek2Noite() : saveNextWeek2Plan();
+  return (turno === 'noite') ? saveNextWeekNoite() : saveNextWeekPlan();
+}
 
 function weekLookFor(day, alvo, turno) {
-  if ((alvo || weekView) === 'proxima') {
-    var id = planoDoTurno(turno)[day];
+  var qual = alvo || weekView;
+  if (ehPlanejada(qual)) {
+    var id = planoDoTurno(turno, qual)[day];
     if (id == null) return null;
     return data.find(function(p){ return p.id === id; }) || null;
   }
@@ -7171,11 +7212,12 @@ function weekLookFor(day, alvo, turno) {
 }
 
 function setWeekLookFor(day, pid, alvo, turno) {
-  if ((alvo || weekView) === 'proxima') {
-    var plano = planoDoTurno(turno);
+  var qual = alvo || weekView;
+  if (ehPlanejada(qual)) {
+    var plano = planoDoTurno(turno, qual);
     Object.keys(plano).forEach(function(d){ if(plano[d] === pid) delete plano[d]; });
     plano[day] = pid;
-    salvarPlanoDoTurno(turno);
+    salvarPlanoDoTurno(turno, qual);
     return;
   }
   var campo = campoDoTurno(turno);
@@ -7185,7 +7227,8 @@ function setWeekLookFor(day, pid, alvo, turno) {
 }
 
 function clearWeekLookFor(day, alvo, turno) {
-  if ((alvo || weekView) === 'proxima') { delete planoDoTurno(turno)[day]; salvarPlanoDoTurno(turno); return; }
+  var qual = alvo || weekView;
+  if (ehPlanejada(qual)) { delete planoDoTurno(turno, qual)[day]; salvarPlanoDoTurno(turno, qual); return; }
   var campo = campoDoTurno(turno);
   var look = data.find(function(p){ return p[campo] === day; });
   if (look) look[campo] = null;
@@ -7196,7 +7239,11 @@ function clearWeekLookFor(day, alvo, turno) {
 // Arrastar mexia só no do catálogo, então look montado ficava preso no dia em
 // que estava. Aqui o dia vira um pacote, e a troca leva o que houver nele.
 function campoMontadoDe(alvo, turno) {
-  if (turno === 'noite') return (alvo === 'proxima') ? 'weekdayNoiteNext' : 'weekdayNoite';
+  if (turno === 'noite') {
+    if (alvo === 'proxima2') return 'weekdayNoiteNext2';
+    return (alvo === 'proxima') ? 'weekdayNoiteNext' : 'weekdayNoite';
+  }
+  if (alvo === 'proxima2') return 'weekdayNext2';
   return (alvo === 'proxima') ? 'weekdayNext' : 'weekday';
 }
 
@@ -7308,6 +7355,24 @@ function ligarArrastarLook(el, day, alvo, turno) {
   });
 }
 
+function clearNextWeek2() {
+  if (!Object.keys(nextWeek2Plan).length &&
+      !montagens.some(function(m){ return m.weekdayNext2; })) return;
+  if (!confirm('Limpar o plano de daqui a duas semanas?')) return;
+  nextWeek2Plan = {}; saveNextWeek2Plan();
+  nextWeek2Noite = {}; saveNextWeek2Noite();
+  nextWeek2Dias = {}; saveNextWeek2Dias();
+  montagens.forEach(function(m){ m.weekdayNext2 = null; m.weekdayNoiteNext2 = null; });
+  saveMontagens();
+  renderGrid(); renderWeek();
+  showSavedToast('Plano de daqui a duas semanas limpo.');
+}
+
+function montarSemana2IA() {
+  showSuggestions();
+  setWizardWeek(2);
+}
+
 function clearNextWeek() {
   // Plano não vai pro histórico: é só descartar.
   if (!Object.keys(nextWeekPlan).length &&
@@ -7330,12 +7395,15 @@ function montarProximaSemanaIA() {
 // Grade da próxima semana: mais enxuta de propósito. Nota do dia, "em casa" e
 // ocasião ficam de fora porque são guardados por dia numa lista só, que é da
 // semana corrente — reaproveitar aqui sobrescreveria os dados dela.
-function renderNextWeekGrid() {
-  var grid = document.getElementById('nextWeekGrid');
+// Uma função só desenha a segunda E a terceira semana — copiar seria manter
+// dois lugares em sincronia pra sempre.
+function renderNextWeekGrid(alvo, idGrid, idRange, semanasAdiante) {
+  alvo = alvo || alvo;
+  var grid = document.getElementById(idGrid || 'nextWeekGrid');
   if (!grid) return;
-  var monday = mondayOfCurrentWeek(); monday.setDate(monday.getDate() + 7);
+  var monday = mondayOfCurrentWeek(); monday.setDate(monday.getDate() + 7 * (semanasAdiante || 1));
   var sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
-  var range = document.getElementById('nextWeekRange');
+  var range = document.getElementById(idRange || 'nextWeekRange');
   if (range) range.textContent = brDate(monday) + ' a ' + brDate(sunday);
 
   grid.innerHTML = '';
@@ -7346,9 +7414,9 @@ function renderNextWeekGrid() {
     var dh = document.createElement('div'); dh.className = 'day-header';
     dh.textContent = day + ' ' + brDate(d);
     col.appendChild(dh);
-    ligarSoltarNoDia(col, day, 'proxima');
+    ligarSoltarNoDia(col, day, alvo);
 
-    var look = weekLookFor(day, 'proxima');
+    var look = weekLookFor(day, alvo);
     var dayKey = (WEEKDAYS.find(function(x){ return x.label === day; }) || {}).key;
     var montado = dayKey ? montagens.find(function(m){ return m.weekdayNext === dayKey; }) : null;
     // A mala só era consultada na semana atual. A viagem dela é de 12 a 28/09 e
@@ -7360,32 +7428,32 @@ function renderNextWeekGrid() {
     if (look || montado) {
       // o que ela escolheu à mão manda; os ramos abaixo cuidam disso
     } else if (malaDoDia && cartaoDaMalaNoTurno(col, malaDoDia, 'dia')) {
-      if (!weekLookFor(day, 'proxima', 'noite')) cartaoDaMalaNoTurno(col, malaDoDia, 'noite');
+      if (!weekLookFor(day, alvo, 'noite')) cartaoDaMalaNoTurno(col, malaDoDia, 'noite');
       tituloDaMalaNoDia(col, malaDoDia);
-      barraDeMontarNoDia(col, day, 'proxima', 'dia');
+      barraDeMontarNoDia(col, day, alvo, 'dia');
       grid.appendChild(col);
       return;
     }
 
-    if (casaNoDia(day, 'proxima') && !look && !montado) {
+    if (casaNoDia(day, alvo) && !look && !montado) {
       var dc = document.createElement('div'); dc.className = 'day-empty';
       dc.style.cssText = 'background:#FAFAF8;border:1.5px dashed #E0E0DB;position:relative;';
-      alvoDeTrocaSemana(dc, day, 'proxima', 'dia');
+      alvoDeTrocaSemana(dc, day, alvo, 'dia');
       dc.innerHTML = '<span style="font-size:1.4rem"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3.8 10.4 8.2-6.6 8.2 6.6V19a1.6 1.6 0 0 1-1.6 1.6H5.4A1.6 1.6 0 0 1 3.8 19v-8.6z"/></svg></span><span class="add-look-hint" style="color:#C4985A;">Em casa</span>';
       var un = document.createElement('button');
       un.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"/></svg>';
       un.style.cssText = 'position:absolute;top:4px;right:4px;background:none;border:none;cursor:pointer;color:#C4985A;line-height:1;padding:2px;';
-      un.onclick = (function(dd){ return function(e){ e.stopPropagation(); setCasaNoDia(dd, 'proxima', false); }; })(day);
+      un.onclick = (function(dd){ return function(e){ e.stopPropagation(); setCasaNoDia(dd, alvo, false); }; })(day);
       dc.appendChild(un);
       var cb = document.createElement('button'); cb.className = 'day-suggest-btn';
       cb.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><circle cx="7.8" cy="7.6" r="2.8"/><path d="M7.8 2.4v1.4M3.6 3.4l1 1M2.4 7.6h1.4M12 3.4l-1 1"/><path d="M9.4 19.4a3.7 3.7 0 0 1 .6-7.4 4.8 4.8 0 0 1 9.1 1.4 3.1 3.1 0 0 1-.6 6h-9.1z"/></svg> Look de casa';
-      cb.onclick = (function(dd){ return function(e){ e.stopPropagation(); sugerirLookParaDia(dd, 'proxima'); }; })(day);
+      cb.onclick = (function(dd){ return function(e){ e.stopPropagation(); sugerirLookParaDia(dd, alvo); }; })(day);
       dc.appendChild(cb);
       col.appendChild(dc);
-      barraDeMontarNoDia(col, day, 'proxima', 'dia');
+      barraDeMontarNoDia(col, day, alvo, 'dia');
     } else if (look) {
       var dl = document.createElement('div'); dl.className = 'day-look';
-      ligarArrastarLook(dl, day, 'proxima');
+      ligarArrastarLook(dl, day, alvo);
       var img = document.createElement('img'); img.src = lookThumb(look); img.alt = '';
       img.loading = 'lazy';
       applyRotation(img, look);
@@ -7393,20 +7461,20 @@ function renderNextWeekGrid() {
       var rm = document.createElement('button'); rm.className = 'day-look-remove';
       rm.title = 'Tirar da próxima semana';
       rm.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"/></svg>';
-      rm.onclick = (function(dd){ return function(e){ e.stopPropagation(); clearWeekLookFor(dd, 'proxima'); renderWeek(); }; })(day);
+      rm.onclick = (function(dd){ return function(e){ e.stopPropagation(); clearWeekLookFor(dd, alvo); renderWeek(); }; })(day);
       var rs = document.createElement('button'); rs.className = 'day-look-resuggest';
       rs.title = 'Sugerir outro look pra ' + day;
       rs.textContent = 'outra';
-      rs.onclick = (function(dd){ return function(e){ e.stopPropagation(); sugerirLookParaDia(dd, 'proxima'); }; })(day);
+      rs.onclick = (function(dd){ return function(e){ e.stopPropagation(); sugerirLookParaDia(dd, alvo); }; })(day);
       dl.appendChild(img); dl.appendChild(rm); dl.appendChild(rs);
-      botaoTrocarTurno(dl, day, 'proxima', 'dia');
-      botaoMoverSemana(dl, day, 'proxima', 'dia');
+      botaoTrocarTurno(dl, day, alvo, 'dia');
+      botaoMoverSemana(dl, day, alvo, 'dia');
       col.appendChild(dl);
-      barraDeMontarNoDia(col, day, 'proxima', 'dia');
-      avisoDeClimaNaColuna(col, day, 'proxima', look.tags);
+      barraDeMontarNoDia(col, day, alvo, 'dia');
+      avisoDeClimaNaColuna(col, day, alvo, look.tags);
     } else if (montado) {
       var dm = document.createElement('div'); dm.className = 'day-look day-look-montado';
-      ligarArrastarLook(dm, day, 'proxima');
+      ligarArrastarLook(dm, day, alvo);
       var fl = document.createElement('div'); fl.className = 'flatlay-canvas';
       renderFlatLay(fl, montado.pieceIds.map(findPieceById).filter(Boolean));
       dm.appendChild(fl);
@@ -7416,48 +7484,48 @@ function renderNextWeekGrid() {
       var mrm = document.createElement('button'); mrm.className = 'day-look-remove';
       mrm.title = 'Tirar da próxima semana';
       mrm.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"/></svg>';
-      mrm.onclick = (function(mid, k){ return function(e){ e.stopPropagation(); setMontadoWeekday(mid, k, 'proxima'); renderWeek(); }; })(montado.id, dayKey);
+      mrm.onclick = (function(mid, k){ return function(e){ e.stopPropagation(); setMontadoWeekday(mid, k, alvo); renderWeek(); }; })(montado.id, dayKey);
       var mrs = document.createElement('button'); mrs.className = 'day-look-resuggest';
       mrs.title = 'Sugerir outro look pra ' + day;
       mrs.textContent = 'outra';
-      mrs.onclick = (function(dd){ return function(e){ e.stopPropagation(); sugerirLookParaDia(dd, 'proxima'); }; })(day);
+      mrs.onclick = (function(dd){ return function(e){ e.stopPropagation(); sugerirLookParaDia(dd, alvo); }; })(day);
       dm.appendChild(mrs);
       dm.appendChild(mrm);
-      botaoTrocarTurno(dm, day, 'proxima', 'dia');
-      botaoMoverSemana(dm, day, 'proxima', 'dia');
+      botaoTrocarTurno(dm, day, alvo, 'dia');
+      botaoMoverSemana(dm, day, alvo, 'dia');
       dm.onclick = (function(mid){ return function(){ switchTab('montados'); openMontadoDetail(mid); }; })(montado.id);
       col.appendChild(dm);
-      barraDeMontarNoDia(col, day, 'proxima', 'dia');
-      avisoDeClimaNaColuna(col, day, 'proxima', tagsDoMontado(montado));
+      barraDeMontarNoDia(col, day, alvo, 'dia');
+      avisoDeClimaNaColuna(col, day, alvo, tagsDoMontado(montado));
     } else {
       var de = document.createElement('div'); de.className = 'day-empty';
       de.innerHTML = '<span style="font-size:1.4rem"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7.2a2.1 2.1 0 1 1 2.1-2.1c0 1.1-1 1.5-2.1 2.1v2"/><path d="M12 9.2 3.6 15.3A1.5 1.5 0 0 0 4.5 18h15a1.5 1.5 0 0 0 .9-2.7L12 9.2z"/></svg></span><span class="add-look-hint">Adicionar look</span>'
-        + '<button onclick="event.stopPropagation();setCasaNoDia(\''+day+'\', \'proxima\', true)" class="day-suggest-btn" style="color:#C4985A;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="m3.8 10.4 8.2-6.6 8.2 6.6V19a1.6 1.6 0 0 1-1.6 1.6H5.4A1.6 1.6 0 0 1 3.8 19v-8.6z"/></svg> Em casa</button>'
-        + '<button onclick="event.stopPropagation();sugerirLookParaDia(\''+day+'\', \'proxima\')" class="day-suggest-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><circle cx="7.8" cy="7.6" r="2.8"/><path d="M7.8 2.4v1.4M3.6 3.4l1 1M2.4 7.6h1.4M12 3.4l-1 1"/><path d="M9.4 19.4a3.7 3.7 0 0 1 .6-7.4 4.8 4.8 0 0 1 9.1 1.4 3.1 3.1 0 0 1-.6 6h-9.1z"/></svg> Sugerir look</button>';
-      de.onclick = (function(dd){ return function(){ openDayPicker(dd, 'proxima'); }; })(day);
-      alvoDeTrocaSemana(de, day, 'proxima', 'dia');
+        + '<button onclick="event.stopPropagation();setCasaNoDia(\''+day+'\', \''+alvo+'\', true)" class="day-suggest-btn" style="color:#C4985A;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="m3.8 10.4 8.2-6.6 8.2 6.6V19a1.6 1.6 0 0 1-1.6 1.6H5.4A1.6 1.6 0 0 1 3.8 19v-8.6z"/></svg> Em casa</button>'
+        + '<button onclick="event.stopPropagation();sugerirLookParaDia(\''+day+'\', \''+alvo+'\')" class="day-suggest-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><circle cx="7.8" cy="7.6" r="2.8"/><path d="M7.8 2.4v1.4M3.6 3.4l1 1M2.4 7.6h1.4M12 3.4l-1 1"/><path d="M9.4 19.4a3.7 3.7 0 0 1 .6-7.4 4.8 4.8 0 0 1 9.1 1.4 3.1 3.1 0 0 1-.6 6h-9.1z"/></svg> Sugerir look</button>';
+      de.onclick = (function(dd){ return function(){ openDayPicker(dd, alvo); }; })(day);
+      alvoDeTrocaSemana(de, day, alvo, 'dia');
       col.appendChild(de);
-      barraDeMontarNoDia(col, day, 'proxima', 'dia');
+      barraDeMontarNoDia(col, day, alvo, 'dia');
     }
 
-    blocoDaNoite(col, day, 'proxima');
+    blocoDaNoite(col, day, alvo);
 
     // Nota do dia, "em casa" e ocasião — agora também na próxima semana, com
     // registro próprio (nextWeekDays), pra não escrever por cima da semana atual.
     var nt = document.createElement('textarea');
     nt.className = 'day-note'; nt.rows = 2;
     nt.placeholder = 'Nota do dia...';
-    nt.value = notaDoDia(day, 'proxima');
+    nt.value = notaDoDia(day, alvo);
     nt.addEventListener('input', function(){ nt.style.height='auto'; nt.style.height = nt.scrollHeight+'px'; });
-    nt.addEventListener('blur', (function(dd){ return function(){ setNotaDoDia(dd, 'proxima', nt.value.trim()); }; })(day));
+    nt.addEventListener('blur', (function(dd){ return function(){ setNotaDoDia(dd, alvo, nt.value.trim()); }; })(day));
     col.appendChild(nt);
 
     var ocRow = document.createElement('div'); ocRow.className = 'day-ocasiao-row';
     DAY_OCASIAO_OPTS.forEach(function(opt){
       var b = document.createElement('button'); b.className = 'day-ocasiao-btn';
       b.innerHTML = opt.emoji; b.title = opt.label;
-      if (ocasiaoDoDia(day, 'proxima') === opt.key) b.classList.add('active');
-      b.onclick = (function(dd,k){ return function(e){ e.stopPropagation(); setOcasiaoDoDia(dd, 'proxima', k); }; })(day, opt.key);
+      if (ocasiaoDoDia(day, alvo) === opt.key) b.classList.add('active');
+      b.onclick = (function(dd,k){ return function(e){ e.stopPropagation(); setOcasiaoDoDia(dd, alvo, k); }; })(day, opt.key);
       ocRow.appendChild(b);
     });
     col.appendChild(ocRow);
@@ -10399,6 +10467,19 @@ function saveNextWeekNoite() {
   syncPut(NEXT_WEEK_NOITE_KEY, json);
 }
 
+// A terceira semana: mesmos três mapas da segunda, chaves próprias. Ela pediu
+// "sempre a semana atual e + 2" — com a viagem de 17 dias, duas semanas não
+// cobriam a viagem inteira.
+var NEXT2_KEY = 'looks_tina_prox2_v1';
+var NEXT2_NOITE_KEY = 'looks_tina_prox2_noite_v1';
+var NEXT2_DIAS_KEY = 'looks_tina_prox2_dias_v1';
+var nextWeek2Plan  = safeParse(lsGet(NEXT2_KEY), {}) || {};
+var nextWeek2Noite = safeParse(lsGet(NEXT2_NOITE_KEY), {}) || {};
+var nextWeek2Dias  = safeParse(lsGet(NEXT2_DIAS_KEY), {}) || {};
+function saveNextWeek2Plan()  { var j = JSON.stringify(nextWeek2Plan);  lsSet(NEXT2_KEY, j);       syncPut(NEXT2_KEY, j); }
+function saveNextWeek2Noite() { var j = JSON.stringify(nextWeek2Noite); lsSet(NEXT2_NOITE_KEY, j); syncPut(NEXT2_NOITE_KEY, j); }
+function saveNextWeek2Dias()  { var j = JSON.stringify(nextWeek2Dias);  lsSet(NEXT2_DIAS_KEY, j);  syncPut(NEXT2_DIAS_KEY, j); }
+
 var NEXT_WEEK_DAYS_KEY = 'looks_tina_proxsemana_dias_v1';
 var nextWeekDays = safeParse(lsGet(NEXT_WEEK_DAYS_KEY), {}) || {};
 
@@ -10407,10 +10488,12 @@ function saveNextWeekDays() {
   lsSet(NEXT_WEEK_DAYS_KEY, json);
   syncPut(NEXT_WEEK_DAYS_KEY, json);
 }
-function diaProx(day) {
-  if (!nextWeekDays[day]) nextWeekDays[day] = {};
-  return nextWeekDays[day];
+function diaProx(day, alvo) {
+  var mapa = (alvo === 'proxima2') ? nextWeek2Dias : nextWeekDays;
+  if (!mapa[day]) mapa[day] = {};
+  return mapa[day];
 }
+function salvarDiasProx(alvo) { return (alvo === 'proxima2') ? saveNextWeek2Dias() : saveNextWeekDays(); }
 
 function notaDoDia(day, alvo) {
   return (alvo === 'proxima') ? (diaProx(day).nota || '') : (weekNotes[day] || '');
@@ -10420,13 +10503,16 @@ function setNotaDoDia(day, alvo, val) {
   saveWeekNote(day, val);
 }
 function casaNoDia(day, alvo) {
-  return (alvo === 'proxima') ? !!diaProx(day).casa : !!weekCasaDays[day];
+  return ehPlanejada(alvo) ? !!diaProx(day, alvo).casa : !!weekCasaDays[day];
 }
 function setCasaNoDia(day, alvo, isCasa) {
-  if (alvo === 'proxima') {
-    if (isCasa) { diaProx(day).casa = true; delete nextWeekPlan[day]; saveNextWeekPlan(); }
-    else delete diaProx(day).casa;
-    saveNextWeekDays(); renderWeek();
+  if (ehPlanejada(alvo)) {
+    if (isCasa) {
+      diaProx(day, alvo).casa = true;
+      delete planoDoTurno('dia', alvo)[day]; salvarPlanoDoTurno('dia', alvo);
+    }
+    else delete diaProx(day, alvo).casa;
+    salvarDiasProx(alvo); renderWeek();
     showSavedToast(isCasa ? 'Dia marcado como em casa' : 'Dia liberado');
     return;
   }
@@ -11038,8 +11124,10 @@ function closeSuggestPanel() {
 function setWizardWeek(offset) {
   wizardWeekOffset = offset;
   var b0 = document.getElementById('setupWeek0'), b1 = document.getElementById('setupWeek1');
+  var b2 = document.getElementById('setupWeek2');
   if (b0) b0.classList.toggle('active', offset === 0);
   if (b1) b1.classList.toggle('active', offset === 1);
+  if (b2) b2.classList.toggle('active', offset === 2);
   assignedLooks = {}; // semana trocou: o que já tinha sido montado não vale mais
   renderSetupStep(); // os dias em casa e as ocasiões são de cada semana, não os mesmos
   var range = document.getElementById('setupWeekRange');
@@ -11073,7 +11161,10 @@ function showSuggestions() {
 }
 
 // A semana que o assistente está montando — não necessariamente a atual.
-function alvoDoAssistente() { return (wizardWeekOffset === 1) ? 'proxima' : 'atual'; }
+function alvoDoAssistente() {
+  if (wizardWeekOffset === 2) return 'proxima2';
+  return (wizardWeekOffset === 1) ? 'proxima' : 'atual';
+}
 
 // Marcar "fico em casa" escrevia sempre na semana corrente, mesmo com "Próxima
 // semana" escolhida lá em cima: marcar não surtia efeito nenhum na semana que
@@ -16556,6 +16647,13 @@ function checkWeekRollover() {
     });
     nextWeekPlan = {}; saveNextWeekPlan();
     nextWeekNoite = {}; saveNextWeekNoite();
+    // E a terceira semana desce um degrau, virando a próxima. A ordem importa:
+    // isto só pode acontecer DEPOIS de a próxima ter sido esvaziada acima,
+    // senão eu sobrescreveria o que acabei de promover.
+    nextWeekPlan  = nextWeek2Plan;  nextWeek2Plan  = {};
+    nextWeekNoite = nextWeek2Noite; nextWeek2Noite = {};
+    saveNextWeekPlan(); saveNextWeekNoite();
+    saveNextWeek2Plan(); saveNextWeek2Noite();
     // O mesmo vale pros looks montados marcados pra próxima semana.
     var montPromovidos = 0;
     montagens.forEach(function(m){
@@ -16564,6 +16662,9 @@ function checkWeekRollover() {
       // mesma coisa pro espaço da noite
       if (m.weekdayNoiteNext) { m.weekdayNoite = m.weekdayNoiteNext; m.weekdayNoiteNext = null; montPromovidos++; }
       else if (m.weekdayNoite) { m.weekdayNoite = null; montPromovidos++; }
+      // e a terceira semana desce pra segunda, na mesma passada e nesta ordem
+      if (m.weekdayNext2) { m.weekdayNext = m.weekdayNext2; m.weekdayNext2 = null; montPromovidos++; }
+      if (m.weekdayNoiteNext2) { m.weekdayNoiteNext = m.weekdayNoiteNext2; m.weekdayNoiteNext2 = null; montPromovidos++; }
     });
     if (montPromovidos) saveMontagens();
 
@@ -16577,7 +16678,8 @@ function checkWeekRollover() {
       if (nd.casa) weekCasaDays[d] = true;
       if (nd.ocasiao) weekDayOcasiao[d] = nd.ocasiao;
     });
-    nextWeekDays = {}; saveNextWeekDays();
+    nextWeekDays = nextWeek2Dias; nextWeek2Dias = {};
+    saveNextWeekDays(); saveNextWeek2Dias();
     lsSet('looks_tina_weeknotes_v1', JSON.stringify(weekNotes));
     lsSet('looks_tina_casadays_v1', JSON.stringify(weekCasaDays));
     lsSet('looks_tina_dayocasiao_v1', JSON.stringify(weekDayOcasiao));
@@ -19099,16 +19201,18 @@ var wizardOcasiao = null;
 
 function applySuggestions() {
   // Montou a próxima semana? Então vai pro plano da próxima, sem encostar na atual.
-  var paraProxima = (wizardWeekOffset === 1);
-  var alvo = paraProxima ? 'a próxima semana' : 'a semana';
+  var alvoSemana = alvoDoAssistente();
+  var paraProxima = (alvoSemana !== 'atual');
+  var alvo = (alvoSemana === 'proxima2') ? 'daqui a duas semanas'
+           : (alvoSemana === 'proxima') ? 'a próxima semana' : 'a semana';
   var hasExisting = paraProxima
-    ? Object.keys(nextWeekPlan).length > 0
+    ? Object.keys(planoDoTurno('dia', alvoSemana)).length > 0
     : data.some(function(p){ return p.weekday !== null; });
   if(hasExisting && !confirm('Isso vai substituir os looks já atribuídos a ' + alvo + '. Continuar?')) return;
 
   // Dia com look montado escolhido à mão vai pro campo do montado, não pro plano
   // do catálogo — são dois registros diferentes pra mesma semana.
-  var campoMont = paraProxima ? 'weekdayNext' : 'weekday';
+  var campoMont = campoMontadoDe(alvoSemana, 'dia');
   montagens.forEach(function(m){
     if (DAYS.some(function(d){ var a = assignedLooks[d]; return a && a.montadoId === m.id; })) return;
     if (FORECAST.some(function(f){ return m[campoMont] === (WEEKDAYS.find(function(w){ return w.label === f.day; })||{}).key; })) m[campoMont] = null;
@@ -19122,12 +19226,13 @@ function applySuggestions() {
   saveMontagens();
 
   if (paraProxima) {
-    nextWeekPlan = {};
+    var plano = planoDoTurno('dia', alvoSemana);
+    Object.keys(plano).forEach(function(k){ delete plano[k]; });
     FORECAST.forEach(function(f){
       var a = assignedLooks[f.day]; if(!a || !a.curId) return;
-      nextWeekPlan[f.day] = a.curId;
+      plano[f.day] = a.curId;
     });
-    saveNextWeekPlan();
+    salvarPlanoDoTurno('dia', alvoSemana);
   } else {
     data.forEach(function(p){ p.weekday = null; });
     FORECAST.forEach(function(f){

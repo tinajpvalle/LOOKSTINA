@@ -54,7 +54,10 @@ const ALLOWED_KEYS = new Set([
   'looks_tina_regras_v1',           // regras escritas por ela ("X com Y não fica bom")
   'looks_tina_trips_v1',            // malas de viagem montadas a partir dos sapatos
   'looks_tina_weekhistory_v1',      // semanas que passaram, guardadas pra restaurar
-  'looks_tina_recusas_v1'           // o "gerar outro": pares e peças que ela troca fora
+  'looks_tina_recusas_v1',          // o "gerar outro": pares e peças que ela troca fora
+  'looks_tina_prox2_v1',            // terceira semana: look de cada dia
+  'looks_tina_prox2_noite_v1',      // terceira semana: look da noite
+  'looks_tina_prox2_dias_v1'        // terceira semana: nota, em casa, ocasião
 ]);
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
