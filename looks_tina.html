@@ -13137,7 +13137,12 @@ function renderTodaySuggestion() {
       document.getElementById('todaySuggestTags').textContent = planejado.montado.name || 'Look montado';
     }
     nav.style.display = 'none';
+    // O Trocar fica visível nos DOIS estados. Antes ele só existia com look já
+    // planejado: no modo sugestão era escondido e dava lugar ao "‹ 1/12 ›". Ela
+    // mandou o print dizendo "nao aparece o trocar ainda" — pra ela Trocar quer
+    // dizer "me dá outro", sem importar em que estado a tela está.
     trocaBtn.style.display = '';
+    trocaBtn.onclick = function(){ trocarLookDoDia(); };
     useBtn.style.display = 'none';
     wornBtn.style.display = (ehHoje && planejado.tipo === 'catalogo') ? '' : 'none';
   } else {
@@ -13151,7 +13156,11 @@ function renderTodaySuggestion() {
     document.getElementById('todaySuggestTags').textContent =
       (p.tags||[]).filter(function(t){ return t.split(':')[0].trim().toLowerCase() !== 'marca'; })
         .map(function(t){ return t.split(':').slice(1).join(':').trim(); }).join(' · ') || 'sem tags';
-    nav.style.display = ''; trocaBtn.style.display = 'none';
+    nav.style.display = '';
+    // Aqui trocar é avançar no pool — o "‹ n/N ›" continua embaixo pra ela poder
+    // voltar e ver onde está.
+    trocaBtn.style.display = '';
+    trocaBtn.onclick = function(){ stepTodayCardLook(1); };
     document.getElementById('todaySuggestCount').textContent = (st.idx + 1) + '/' + st.pool.length;
     useBtn.style.display = '';
     useBtn.textContent = ehHoje ? 'Vou usar esse hoje' : ('Usar esse em ' + info.label);
