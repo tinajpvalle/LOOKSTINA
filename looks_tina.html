@@ -4833,7 +4833,10 @@ function verDetalheDoLook(tipo, id) {
   abaDeOrigem = (typeof currentTab !== 'undefined' && currentTab !== 'montados' && currentTab !== 'catalog')
     ? currentTab : null;
   if (tipo === 'montado') { switchTab('montados'); openMontadoDetail(id); }
-  else { verDetalheDoLook('look', id); }
+  // Esta linha já foi `verDetalheDoLook('look', id)` — a substituição em massa
+  // que criou esta função também trocou a chamada DE DENTRO dela, e virou
+  // recursão infinita: nenhuma foto do catálogo abria.
+  else { switchTab('catalog'); openView(id); }
 }
 
 function voltarDaAbaDeOrigem() {
