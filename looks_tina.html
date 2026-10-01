@@ -4249,7 +4249,7 @@ function abrirCombinaCom(pieceId) {
       var im = document.createElement('img'); im.src = lookThumb(l); im.loading = 'lazy';
       applyRotation(im, l);
       c.appendChild(im);
-      c.onclick = (function(lid){ return function(){ fecharCombinaCom(); switchTab('catalog'); openView(lid); }; })(l.id);
+      c.onclick = (function(lid){ return function(){ fecharCombinaCom(); verDetalheDoLook('look', lid); }; })(l.id);
       grid.appendChild(c);
     });
     box.appendChild(grid);
@@ -4824,10 +4824,29 @@ function fecharZoomDoLook() {
   tripLookPickerAberto = false;
 }
 
+// Abrir o detalhe de um look a partir da semana troca de aba — e ao fechar ela
+// ficava onde o app a tinha largado. "ao fechar a janela ele está indo para a
+// página de looks e nao para a semana". Agora o caminho de volta é guardado.
+var abaDeOrigem = null;
+
+function verDetalheDoLook(tipo, id) {
+  abaDeOrigem = (typeof currentTab !== 'undefined' && currentTab !== 'montados' && currentTab !== 'catalog')
+    ? currentTab : null;
+  if (tipo === 'montado') { switchTab('montados'); openMontadoDetail(id); }
+  else { verDetalheDoLook('look', id); }
+}
+
+function voltarDaAbaDeOrigem() {
+  if (!abaDeOrigem) return;
+  var volta = abaDeOrigem; abaDeOrigem = null;
+  switchTab(volta);
+}
+
 function closeMontadoDetail() {
   montadoPickerAberto = false;
   document.getElementById('montadoDetailOverlay').style.display = 'none';
   montadoDetailId = null;
+  voltarDaAbaDeOrigem();
 }
 
 function confirmDeleteMontado() {
@@ -7077,7 +7096,7 @@ function renderWeek() {
         mchip.className = 'day-montado-chip';
         mchip.textContent = '+ ' + (montado.name || 'look montado');
         mchip.title = 'Look montado também planejado pra ' + day + ' — clique pra ver';
-        mchip.onclick = (function(mid){ return function(e){ e.stopPropagation(); switchTab('montados'); openMontadoDetail(mid); }; })(montado.id);
+        mchip.onclick = (function(mid){ return function(e){ e.stopPropagation(); verDetalheDoLook('montado', mid); }; })(montado.id);
         col.appendChild(mchip);
       }
     } else if (montado) {
@@ -7104,7 +7123,7 @@ function renderWeek() {
       dm.appendChild(mrm);
       botaoTrocarTurno(dm, day, 'atual', 'dia');
       botaoMoverSemana(dm, day, 'atual', 'dia');
-      dm.onclick = (function(mid){ return function(){ switchTab('montados'); openMontadoDetail(mid); }; })(montado.id);
+      dm.onclick = (function(mid){ return function(){ verDetalheDoLook('montado', mid); }; })(montado.id);
       col.appendChild(dm);
       barraDeMontarNoDia(col, day, 'atual', 'dia');
       avisoDeClimaNaColuna(col, day, 'atual', tagsDoMontado(montado));
@@ -7474,7 +7493,7 @@ function renderNextWeekGrid(alvo, idGrid, idRange, semanasAdiante) {
       var img = document.createElement('img'); img.src = lookThumb(look); img.alt = '';
       img.loading = 'lazy';
       applyRotation(img, look);
-      img.onclick = (function(pid){ return function(){ switchTab('catalog'); openView(pid); }; })(look.id);
+      img.onclick = (function(pid){ return function(){ verDetalheDoLook('look', pid); }; })(look.id);
       var rm = document.createElement('button'); rm.className = 'day-look-remove';
       rm.title = 'Tirar da próxima semana';
       rm.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"/></svg>';
@@ -7510,7 +7529,7 @@ function renderNextWeekGrid(alvo, idGrid, idRange, semanasAdiante) {
       dm.appendChild(mrm);
       botaoTrocarTurno(dm, day, alvo, 'dia');
       botaoMoverSemana(dm, day, alvo, 'dia');
-      dm.onclick = (function(mid){ return function(){ switchTab('montados'); openMontadoDetail(mid); }; })(montado.id);
+      dm.onclick = (function(mid){ return function(){ verDetalheDoLook('montado', mid); }; })(montado.id);
       col.appendChild(dm);
       barraDeMontarNoDia(col, day, alvo, 'dia');
       avisoDeClimaNaColuna(col, day, alvo, tagsDoMontado(montado));
@@ -7786,13 +7805,13 @@ function blocoDaNoite(col, day, alvo) {
   if (noite) {
     var img = document.createElement('img'); img.src = lookThumb(noite); img.alt = ''; img.loading = 'lazy';
     applyRotation(img, noite);
-    img.onclick = (function(pid){ return function(){ switchTab('catalog'); openView(pid); }; })(noite.id);
+    img.onclick = (function(pid){ return function(){ verDetalheDoLook('look', pid); }; })(noite.id);
     wrap.appendChild(img);
   } else {
     var fl = document.createElement('div'); fl.className = 'flatlay-canvas';
     fl.style.cssText = 'max-width:none;aspect-ratio:1;border-radius:0;cursor:pointer;';
     renderFlatLay(fl, occ.montado.pieceIds.map(findPieceById).filter(Boolean));
-    fl.onclick = (function(mid){ return function(){ switchTab('montados'); openMontadoDetail(mid); }; })(occ.montado.id);
+    fl.onclick = (function(mid){ return function(){ verDetalheDoLook('montado', mid); }; })(occ.montado.id);
     wrap.appendChild(fl);
   }
   var outra = document.createElement('button');
@@ -10421,7 +10440,10 @@ function renderWeekDayBtns(pid) {
 }
 
 function closeView(e) { if(e.target===document.getElementById('viewOverlay')) closeViewModal(); }
-function closeViewModal() { document.getElementById('viewOverlay').classList.remove('open'); }
+function closeViewModal() {
+  document.getElementById('viewOverlay').classList.remove('open');
+  voltarDaAbaDeOrigem();
+}
 
 function clearTagFilter() {
   activeTagFilter = null;
@@ -13197,8 +13219,8 @@ function viewTodaySuggestionLook() {
   var id = todaySuggestionCurrentId;
   closeTodaySuggestion();
   todaySuggestionDismissed = false; // ver o look não conta como "dispensar" a sugestão
-  if(planejadoMontado) { switchTab('montados'); openMontadoDetail(planejadoMontado); return; }
-  if(id != null) { switchTab('catalog'); openView(id); }
+  if(planejadoMontado) { verDetalheDoLook('montado', planejadoMontado); return; }
+  if(id != null) { verDetalheDoLook('look', id); }
 }
 
 // Registrar o uso a partir da sugestão da manhã
@@ -18374,7 +18396,7 @@ function renderCal() {
         img.style.cssText = 'width:' + (looks.length===1?'100%':'46%') + ';aspect-ratio:1;object-fit:cover;border-radius:5px;cursor:pointer;';
         applyRotation(img, p);
         img.title = (p.tags||[]).slice(0,2).map(function(t){return t.split(':').pop().trim();}).join(', ');
-        img.onclick = (function(pid){ return function(){ switchTab('catalog'); openView(pid); }; })(p.id);
+        img.onclick = (function(pid){ return function(){ verDetalheDoLook('look', pid); }; })(p.id);
         imgWrap.appendChild(img);
       });
       if(looks.length > 4){
@@ -18398,13 +18420,13 @@ function renderCal() {
         pimg.style.cssText = 'width:100%;aspect-ratio:1;object-fit:cover;border-radius:5px;cursor:pointer;opacity:.62;';
         applyRotation(pimg, plano.look);
         pimg.title = 'Planejado pra este dia';
-        pimg.onclick = (function(pid){ return function(){ switchTab('catalog'); openView(pid); }; })(plano.look.id);
+        pimg.onclick = (function(pid){ return function(){ verDetalheDoLook('look', pid); }; })(plano.look.id);
         pw.appendChild(pimg);
       } else if (plano.montado) {
         var pm = document.createElement('div');
         pm.style.cssText = 'font-size:.58rem;background:#FAFAF8;color:#666666;border:1px solid #EAEAE7;border-radius:5px;padding:2px 4px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
         pm.textContent = plano.montado.name || 'Look montado';
-        pm.onclick = (function(mid){ return function(){ switchTab('montados'); openMontadoDetail(mid); }; })(plano.montado.id);
+        pm.onclick = (function(mid){ return function(){ verDetalheDoLook('montado', mid); }; })(plano.montado.id);
         pw.appendChild(pm);
       }
       // Dia que já passou (ou hoje) com look planejado: um toque confirma que ela
