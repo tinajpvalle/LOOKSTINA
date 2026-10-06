@@ -9282,8 +9282,66 @@ function jaFoiImportado(nome, tamanho) {
   return importedLooks.some(function(it){ return (it.name || '').toLowerCase().trim() === alvo; });
 }
 
+// Foto do iPhone vem em HEIC, que o Chrome não sabe abrir: ela importou 40
+// looks e parte deles virou cartão em branco. O redimensionamento falhava em
+// silêncio e guardava o HEIC cru — que nem o servidor converte depois. Então o
+// HEIC vira JPEG aqui, antes de tudo. A biblioteca (1,3 MB) só é baixada quando
+// aparece um HEIC; quem importa JPEG não paga nada.
+var _heic2anyPromise = null;
+function ehHeic(arquivo, nome) {
+  var tipo = (arquivo && arquivo.type || '').toLowerCase();
+  return tipo === 'image/heic' || tipo === 'image/heif' || /\.(heic|heif)$/i.test(nome || '');
+}
+function carregarHeic2any() {
+  if (!_heic2anyPromise) {
+    _heic2anyPromise = new Promise(function(ok, falha){
+      var sc = document.createElement('script');
+      sc.src = 'vendor/heic2any/heic2any.min.js';
+      sc.onload = function(){ ok(window.heic2any); };
+      sc.onerror = function(){ _heic2anyPromise = null; falha(new Error('heic2any não carregou')); };
+      document.head.appendChild(sc);
+    });
+  }
+  return _heic2anyPromise;
+}
+// Devolve um Blob que o navegador consegue desenhar. Se a conversão falhar,
+// devolve o original — fica o cartão em branco de antes, mas nada se perde.
+function paraFormatoQueAbre(arquivo, nome) {
+  if (!ehHeic(arquivo, nome)) return Promise.resolve(arquivo);
+  return carregarHeic2any().then(function(heic2any){
+    return heic2any({ blob: arquivo, toType: 'image/jpeg', quality: 0.9 });
+  }).then(function(r){ return Array.isArray(r) ? r[0] : r; })
+    .catch(function(){ return arquivo; });
+}
+// Os cartões que já entraram com HEIC cru (antes desta correção) são
+// convertidos ao abrir a aba — ela não precisa apagar e subir de novo.
+var _consertandoHeic = false;
+function consertarImportadosHeic() {
+  if (_consertandoHeic) return;
+  var quebrados = importedLooks.filter(function(it){ return /^data:image\/hei[cf]/i.test(it.dataUrl || ''); });
+  if (!quebrados.length) return;
+  _consertandoHeic = true;
+  (function proximo(i) {
+    if (i >= quebrados.length) { _consertandoHeic = false; saveImported(); renderImportView(); return; }
+    var it = quebrados[i];
+    fetch(it.dataUrl).then(function(r){ return r.blob(); })
+      .then(function(blob){ return paraFormatoQueAbre(blob, 'x.heic'); })
+      .then(function(blob){
+        if (/hei[cf]/i.test(blob.type || '')) return null;   // não converteu
+        return new Promise(function(ok){
+          var rd = new FileReader();
+          rd.onload = function(e){ resizeImageDataUrl(e.target.result, 1000, 0.82, ok); };
+          rd.onerror = function(){ ok(null); };
+          rd.readAsDataURL(blob);
+        });
+      })
+      .then(function(novo){ if (novo) it.dataUrl = novo; proximo(i + 1); })
+      .catch(function(){ proximo(i + 1); });
+  })(0);
+}
+
 function handleImportFiles(files) {
-  var arr = Array.from(files).filter(function(f){ return f.type.startsWith('image/'); });
+  var arr = Array.from(files).filter(function(f){ return f.type.startsWith('image/') || ehHeic(f, f.name); });
   if(arr.length === 0) return;
 
   var novos = [], repetidos = 0;
@@ -9301,15 +9359,17 @@ function handleImportFiles(files) {
 
   var pending = novos.length;
   novos.forEach(function(item) {
-    var reader = new FileReader();
-    reader.onload = function(e) {
-      resizeImageDataUrl(e.target.result, 1000, 0.82, function(resized){
-        importedLooks.push({dataUrl: resized, tagsRaw:'', name: item.nome, origTamanho: item.file.size});
-        pending--;
-        if(pending === 0) { saveImported(); renderImportView(); avisoDaImportacao(novos.length, repetidos); }
-      });
-    };
-    reader.readAsDataURL(item.file);
+    paraFormatoQueAbre(item.file, item.file.name).then(function(blob){
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        resizeImageDataUrl(e.target.result, 1000, 0.82, function(resized){
+          importedLooks.push({dataUrl: resized, tagsRaw:'', name: item.nome, origTamanho: item.file.size});
+          pending--;
+          if(pending === 0) { saveImported(); renderImportView(); avisoDaImportacao(novos.length, repetidos); }
+        });
+      };
+      reader.readAsDataURL(blob);
+    });
   });
 }
 
@@ -9788,7 +9848,7 @@ function switchTab(tab) {
   if (tab==='stats') renderStats();
   if (tab==='consultoria') renderConsultoria();
   if (tab==='cal') renderCal();
-  if (tab==='import') renderImportView();
+  if (tab==='import') { renderImportView(); consertarImportadosHeic(); }
   if (tab==='insp') renderInspiracoes();
   if (tab==='pecas') renderPecas();
   if (tab==='montados') renderLooksMontados();
@@ -19429,7 +19489,7 @@ function applySuggestions() {
     <div style="font-size:2.5rem;margin-bottom:8px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M3 8.2a2 2 0 0 1 2-2h2L8.5 4h7L17 6.2h2a2 2 0 0 1 2 2v9.6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8.2z"/><circle cx="12" cy="13" r="3.4"/></svg></div>
     <div style="font-weight:600;color:#1A1A1A;margin-bottom:4px;">Arraste fotos aqui</div>
     <div style="color:#A8A8A4;font-size:.82rem;">ou clique para selecionar</div>
-    <input type="file" id="importFileInput" multiple accept="image/*" style="display:none" onchange="handleImportFiles(this.files)">
+    <input type="file" id="importFileInput" multiple accept="image/*,.heic,.heif" style="display:none" onchange="handleImportFiles(this.files)">
   </div>
 
   <div id="importAviso" style="display:none;margin-top:14px;background:#FAFAF8;border:1px solid #E0E0DB;border-radius:10px;padding:10px 14px;font-size:.82rem;color:#1A1A1A;"></div>
