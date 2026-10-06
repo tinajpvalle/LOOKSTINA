@@ -9285,33 +9285,64 @@ function jaFoiImportado(nome, tamanho) {
 // Foto do iPhone vem em HEIC, que o Chrome não sabe abrir: ela importou 40
 // looks e parte deles virou cartão em branco. O redimensionamento falhava em
 // silêncio e guardava o HEIC cru — que nem o servidor converte depois. Então o
-// HEIC vira JPEG aqui, antes de tudo. A biblioteca (1,3 MB) só é baixada quando
-// aparece um HEIC; quem importa JPEG não paga nada.
-var _heic2anyPromise = null;
+// HEIC vira JPEG aqui, antes de tudo.
+//
+// Primeiro foi o heic2any, e ele recusou as 39 fotos do álbum dela ("format not
+// supported"): traz um libheif de 2020, e o iPhone grava HEIC que ele não lê.
+// Agora é o libheif atual (vendor/libheif, LGPL, sem modificação), baixado só
+// quando aparece um HEIC. Testado com as 39 originais do álbum Maria_10_26.
+var _libheifPromise = null;
 function ehHeic(arquivo, nome) {
   var tipo = (arquivo && arquivo.type || '').toLowerCase();
   return tipo === 'image/heic' || tipo === 'image/heif' || /\.(heic|heif)$/i.test(nome || '');
 }
-function carregarHeic2any() {
-  if (!_heic2anyPromise) {
-    _heic2anyPromise = new Promise(function(ok, falha){
+function carregarLibheif() {
+  if (!_libheifPromise) {
+    _libheifPromise = new Promise(function(ok, falha){
       var sc = document.createElement('script');
-      sc.src = 'vendor/heic2any/heic2any.min.js';
-      sc.onload = function(){ ok(window.heic2any); };
-      sc.onerror = function(){ _heic2anyPromise = null; falha(new Error('heic2any não carregou')); };
+      sc.src = 'vendor/libheif/libheif-bundle.js';
+      sc.onload = function(){ ok(window.libheif()); };
+      sc.onerror = function(){ _libheifPromise = null; falha(new Error('libheif não carregou')); };
       document.head.appendChild(sc);
     });
   }
-  return _heic2anyPromise;
+  return _libheifPromise;
+}
+// Uma foto de cada vez: decodificada, uma foto de 12 MP ocupa ~48 MB, e 40 em
+// paralelo estourariam a memória da aba.
+var _filaHeic = Promise.resolve();
+function heicParaJpeg(blob) {
+  var vez = _filaHeic.then(function(){
+    return Promise.all([carregarLibheif(), blob.arrayBuffer()]);
+  }).then(function(r){
+    var lib = r[0];
+    var imagem = new lib.HeifDecoder().decode(new Uint8Array(r[1]))[0];
+    if (!imagem) throw new Error('HEIC sem imagem');
+    var w = imagem.get_width(), h = imagem.get_height();
+    var cheia = document.createElement('canvas');
+    cheia.width = w; cheia.height = h;
+    var ctx = cheia.getContext('2d');
+    var pixels = ctx.createImageData(w, h);
+    return new Promise(function(ok, falha){
+      imagem.display(pixels, function(res){
+        imagem.free();
+        if (!res) return falha(new Error('HEIC não decodificou'));
+        ctx.putImageData(pixels, 0, 0);
+        cheia.toBlob(function(jpg){ jpg ? ok(jpg) : falha(new Error('toBlob falhou')); }, 'image/jpeg', 0.9);
+      });
+    });
+  });
+  _filaHeic = vez.catch(function(){});
+  return vez;
 }
 // Devolve um Blob que o navegador consegue desenhar. Se a conversão falhar,
-// devolve o original — fica o cartão em branco de antes, mas nada se perde.
+// devolve o original — fica o cartão em branco, mas nada se perde.
 function paraFormatoQueAbre(arquivo, nome) {
   if (!ehHeic(arquivo, nome)) return Promise.resolve(arquivo);
-  return carregarHeic2any().then(function(heic2any){
-    return heic2any({ blob: arquivo, toType: 'image/jpeg', quality: 0.9 });
-  }).then(function(r){ return Array.isArray(r) ? r[0] : r; })
-    .catch(function(){ return arquivo; });
+  return heicParaJpeg(arquivo).catch(function(e){
+    console.warn('HEIC não converteu:', nome, e);
+    return arquivo;
+  });
 }
 // Os cartões que já entraram com HEIC cru (antes desta correção) são
 // convertidos ao abrir a aba — ela não precisa apagar e subir de novo.
@@ -9358,8 +9389,19 @@ function handleImportFiles(files) {
   }
 
   var pending = novos.length;
+  // Converter HEIC leva ~1,5 s por foto; com 40 é um minuto de tela parada.
+  var totalHeic = novos.filter(function(it){ return ehHeic(it.file, it.file.name); }).length;
+  var heicFeitas = 0;
+  var aviso = document.getElementById('importAviso');
+  function mostrarProgresso() {
+    if (!aviso || !totalHeic) return;
+    aviso.textContent = 'Convertendo fotos do iPhone… ' + heicFeitas + ' de ' + totalHeic;
+    aviso.style.display = 'block';
+  }
+  mostrarProgresso();
   novos.forEach(function(item) {
     paraFormatoQueAbre(item.file, item.file.name).then(function(blob){
+      if (ehHeic(item.file, item.file.name)) { heicFeitas++; if (pending > 1) mostrarProgresso(); }
       var reader = new FileReader();
       reader.onload = function(e) {
         resizeImageDataUrl(e.target.result, 1000, 0.82, function(resized){
