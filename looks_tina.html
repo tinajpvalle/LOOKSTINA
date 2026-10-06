@@ -13101,14 +13101,22 @@ function usarLookNesteDia() {
     // "hoje" quer dizer que já vestiu: registra o uso. Antes esse botão só
     // planejava o dia, então nada chegava no Calendário — e, como o dia guarda
     // um look só, cada clique ainda substituía o anterior.
-    var novo = marcarUsoDoLook(todaySuggestionCurrentId);
-    // Ocupa o dia só se estiver livre, pra não derrubar um look já usado antes.
-    if (!weekLookFor(info.label, info.alvo)) {
+    // O dia passa a ser o look que ela escolheu, mesmo que já tivesse outro.
+    // Antes só ocupava dia vazio: trocar o sugerido e clicar aqui registrava o
+    // uso no Calendário, mas a Semana seguia com o look antigo. O antigo não
+    // perde nada — o uso dele, se houve, continua no Calendário.
+    // (Sem o "se for diferente", o assignDay tiraria o look do dia: ele alterna.)
+    var atual = weekLookFor(info.label, info.alvo);
+    if (!atual || atual.id !== todaySuggestionCurrentId) {
       assignDay(todaySuggestionCurrentId, info.label, info.alvo);
-      todayCardPool(info).modo = 'plano';
     }
+    // Registra o uso DEPOIS de pôr no dia: o assignDay avisa "esse look foi usado
+    // hoje, tem certeza?" quando vê lastWorn de hoje — e ia ver o que acabou de
+    // ser gravado aqui.
+    var novo = marcarUsoDoLook(todaySuggestionCurrentId);
+    todayCardPool(info).modo = 'plano';
     renderTodaySuggestion();
-    showSavedToast(novo ? 'Uso registrado! Aparece no Calendário.' : 'Esse look já estava marcado como usado hoje.');
+    showSavedToast(novo ? 'Uso registrado! Já está na Semana e no Calendário.' : 'Esse look já estava marcado como usado hoje.');
     return;
   }
 
