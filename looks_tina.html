@@ -5726,9 +5726,13 @@ function rotateLookBy(pid, delta) {
 // Vários pontos do app liam só `.thumb`, então a foto de um look importado saía
 // quebrada (planejador da semana, PDF, comparar, relatório…). O fallback por id só
 // vale para o catálogo, onde o id é numérico e corresponde a thumbs/<id>.jpg.
+var THUMBS_VERSAO = '20261015';
 function lookThumb(p) {
   if (!p) return '';
-  return p.src || p.thumb || (typeof p.id === 'number' ? 'thumbs/' + p.id + '.jpg' : '');
+  var s = p.src || p.thumb || (typeof p.id === 'number' ? 'thumbs/' + p.id + '.jpg' : '');
+  // As miniaturas ficam um dia no cache do navegador; mudar THUMBS_VERSAO quando
+  // alguma foto em thumbs/ for trocada faz a nova aparecer na hora.
+  return /^thumbs\//.test(s) ? s + '?v=' + THUMBS_VERSAO : s;
 }
 
 // Ordem padrão do catálogo: upload mais recente primeiro.
