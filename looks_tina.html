@@ -1536,6 +1536,7 @@ body.compare-mode .card-compare-btn { display: flex; }
       <div id="pecaBaseEscolha">
         <div style="font-size:.74rem;color:var(--txt-2);margin-bottom:5px;">E uma cor pro resto do look? (opcional)</div>
         <div class="cor-bar" id="pecaBaseCores"></div>
+        <div class="cor-bar" id="pecaBaseCategorias" style="margin-top:6px;"></div>
         <input type="text" id="pecaBaseBusca" class="trip-busca" autocomplete="off" oninput="escolhaDePecaBaseBuscou()">
         <div class="trip-picker-grid" id="pecaBaseGrid" style="padding-bottom:0;"></div>
       </div>
@@ -12622,6 +12623,7 @@ var corPedidaNoMontador = null;  // lida pelo pickPieceForCategory enquanto mont
 function abrirEscolhaDePecaBase(day, alvo, turno) {
   pecaBaseAlvo = { day: day, alvo: alvo || 'atual', turno: (turno === 'noite') ? 'noite' : 'dia' };
   pecaBaseCor = null;
+  pecaBaseCategoria = null;
   document.getElementById('pecaBaseTitulo').textContent =
     'Começar por qual peça? · ' + day
     + (pecaBaseAlvo.turno === 'noite' ? ' à noite' : '')
@@ -12649,6 +12651,8 @@ function renderEscolhaDePecaBase() {
   if (!grid) return;
   var q = (document.getElementById('pecaBaseBusca').value || '').trim().toLowerCase();
   var lista = allPecas().filter(function(p){ return !p.archived && !pecaArquivada(p.id); });
+  renderCategoriasDaBase(lista);
+  if (pecaBaseCategoria) lista = lista.filter(function(p){ return p.category === pecaBaseCategoria; });
   if (q) {
     lista = lista.filter(function(p){
       var texto = (p.name + ' ' + (p.brand||'') + ' ' + (p.color||'') + ' '
@@ -12947,6 +12951,32 @@ function coresDoArmario() {
 function alternarCorDaBase(cor) {
   pecaBaseCor = (pecaBaseCor === cor) ? null : cor;
   renderCoresDaBase();
+}
+
+// "Pode ter um select por categoria? top, bottoms" — com 120 peças misturadas
+// ela rolava a tela inteira atrás da calça.
+var pecaBaseCategoria = null;
+var CATEGORIAS_DA_BASE = [
+  ['Tops', 'Top'], ['Bottoms', 'Bottom'], ['Outerwear', 'Casaco'], ['Shoes', 'Sapato'],
+  ['Bags', 'Bolsa'], ['Accessories', 'Acessório'], ['Jewelry', 'Joia']
+];
+function renderCategoriasDaBase(lista) {
+  var box = document.getElementById('pecaBaseCategorias');
+  if (!box) return;
+  var cont = {};
+  lista.forEach(function(p){ cont[p.category] = (cont[p.category] || 0) + 1; });
+  var chip = function(cat, nome, n){
+    return '<button type="button" class="cor-chip' + (pecaBaseCategoria === cat ? ' active' : '') + '" '
+      + 'onclick="escolherCategoriaDaBase(' + (cat ? ('\'' + cat + '\'') : 'null') + ')">'
+      + tripEsc(nome) + (n ? ' <span style="opacity:.55">' + n + '</span>' : '') + '</button>';
+  };
+  box.innerHTML = chip(null, 'Todas', lista.length) + CATEGORIAS_DA_BASE
+    .filter(function(c){ return cont[c[0]]; })
+    .map(function(c){ return chip(c[0], c[1], cont[c[0]]); }).join('');
+}
+function escolherCategoriaDaBase(cat) {
+  pecaBaseCategoria = cat;
+  renderEscolhaDePecaBase();
 }
 
 function renderCoresDaBase() {
