@@ -1418,6 +1418,8 @@ body.compare-mode .card-compare-btn { display: flex; }
       <div id="todaySuggestTags" style="font-size:.92rem;color:#333333;margin-bottom:14px;line-height:1.5;"></div>
       <button id="todaySuggestWornBtn" onclick="markTodaySuggestionWorn()" style="width:100%;background:#1A1A1A;color:#fff;border:none;border-radius:8px;padding:11px;cursor:pointer;font-size:.86rem;font-family:inherit;font-weight:600;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><polyline points="4.5 12.2 9.8 17.5 19.5 6.5"/></svg> Vou usar esse hoje</button>
       <button id="todaySuggestUseBtn" onclick="usarLookNesteDia()" style="display:none;width:100%;background:#1A1A1A;color:#fff;border:none;border-radius:8px;padding:11px;cursor:pointer;font-size:.86rem;font-family:inherit;font-weight:600;">Usar esse dia</button>
+      <button id="todaySuggestOutroDiaBtn" onclick="alternarOutroDiaDaSugestao()" style="display:none;width:100%;background:#fff;border:1px solid #E0E0DB;color:#1A1A1A;border-radius:8px;padding:9px;margin-top:8px;cursor:pointer;font-size:.83rem;font-family:inherit;">Usar em outro dia</button>
+      <div id="todaySuggestOutroDia" class="cor-bar" style="display:none;margin-top:8px;"></div>
       <div id="todaySuggestVoto"></div>
       <div style="display:flex;gap:8px;margin-top:8px;">
         <div id="todaySuggestNav" class="today-nav" style="display:none;">
@@ -13614,6 +13616,12 @@ function renderTodaySuggestion() {
     useBtn.textContent = ehHoje ? 'Vou usar esse hoje' : ('Usar esse em ' + info.label);
     wornBtn.style.display = 'none';
   }
+  // "Gostei muito mas quero usar ele na sexta": o look que está na tela vai pra
+  // outro dia sem ela ter que navegar até lá e achar ele de novo.
+  var outroBtn = document.getElementById('todaySuggestOutroDiaBtn');
+  if (outroBtn) outroBtn.style.display = (useBtn.style.display === 'none') ? 'none' : '';
+  outroDiaDaSugestaoAberto = false;
+  renderOutroDiaDaSugestao();
 
   var rotBtn = document.getElementById('todaySuggestRotateBtn');
   if (rotBtn) rotBtn.style.display = (img.style.display === 'none') ? 'none' : 'flex';
@@ -13655,6 +13663,47 @@ function viewTodaySuggestionLook() {
 // "esquecidos", o "nunca usados", o Relatório e o recencyBonus que ordena esta
 // própria sugestão. Aqui é o único momento do dia em que ela olha um look
 // específico, então é o lugar barato de registrar isso.
+var outroDiaDaSugestaoAberto = false;
+function alternarOutroDiaDaSugestao() {
+  outroDiaDaSugestaoAberto = !outroDiaDaSugestaoAberto;
+  renderOutroDiaDaSugestao();
+}
+
+// Os dias que dá pra planejar: de amanhã até o domingo da próxima semana.
+function diasParaPlanejarDaqui() {
+  var dias = [];
+  for (var off = 1; off <= todayCardMaxOffset(); off++) {
+    var d = new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate() + off);
+    var proxMonday = mondayOfCurrentWeek(); proxMonday.setDate(proxMonday.getDate() + 7);
+    dias.push({ data: d, label: JS_DOW_TO_PT[d.getDay()], alvo: (d >= proxMonday) ? 'proxima' : 'atual' });
+  }
+  return dias;
+}
+
+function renderOutroDiaDaSugestao() {
+  var box = document.getElementById('todaySuggestOutroDia');
+  if (!box) return;
+  box.style.display = outroDiaDaSugestaoAberto ? '' : 'none';
+  if (!outroDiaDaSugestaoAberto) { box.innerHTML = ''; return; }
+  box.innerHTML = diasParaPlanejarDaqui().map(function(d, i){
+    return '<button type="button" class="cor-chip" onclick="usarSugestaoEmOutroDia(' + i + ')">'
+      + d.label + ' ' + d.data.getDate() + '</button>';
+  }).join('');
+}
+
+function usarSugestaoEmOutroDia(i) {
+  var d = diasParaPlanejarDaqui()[i];
+  var pid = todaySuggestionCurrentId;
+  if (!d || pid == null) return;
+  var atual = weekLookFor(d.label, d.alvo);
+  // assignDay alterna: com o mesmo look já lá, tiraria em vez de pôr.
+  if (!atual || atual.id !== pid) assignDay(pid, d.label, d.alvo);
+  outroDiaDaSugestaoAberto = false;
+  renderOutroDiaDaSugestao();
+  showSavedToast('Look marcado pra ' + d.label + ' ' + brDate(d.data)
+    + (d.alvo === 'proxima' ? ' (próxima semana)' : '') + '!');
+}
+
 function markTodaySuggestionWorn() {
   var p = data.find(function(x){ return x.id === todaySuggestionCurrentId; });
   if(!p) return;
