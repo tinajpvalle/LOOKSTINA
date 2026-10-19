@@ -7056,10 +7056,12 @@ function renderWeek() {
   renderAvisoUsoRegistrado();
   var wg = document.getElementById('weekGrid');
   wg.innerHTML = '';
-  DAYS.forEach(function(day) {
+  DAYS.forEach(function(day, i) {
     var col = document.createElement('div'); col.className = 'day-col';
     col.dataset.day = day;
-    var dh = document.createElement('div'); dh.className = 'day-header'; dh.textContent = day;
+    // Com a data, igual à Próxima semana — só "SEG" não dizia que dia do mês era.
+    var dataNoTopo = mondayOfCurrentWeek(); dataNoTopo.setDate(dataNoTopo.getDate() + i);
+    var dh = document.createElement('div'); dh.className = 'day-header'; dh.textContent = day + ' ' + brDate(dataNoTopo);
     col.appendChild(dh);
 
     // Dia de viagem: a mala já decidiu o look, então ela ocupa o lugar dele.
