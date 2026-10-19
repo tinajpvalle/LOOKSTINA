@@ -1541,9 +1541,11 @@ body.compare-mode .card-compare-btn { display: flex; }
         <div class="trip-picker-grid" id="pecaBaseGrid" style="padding-bottom:0;"></div>
       </div>
       <div id="pecaBaseOpcoes" style="display:none;">
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
-          <button class="btn btn-ghost" onclick="gerarOpcoesDaPeca()">Outras opções</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
+          <button class="btn btn-ghost" id="pecaBaseAnteriores" onclick="voltarOpcoesDaPeca()" style="display:none;">← Opções anteriores</button>
+          <button class="btn btn-ghost" onclick="gerarOpcoesDaPeca()">Outras opções →</button>
           <button class="btn btn-ghost" onclick="voltarParaAsPecasDaBase()">Trocar a peça</button>
+          <span id="pecaBasePagina" style="font-size:.74rem;color:var(--txt-3);"></span>
         </div>
         <div class="opcoes-da-peca-grid" id="pecaBaseOpcoesGrid"></div>
       </div>
@@ -12867,29 +12869,52 @@ function montarPelaFormulaNoDia(texto, slots, day, alvo, turno) {
 // "Hoje quero usar essa calça": em vez de pôr um look só direto no dia, mostra
 // algumas opções em volta da peça e ela escolhe qual vai.
 var OPCOES_POR_PECA = 4;
-var opcoesDaPeca = null;   // { base, cor, looks: [[ids]] }
+// paginas guarda cada leva de opções que ela já viu, pra dar pra voltar numa
+// anterior ("se eu vi uma opção anterior e gostei"); looks é a que está na tela.
+var opcoesDaPeca = null;   // { base, cor, paginas: [[[ids]]], pagina, looks }
 
 function montarComEssaPeca(pieceId) {
   if (!pecaBaseAlvo) return;
   var base = findPieceById(pieceId);
   if (!base) return;
-  opcoesDaPeca = { base: base, cor: pecaBaseCor, looks: [] };
+  opcoesDaPeca = { base: base, cor: pecaBaseCor, paginas: [], pagina: -1, looks: [] };
   gerarOpcoesDaPeca();
 }
 
 function gerarOpcoesDaPeca() {
   var op = opcoesDaPeca;
   if (!op) return;
+  // Se ela tinha voltado, "Outras opções" anda pra frente nas que já viu antes
+  // de sortear novas.
+  if (op.pagina < op.paginas.length - 1) { mostrarPaginaDeOpcoes(op.pagina + 1); return; }
   // As que ela já viu não voltam ao pedir outras.
-  var vistos = (op.vistos || []).concat(op.looks.map(function(ids){ return ids.slice().sort().join('|'); }));
-  op.vistos = vistos;
-  op.looks = [];
-  for (var t = 0; t < OPCOES_POR_PECA * 2 && op.looks.length < OPCOES_POR_PECA; t++) {
-    var evitar = vistos.concat(op.looks.map(function(ids){ return ids.slice().sort().join('|'); }));
-    var ids = idsDeUmLookNovo(op.base, op.cor, evitar);
-    if (ids) op.looks.push(ids);
+  var chave = function(ids){ return ids.slice().sort().join('|'); };
+  var vistos = [].concat.apply([], op.paginas).map(chave);
+  var leva = [];
+  for (var t = 0; t < OPCOES_POR_PECA * 2 && leva.length < OPCOES_POR_PECA; t++) {
+    var ids = idsDeUmLookNovo(op.base, op.cor, vistos.concat(leva.map(chave)));
+    if (ids) leva.push(ids);
   }
+  if (!leva.length && op.paginas.length) {
+    showSavedToast('Não achei mais looks diferentes com essa peça.');
+    return;
+  }
+  op.paginas.push(leva);
+  mostrarPaginaDeOpcoes(op.paginas.length - 1);
+}
+
+function mostrarPaginaDeOpcoes(i) {
+  var op = opcoesDaPeca;
+  if (!op || i < 0 || i >= op.paginas.length) return;
+  op.pagina = i;
+  op.looks = op.paginas[i];
   renderOpcoesDaPeca();
+  var caixa = document.getElementById('pecaBaseOpcoes');
+  if (caixa && caixa.closest('.modal')) caixa.closest('.modal').scrollTop = 0;
+}
+
+function voltarOpcoesDaPeca() {
+  if (opcoesDaPeca) mostrarPaginaDeOpcoes(opcoesDaPeca.pagina - 1);
 }
 
 function renderOpcoesDaPeca() {
@@ -12903,6 +12928,10 @@ function renderOpcoesDaPeca() {
   document.getElementById('pecaBaseSub').textContent = op.looks.length
     ? ('Looks com ' + tripNomeCurto(op.base) + (op.cor ? (' + ' + op.cor) : '') + ' — toque no que você quer usar')
     : ('Não consegui montar look com ' + tripNomeCurto(op.base) + ' agora.');
+  var anterior = document.getElementById('pecaBaseAnteriores');
+  if (anterior) anterior.style.display = op.pagina > 0 ? '' : 'none';
+  var qual = document.getElementById('pecaBasePagina');
+  if (qual) qual.textContent = op.paginas.length > 1 ? ((op.pagina + 1) + ' de ' + op.paginas.length) : '';
   var grid = document.getElementById('pecaBaseOpcoesGrid');
   grid.innerHTML = '';
   op.looks.forEach(function(ids, i){
