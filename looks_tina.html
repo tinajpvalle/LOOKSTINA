@@ -831,6 +831,7 @@ body.week-pick-mode .card-week-btn { display: block; }
 .day-look-montado-label { font-size: .68rem; color: #666666; text-align: center; padding: 4px 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .day-clima-aviso { font-size: .64rem; color: #9A6A1F; background: #FDF6E9; border: 1px solid #F0E2C4; border-radius: 6px; margin: 4px 6px 0; padding: 3px 6px; cursor: pointer; text-align: center; line-height: 1.35; }
 .day-clima-aviso:hover { background: #F8EDD8; }
+.day-repetida-aviso, .day-repetida-aviso:hover { color: #5A5A5A; background: #F3F3F0; border-color: #E2E2DD; cursor: default; }
 .day-montado-chip { font-size: .66rem; color: #666666; background: #FAFAF8; border: 1px solid #EAEAE7; border-radius: 6px; margin: 4px 6px 0; padding: 2px 6px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; }
 /* Altura fixa com conteúdo de 189px: o "Sugerir look" já vazava pra fora da
    caixa antes, e com os botões de montar embaixo isso virou sobreposição.
@@ -1034,6 +1035,7 @@ body.compare-mode .card-compare-btn { display: flex; }
 .day-montado-chip { background: var(--surface); border-color: var(--line); color: var(--txt-2); }
 .day-clima-aviso { background: #2E2413; border-color: #4A3A1C; color: #E0B970; }
 .day-clima-aviso:hover { background: #3A2D17; }
+.day-repetida-aviso, .day-repetida-aviso:hover { background: #262624; border-color: #3A3A37; color: #BDBDB7; }
 
 /* Modais: raio menor, sem sombra */
 .modal, .edit-modal, .rename-modal, #dayPickerBox { border-radius: var(--r-lg); }
@@ -1183,6 +1185,7 @@ body.compare-mode .card-compare-btn { display: flex; }
     <button class="btn btn-week" id="weekPickBtn" onclick="toggleWeekPickMode()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><circle cx="12" cy="12" r="8.5"/><path d="M12 8.2v7.6M8.2 12h7.6"/></svg> Selecionar looks</button>
     <button class="btn btn-ghost" onclick="clearWeek()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14"/></svg> Limpar semana</button>
     <button class="btn btn-ghost" onclick="showSuggestions()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><circle cx="7.8" cy="7.6" r="2.8"/><path d="M7.8 2.4v1.4M3.6 3.4l1 1M2.4 7.6h1.4M12 3.4l-1 1"/><path d="M9.4 19.4a3.7 3.7 0 0 1 .6-7.4 4.8 4.8 0 0 1 9.1 1.4 3.1 3.1 0 0 1-.6 6h-9.1z"/></svg> Sugestão IA</button>
+    <button class="btn btn-ghost" onclick="abrirCapsulaDaSemana()" title="Poucas peças que combinam entre si, revezando nos dias úteis"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><rect x="3.5" y="3.5" width="17" height="17" rx="2"/><path d="M9.2 3.5v17M14.8 3.5v17M3.5 9.2h17M3.5 14.8h17"/></svg> Cápsula da semana</button>
     <button class="btn btn-ghost" onclick="openTripWizard()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M9 7V4h6v3M3 13.5h18"/></svg> Mala de viagem</button>
   </div>
   <div class="week-header">
@@ -1587,11 +1590,11 @@ body.compare-mode .card-compare-btn { display: flex; }
   <div class="modal trip-modal">
     <button class="close-btn" onclick="fecharSudoku()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"/></svg></button>
     <div class="modal-body">
-      <h3 style="margin-bottom:4px;">M&eacute;todo Sudoku</h3>
+      <h3 id="sudokuTitulo" style="margin-bottom:4px;">M&eacute;todo Sudoku</h3>
       <div id="sudokuResumo" style="font-size:.78rem;color:var(--txt-2);margin-bottom:12px;"></div>
       <div id="sudokuGrade" class="sudoku-grade"></div>
       <div id="sudokuExtras" class="sudoku-extras"></div>
-      <button class="btn btn-week" style="width:100%;justify-content:center;margin-top:14px;" onclick="sudokuAprovar()">Aprovar e montar os looks</button>
+      <button class="btn btn-week" style="width:100%;justify-content:center;margin-top:14px;" id="sudokuAprovarBtn" onclick="sudokuAprovar()">Aprovar e montar os looks</button>
     </div>
   </div>
 </div>
@@ -7160,6 +7163,7 @@ function renderWeek() {
       col.appendChild(dl);
       barraDeMontarNoDia(col, day, 'atual', 'dia');
       avisoDeClimaNaColuna(col, day, 'atual', look.tags);
+      avisoDePecaRepetida(col, day, 'atual');
       // Dia com look do catálogo E look montado: o montado entra como etiqueta
       // embaixo, pra não sumir da vista (mesma ideia usada no Calendário).
       if (montado) {
@@ -7198,6 +7202,7 @@ function renderWeek() {
       col.appendChild(dm);
       barraDeMontarNoDia(col, day, 'atual', 'dia');
       avisoDeClimaNaColuna(col, day, 'atual', tagsDoMontado(montado));
+      avisoDePecaRepetida(col, day, 'atual');
     } else if (malaDoDia && cartaoDaMalaNoTurno(col, malaDoDia, 'dia')) {
       // A mala vem antes do "em casa": viajando, ela não está em casa. O domingo
       // dela estava marcado assim e o look da mala nunca aparecia.
@@ -7580,6 +7585,7 @@ function renderNextWeekGrid(alvo, idGrid, idRange, semanasAdiante) {
       col.appendChild(dl);
       barraDeMontarNoDia(col, day, alvo, 'dia');
       avisoDeClimaNaColuna(col, day, alvo, look.tags);
+      avisoDePecaRepetida(col, day, alvo);
     } else if (montado) {
       var dm = document.createElement('div'); dm.className = 'day-look day-look-montado';
       ligarArrastarLook(dm, day, alvo);
@@ -7605,6 +7611,7 @@ function renderNextWeekGrid(alvo, idGrid, idRange, semanasAdiante) {
       col.appendChild(dm);
       barraDeMontarNoDia(col, day, alvo, 'dia');
       avisoDeClimaNaColuna(col, day, alvo, tagsDoMontado(montado));
+      avisoDePecaRepetida(col, day, alvo);
     } else {
       var de = document.createElement('div'); de.className = 'day-empty';
       de.innerHTML = '<span style="font-size:1.4rem"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7.2a2.1 2.1 0 1 1 2.1-2.1c0 1.1-1 1.5-2.1 2.1v2"/><path d="M12 9.2 3.6 15.3A1.5 1.5 0 0 0 4.5 18h15a1.5 1.5 0 0 0 .9-2.7L12 9.2z"/></svg></span><span class="add-look-hint">Adicionar look</span>'
@@ -11819,6 +11826,55 @@ function avisoDeClimaDoDia(tags, fc) {
 }
 
 // A tarja fica na coluna do dia, junto do look, com o botão de trocar do lado.
+// ── Peça repetida na semana ──
+// "A mesma calça na segunda e na terça": o dia mostra qual peça repete e em que
+// outro dia. Só roupa — sapato e bolsa ela repete de propósito.
+// Look do catálogo é foto com etiquetas, look montado é lista de peças; como as
+// duas coisas não se comparam com segurança, cada tipo é comparado só com o
+// seu. Etiqueta de uma palavra só ("top: branco", "calça: jeans") é descrição
+// genérica, não uma peça — repetir isso não quer dizer nada.
+function pecasDoDiaParaRepeticao(day, alvo) {
+  // Aqui dentro, e não numa var lá fora: a Semana é pintada no carregamento,
+  // antes de uma var declarada mais abaixo no arquivo receber o valor.
+  var ROUPA_DA_ETIQUETA = /^(calça|saia|short|bermuda|vestido|macacão|blusa|top|camisa|camiseta|regata|polo|casaco|jaqueta|cardigan|colete|suéter|sueter|tricô|blazer|trench)$/;
+  var occ = weekOccupants(day, alvo), out = [];
+  if (occ.look) {
+    (occ.look.tags || []).forEach(function(t){
+      var cat = t.split(':')[0].trim().toLowerCase();
+      var val = t.split(':').slice(1).join(':').trim().toLowerCase();
+      if (!ROUPA_DA_ETIQUETA.test(cat) || val.split(/\s+/).length < 2) return;
+      out.push({ chave: 'e:' + cat + ':' + val, nome: cat + ' ' + val });
+    });
+  } else if (occ.montado && !occ.montado.capsula) {
+    // Na cápsula repetir é o método — avisar seria barulho.
+    (occ.montado.pieceIds || []).map(findPieceById).filter(Boolean).forEach(function(p){
+      if (['Tops', 'Bottoms', 'Outerwear'].indexOf(p.category) === -1) return;
+      out.push({ chave: 'p:' + p.id, nome: tripNomeCurto(p) });
+    });
+  }
+  return out;
+}
+
+function avisoDePecaRepetida(col, day, alvo) {
+  var minhas = pecasDoDiaParaRepeticao(day, alvo);
+  if (!minhas.length) return;
+  var achadas = [];
+  minhas.forEach(function(m){
+    var outros = DAYS.filter(function(d){
+      return d !== day && pecasDoDiaParaRepeticao(d, alvo).some(function(x){ return x.chave === m.chave; });
+    });
+    if (outros.length) achadas.push({ curto: m.nome + ' (' + outros.join(', ') + ')',
+      longo: m.nome + ' também ' + (outros.length === 1 ? 'na ' : 'em ') + outros.join(', ') });
+  });
+  if (!achadas.length) return;
+  var texto = 'Repete: ' + achadas[0].curto + (achadas.length > 1 ? (' +' + (achadas.length - 1)) : '');
+  var tarja = document.createElement('div');
+  tarja.className = 'day-clima-aviso day-repetida-aviso';
+  tarja.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M4 12a8 8 0 0 1 13.7-5.6L20 8.6"/><path d="M20 4v4.6h-4.6"/><path d="M20 12a8 8 0 0 1-13.7 5.6L4 15.4"/><path d="M4 20v-4.6h4.6"/></svg> <span>' + tripEsc(texto) + '</span>';
+  tarja.title = achadas.map(function(a){ return a.longo; }).join('\n');
+  col.appendChild(tarja);
+}
+
 function avisoDeClimaNaColuna(col, day, alvo, tags) {
   var fc = infoParaDia(day, alvo).fc;
   var texto = avisoDeClimaDoDia(tags, fc);
@@ -14139,6 +14195,7 @@ function tripClimaScore(p, profile) {
 }
 
 function tripPerfilDominante() {
+  if (capsulaDias) return perfilDosDias(capsulaDias);   // Sudoku aberto pela semana
   var contas = {};
   tripForecast.forEach(function(f){ contas[f.profile] = (contas[f.profile] || 0) + 1; });
   var melhor = null;
@@ -15079,7 +15136,81 @@ var sudokuRecusadas = {};   // por categoria: o que ela já trocou fora, não vo
 
 function sudokuOrdemDosGrupos() { return ['Tops', 'Bottoms', 'Outerwear']; }
 
+// ── Cápsula da semana ──
+// O Método Sudoku da mala, aplicado à semana em casa: eu proponho 9 peças que
+// combinam todas entre si (3 de cima, 3 de baixo, 3 terceiras peças) mais
+// sapatos e bolsa, ela aprova ou troca, e os dias úteis saem das 27
+// combinações — o quadrado latino garante que dias vizinhos não dividem peça.
+var capsulaDias = null;   // [{label, alvo, data}] enquanto o Sudoku está no modo semana
+
+// De hoje até sexta. No fim de semana, a semana útil que vem.
+function diasDaCapsula() {
+  var hoje = new Date(); hoje.setHours(0,0,0,0);
+  var dias = [];
+  [0, 7].some(function(desloc){
+    var seg = mondayOfCurrentWeek(); seg.setDate(seg.getDate() + desloc);
+    for (var i = 0; i < 5; i++) {
+      var d = new Date(seg); d.setDate(seg.getDate() + i);
+      if (d >= hoje) dias.push({ label: DAYS[i], alvo: desloc ? 'proxima' : 'atual', data: d });
+    }
+    return dias.length > 0;
+  });
+  return dias;
+}
+
+function perfilDosDias(dias) {
+  var cont = {};
+  dias.forEach(function(d){
+    var fc = infoParaDia(d.label, d.alvo).fc;
+    var pf = (fc && fc.temp && fc.temp !== '—') ? fc.profile : 'ameno';
+    cont[pf] = (cont[pf] || 0) + 1;
+  });
+  return Object.keys(cont).sort(function(a, b){ return cont[b] - cont[a]; })[0] || 'ameno';
+}
+
+function abrirCapsulaDaSemana() {
+  var dias = diasDaCapsula();
+  if (!dias.length) return;
+  sudokuRecusadas = {};
+  var perfil = perfilDosDias(dias);
+  sudokuSel = tripSudokuEscolher(perfil);
+  if (!sudokuSel) { showSavedToast('Não tenho peças suficientes pra montar as 9.'); return; }
+  sudokuEscolherSapatos(perfil);
+  capsulaDias = dias;
+  var de = brDate(dias[0].data), ate = brDate(dias[dias.length - 1].data);
+  document.getElementById('sudokuTitulo').textContent = 'Cápsula da semana · ' + (de === ate ? de : (de + ' a ' + ate));
+  document.getElementById('sudokuAprovarBtn').textContent = 'Aprovar e pôr nos ' + dias.length + ' dias';
+  document.getElementById('sudokuOverlay').classList.add('open');
+  renderSudoku();
+}
+
+function capsulaAprovar() {
+  var dias = capsulaDias, combos = sudokuCombinacoes(sudokuSel);
+  var tudo = novoRegistroDeDesfazer();
+  dias.forEach(function(d, i){
+    var fc = infoParaDia(d.label, d.alvo).fc;
+    var c = combos[i % combos.length];
+    var ids = [c.top.id, c.bottom.id];
+    // Sapato alterna por dia; a 3ª peça só entra no frio ou no ameno.
+    if (sudokuSapatos.length) ids.push(sudokuSapatos[i % sudokuSapatos.length].id);
+    if (fc && (tripFrio(fc.profile) || fc.profile === 'ameno')) ids.push(c.outer.id);
+    if (sudokuBolsa) ids.push(sudokuBolsa.id);
+    var reg = gravarLookMontadoNoDia(d.label, d.alvo, 'dia', ids, null, null, true);
+    var m = montagens.find(function(x){ return x.id === reg.criados[0]; });
+    if (m) { m.name = 'Cápsula — ' + d.label; m.capsula = true; }
+    tudo.turnos = tudo.turnos.concat(reg.turnos); tudo.criados = tudo.criados.concat(reg.criados);
+  });
+  saveMontagens();
+  renderWeek();
+  fecharSudoku();
+  avisoComDesfazer('Cápsula na semana: 9 peças em ' + dias.length + ' dias ('
+    + dias.map(function(d){ return d.label; }).join(', ') + ').', tudo);
+}
+
 function tripAbrirSudoku() {
+  capsulaDias = null;
+  document.getElementById('sudokuTitulo').textContent = 'Método Sudoku';
+  document.getElementById('sudokuAprovarBtn').textContent = 'Aprovar e montar os looks';
   if (tripForecast.length !== tripNumDays) {
     showSavedToast('Só um instante — ainda estou buscando o clima do destino.');
     return;
@@ -15095,6 +15226,7 @@ function tripAbrirSudoku() {
 
 function fecharSudoku() {
   document.getElementById('sudokuOverlay').classList.remove('open');
+  capsulaDias = null;
 }
 
 // Sapato e bolsa não estão nas 9 do método, mas viagem precisa deles. Escolhidos
@@ -15222,7 +15354,7 @@ function renderSudoku() {
 
   var extras = document.getElementById('sudokuExtras');
   var mais = sudokuSapatos.concat(sudokuBolsa ? [sudokuBolsa] : []);
-  extras.innerHTML = '<div class="sudoku-extras-rot">E mais, que o método não conta mas a viagem pede:</div>'
+  extras.innerHTML = '<div class="sudoku-extras-rot">E mais, que o método não conta mas a ' + (capsulaDias ? 'semana' : 'viagem') + ' pede:</div>'
     + mais.map(function(p, i){
         var ehBolsa = (p === sudokuBolsa);
         return '<div class="sudoku-extra"><img src="' + tripEsc(p.img) + '" alt="">'
@@ -15239,6 +15371,7 @@ function renderSudoku() {
 // Aprovado: as 9 + sapatos + bolsa viram a mala, e os dias saem das 27.
 function sudokuAprovar() {
   if (!sudokuSel) return;
+  if (capsulaDias) { capsulaAprovar(); return; }
   var todas = sudokuSel.pecas.concat(sudokuSapatos, sudokuBolsa ? [sudokuBolsa] : []);
   tripModoSudoku = true;
   tripPacked = {};
