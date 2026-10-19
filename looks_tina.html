@@ -15048,6 +15048,7 @@ function sudokuCabeNoGrupo(p, doGrupo) {
 function sudokuPool(cat, perfil) {
   return piecesByCategory(cat).filter(function(p){
     if (p.archived || pecaArquivada(p.id)) return false;
+    if (capsulaEvita(p)) return false;
     if (tripEhDeCasa(p)) return false;
     if (tripClimaScore(p, perfil) < 0) return false;
     return true;
@@ -15177,6 +15178,29 @@ function diasDaCapsula(alvo) {
   return dias;
 }
 
+// "As peças de daqui a 2 semanas têm que ser diferentes da semana anterior":
+// o que já está montado nas semanas vizinhas (de dia ou de noite) não entra na
+// cápsula — nem roupa, nem sapato, nem bolsa. Look do catálogo é foto com
+// etiquetas, sem peça, então não tem o que tirar dele.
+var capsulaEvitarIds = {};
+var VIZINHAS_DA_SEMANA = { atual: ['proxima'], proxima: ['atual', 'proxima2'], proxima2: ['proxima'] };
+
+function pecasDasSemanasVizinhas(alvo) {
+  var ids = {};
+  (VIZINHAS_DA_SEMANA[alvo] || []).forEach(function(w){
+    var campos = [campoMontadoDe(w, 'dia'), campoMontadoDe(w, 'noite')];
+    montagens.forEach(function(m){
+      if (!campos.some(function(c){ return m[c]; })) return;
+      (m.pieceIds || []).forEach(function(id){ ids[id] = true; });
+    });
+  });
+  return ids;
+}
+
+function capsulaEvita(p) {
+  return !!(capsulaDias && capsulaEvitarIds && capsulaEvitarIds[p.id]);
+}
+
 function perfilDosDias(dias) {
   var cont = {};
   dias.forEach(function(d){
@@ -15195,11 +15219,19 @@ function abrirCapsulaDaSemana(alvo) {
   var dias = diasDaCapsula(alvo);
   if (!dias.length) return;
   sudokuRecusadas = {};
+  capsulaDias = dias;   // antes de escolher: o Sudoku consulta o modo semana
+  capsulaEvitarIds = pecasDasSemanasVizinhas(dias[0].alvo);
   var perfil = perfilDosDias(dias);
   sudokuSel = tripSudokuEscolher(perfil);
-  if (!sudokuSel) { showSavedToast('Não tenho peças suficientes pra montar as 9.'); return; }
+  var aviso = null;
+  if (!sudokuSel && Object.keys(capsulaEvitarIds).length) {
+    capsulaEvitarIds = {};
+    sudokuSel = tripSudokuEscolher(perfil);
+    aviso = 'Não deu pra fugir de todas as peças da semana vizinha — algumas repetem.';
+  }
+  if (!sudokuSel) { capsulaDias = null; showSavedToast('Não tenho peças suficientes pra montar as 9.'); return; }
   sudokuEscolherSapatos(perfil);
-  capsulaDias = dias;
+  if (aviso) showSavedToast(aviso);
   var de = brDate(dias[0].data), ate = brDate(dias[dias.length - 1].data);
   document.getElementById('sudokuTitulo').textContent = 'Cápsula da semana · ' + (de === ate ? de : (de + ' a ' + ate));
   document.getElementById('sudokuAprovarBtn').textContent = 'Aprovar e pôr nos ' + dias.length + ' dias';
@@ -15287,6 +15319,7 @@ function tripAbrirSudoku() {
 function fecharSudoku() {
   document.getElementById('sudokuOverlay').classList.remove('open');
   capsulaDias = null;
+  capsulaEvitarIds = {};
 }
 
 // Sapato e bolsa não estão nas 9 do método, mas viagem precisa deles. Escolhidos
@@ -15300,6 +15333,7 @@ function sudokuEscolherSapatos(perfil) {
   function melhores(cat, quantas, jaTem) {
     var pool = piecesByCategory(cat).filter(function(p){
       if (p.archived || pecaArquivada(p.id)) return false;
+      if (capsulaEvita(p)) return false;
       if (tripEhDeCasa(p) || temEstampa(p)) return false;
       if (tripClimaScore(p, perfil) < 0) return false;
       return true;
@@ -15369,6 +15403,7 @@ function sudokuTrocarExtra(i) {
   var perfil = tripPerfilDominante();
   var pool = piecesByCategory(cat).filter(function(p){
     if (p.archived || pecaArquivada(p.id)) return false;
+    if (capsulaEvita(p)) return false;
     if (tripEhDeCasa(p) || temEstampa(p)) return false;     // sai em todos os looks
     if (tripClimaScore(p, perfil) < 0) return false;
     if (fixos.indexOf(p) !== -1) return false;
