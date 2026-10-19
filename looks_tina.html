@@ -3722,7 +3722,7 @@ var WEEKDAYS = [
 function setMontadoWeekday(id, day, alvo) {
   var target = montagens.find(function(m) { return m.id === id; });
   if (!target) return;
-  var campo = (alvo === 'proxima') ? 'weekdayNext' : 'weekday';
+  var campo = campoMontadoDe(alvo);   // inclui 'proxima2', que caía em weekday
   var turningOff = target[campo] === day;
   montagens.forEach(function(m) {
     if (m[campo] === day) m[campo] = null;
@@ -7532,7 +7532,10 @@ function renderNextWeekGrid(alvo, idGrid, idRange, semanasAdiante) {
 
     var look = weekLookFor(day, alvo);
     var dayKey = (WEEKDAYS.find(function(x){ return x.label === day; }) || {}).key;
-    var montado = dayKey ? montagens.find(function(m){ return m.weekdayNext === dayKey; }) : null;
+    // Pelo campo da semana desta grade: "Daqui a duas semanas" lia weekdayNext e
+    // mostrava de novo os looks montados da semana que vem.
+    var campoMontado = campoMontadoDe(alvo);
+    var montado = dayKey ? montagens.find(function(m){ return m[campoMontado] === dayKey; }) : null;
     // A mala só era consultada na semana atual. A viagem dela é de 12 a 28/09 e
     // a próxima semana (14 a 20) cai inteira dentro dela — e vinha vazia, sete
     // dias de "Adicionar look". Aqui vale a mesma ordem da semana atual: a mala
