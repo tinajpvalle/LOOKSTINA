@@ -892,6 +892,8 @@ body.compare-mode .card-compare-btn { display: flex; }
 .sugg-chip-actions { position: absolute; top: -8px; right: -8px; display: flex; gap: 3px; }
 .sugg-action-btn { background: #fff; border: 1px solid #E0E0DB; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: .65rem; }
 
+.opcoes-da-peca-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px; }
+.opcoes-da-peca-grid .pc-card-meta { font-size:.72rem; line-height:1.35; }
 .montado-card { background:#fff;border-radius:12px;overflow:hidden;border:1px solid #EAEAE7;cursor:pointer;transition: border-color .15s; }
 .montado-card:hover { border-color: #C6C6C2; }
 .montado-collage { display:flex; flex-wrap:wrap; gap:4px; padding:10px; justify-content:center; background:#FAFAF8; min-height:80px; align-items:center; }
@@ -1531,10 +1533,19 @@ body.compare-mode .card-compare-btn { display: flex; }
     <div class="modal-body">
       <h3 id="pecaBaseTitulo" style="margin-bottom:4px;">Começar por qual peça?</h3>
       <div id="pecaBaseSub" style="font-size:.82rem;color:var(--txt-2);margin-bottom:8px;"></div>
-      <div style="font-size:.74rem;color:var(--txt-2);margin-bottom:5px;">E uma cor pro resto do look? (opcional)</div>
-      <div class="cor-bar" id="pecaBaseCores"></div>
-      <input type="text" id="pecaBaseBusca" class="trip-busca" autocomplete="off" oninput="escolhaDePecaBaseBuscou()">
-      <div class="trip-picker-grid" id="pecaBaseGrid" style="padding-bottom:0;"></div>
+      <div id="pecaBaseEscolha">
+        <div style="font-size:.74rem;color:var(--txt-2);margin-bottom:5px;">E uma cor pro resto do look? (opcional)</div>
+        <div class="cor-bar" id="pecaBaseCores"></div>
+        <input type="text" id="pecaBaseBusca" class="trip-busca" autocomplete="off" oninput="escolhaDePecaBaseBuscou()">
+        <div class="trip-picker-grid" id="pecaBaseGrid" style="padding-bottom:0;"></div>
+      </div>
+      <div id="pecaBaseOpcoes" style="display:none;">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+          <button class="btn btn-ghost" onclick="gerarOpcoesDaPeca()">Outras opções</button>
+          <button class="btn btn-ghost" onclick="voltarParaAsPecasDaBase()">Trocar a peça</button>
+        </div>
+        <div class="opcoes-da-peca-grid" id="pecaBaseOpcoesGrid"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -12627,6 +12638,8 @@ function abrirEscolhaDePecaBase(day, alvo, turno) {
 function fecharEscolhaDePecaBase() {
   document.getElementById('pecaBaseOverlay').classList.remove('open');
   pecaBaseAlvo = null;
+  opcoesDaPeca = null;
+  renderOpcoesDaPeca();
 }
 
 function escolhaDePecaBaseBuscou() { renderEscolhaDePecaBase(); }
@@ -12847,11 +12860,75 @@ function montarPelaFormulaNoDia(texto, slots, day, alvo, turno) {
   showSavedToast('Montei ' + formulaDoLook(ids) + ' pra ' + day + (turno === 'noite' ? ' à noite' : '') + '.');
 }
 
+// "Hoje quero usar essa calça": em vez de pôr um look só direto no dia, mostra
+// algumas opções em volta da peça e ela escolhe qual vai.
+var OPCOES_POR_PECA = 4;
+var opcoesDaPeca = null;   // { base, cor, looks: [[ids]] }
+
 function montarComEssaPeca(pieceId) {
   if (!pecaBaseAlvo) return;
-  var alvo = pecaBaseAlvo, cor = pecaBaseCor;
+  var base = findPieceById(pieceId);
+  if (!base) return;
+  opcoesDaPeca = { base: base, cor: pecaBaseCor, looks: [] };
+  gerarOpcoesDaPeca();
+}
+
+function gerarOpcoesDaPeca() {
+  var op = opcoesDaPeca;
+  if (!op) return;
+  // As que ela já viu não voltam ao pedir outras.
+  var vistos = (op.vistos || []).concat(op.looks.map(function(ids){ return ids.slice().sort().join('|'); }));
+  op.vistos = vistos;
+  op.looks = [];
+  for (var t = 0; t < OPCOES_POR_PECA * 2 && op.looks.length < OPCOES_POR_PECA; t++) {
+    var evitar = vistos.concat(op.looks.map(function(ids){ return ids.slice().sort().join('|'); }));
+    var ids = idsDeUmLookNovo(op.base, op.cor, evitar);
+    if (ids) op.looks.push(ids);
+  }
+  renderOpcoesDaPeca();
+}
+
+function renderOpcoesDaPeca() {
+  var op = opcoesDaPeca;
+  var caixa = document.getElementById('pecaBaseOpcoes');
+  var escolha = document.getElementById('pecaBaseEscolha');
+  if (!caixa || !escolha) return;
+  if (!op) { caixa.style.display = 'none'; escolha.style.display = ''; return; }
+  escolha.style.display = 'none';
+  caixa.style.display = '';
+  document.getElementById('pecaBaseSub').textContent = op.looks.length
+    ? ('Looks com ' + tripNomeCurto(op.base) + (op.cor ? (' + ' + op.cor) : '') + ' — toque no que você quer usar')
+    : ('Não consegui montar look com ' + tripNomeCurto(op.base) + ' agora.');
+  var grid = document.getElementById('pecaBaseOpcoesGrid');
+  grid.innerHTML = '';
+  op.looks.forEach(function(ids, i){
+    var card = document.createElement('div');
+    card.className = 'montado-card';
+    var flat = document.createElement('div');
+    flat.className = 'flatlay-canvas';
+    card.appendChild(flat);
+    var nomes = document.createElement('div');
+    nomes.className = 'pc-card-body';
+    nomes.innerHTML = '<div class="pc-card-meta">' + ids.map(findPieceById).filter(Boolean)
+      .map(function(p){ return tripEsc(tripNomeCurto(p)); }).join(' · ') + '</div>';
+    card.appendChild(nomes);
+    card.onclick = function(){ escolherOpcaoDaPeca(i); };
+    grid.appendChild(card);
+    renderFlatLay(flat, ids.map(findPieceById).filter(Boolean));
+  });
+}
+
+function escolherOpcaoDaPeca(i) {
+  var op = opcoesDaPeca, alvo = pecaBaseAlvo;
+  if (!op || !alvo || !op.looks[i]) return;
   fecharEscolhaDePecaBase();
-  montarDoArmarioNoDia(alvo.day, alvo.alvo, alvo.turno, pieceId, cor);
+  gravarLookMontadoNoDia(alvo.day, alvo.alvo, alvo.turno, op.looks[i], op.base, op.cor);
+}
+
+function voltarParaAsPecasDaBase() {
+  opcoesDaPeca = null;
+  renderOpcoesDaPeca();
+  renderEscolhaDePecaBase();
 }
 
 // Cores que ela tem de verdade no armário, da mais comum pra menos. Oferecer
@@ -12956,8 +13033,21 @@ function montarDoArmarioNoDia(day, alvo, turno, baseId, cor) {
   turno = (turno === 'noite') ? 'noite' : 'dia';
   alvo = alvo || 'atual';
   var base = baseId ? findPieceById(baseId) : null;
+  var ids = idsDeUmLookNovo(base, cor, []);
+  if (!ids) {
+    showSavedToast(base ? ('Não consegui montar um look com ' + base.name + ' agora — tente de novo.')
+                        : 'Não consegui montar um look novo agora — tente de novo.');
+    return;
+  }
+  gravarLookMontadoNoDia(day, alvo, turno, ids, base, cor);
+}
+
+// Sorteia as peças de um look novo em volta da base (se houver). evitar são
+// chaves de looks que não podem sair de novo — as opções já mostradas na tela.
+function idsDeUmLookNovo(base, cor, evitar) {
   corPedidaNoMontador = cor || null;
-  var jaExistem = montagens.map(function(m){ return (m.pieceIds || []).slice().sort().join('|'); });
+  var jaExistem = montagens.map(function(m){ return (m.pieceIds || []).slice().sort().join('|'); })
+    .concat(evitar || []);
 
   // O construtor guarda o estado dele em variáveis globais; aqui ele é usado
   // sem a tela, então o que estava aberto volta como estava.
@@ -12981,13 +13071,12 @@ function montarDoArmarioNoDia(day, alvo, turno, baseId, cor) {
   }
   suggestionSlots = guardado.slots; suggestionLockedIds = guardado.locked; historicoSugestoes = guardado.hist;
   corPedidaNoMontador = null;
+  return ids;
+}
 
-  if (!ids) {
-    showSavedToast(base ? ('Não consegui montar um look com ' + base.name + ' agora — tente de novo.')
-                        : 'Não consegui montar um look novo agora — tente de novo.');
-    return;
-  }
-
+function gravarLookMontadoNoDia(day, alvo, turno, ids, base, cor) {
+  turno = (turno === 'noite') ? 'noite' : 'dia';
+  alvo = alvo || 'atual';
   var novo = {
     id: 'm_' + Date.now() + '_' + Math.floor(Math.random() * 100000),
     name: (function(){
