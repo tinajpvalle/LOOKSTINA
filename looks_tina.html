@@ -897,6 +897,7 @@ body.compare-mode .card-compare-btn { display: flex; }
 
 .opcoes-da-peca-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px; }
 .opcoes-da-peca-grid .pc-card-meta { font-size:.72rem; line-height:1.35; }
+.toast-desfazer { margin-left:12px; background:none; border:none; color:#fff; font:inherit; font-weight:700; text-decoration:underline; cursor:pointer; padding:0; }
 .opcao-acoes { display:flex; gap:6px; margin-top:8px; }
 .opcao-acoes .btn { flex:1; padding:6px 4px; font-size:.72rem; justify-content:center; }
 .opcao-varios-dias { margin-bottom:12px; font-size:.82rem; }
@@ -1565,6 +1566,18 @@ body.compare-mode .card-compare-btn { display: flex; }
         </details>
         <div class="opcoes-da-peca-grid" id="pecaBaseOpcoesGrid"></div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Looks guardados no "por uma peça", pra pôr direto num dia -->
+<div class="overlay" id="guardadosOverlay" onclick="if(event.target===this) fecharGuardadosNoDia()">
+  <div class="modal trip-modal">
+    <button class="close-btn" onclick="fecharGuardadosNoDia()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:-2px"><path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"/></svg></button>
+    <div class="modal-body">
+      <h3 id="guardadosTitulo" style="margin-bottom:4px;">Looks guardados</h3>
+      <div id="guardadosSub" style="font-size:.82rem;color:var(--txt-2);margin-bottom:12px;"></div>
+      <div class="opcoes-da-peca-grid" id="guardadosGrid"></div>
     </div>
   </div>
 </div>
@@ -7751,6 +7764,127 @@ function ligarSoltarNoTurno(el, day, alvo, turno) {
 // Ela não achou o "Montar do armário" porque ele só existia em dia vazio — e
 // semana cheia é o caso normal. Aqui ele fica junto de todo dia, trocando o look
 // que estiver lá.
+// ── Quem ocupa um turno de um dia, e desfazer ──
+// O dia guarda um look do catálogo e/ou um look montado, de dia e de noite.
+// Pôr um look montado num dia que já tinha um do catálogo não aparecia: na
+// Semana o do catálogo ganha. Agora quem entra tira o que estava — e o que
+// estava fica anotado pro "Desfazer" do aviso.
+function ocupantesDoTurno(day, alvo, turno) {
+  return (turno === 'noite') ? (noiteDoDia(day, alvo) || {}) : weekOccupants(day, alvo);
+}
+function limparTurno(day, alvo, turno) {
+  if (turno === 'noite') limparNoiteDoDia(day, alvo); else clearWeekOccupants(day, alvo);
+}
+function porNoTurno(day, alvo, turno, occ) {
+  if (!occ) return;
+  if (turno === 'noite') porNoiteNoDia(day, alvo, occ); else setWeekOccupants(day, occ, alvo);
+}
+
+// registro: { turnos: [{day, alvo, turno, antes}], criados: [ids de montados] }
+function novoRegistroDeDesfazer() { return { turnos: [], criados: [] }; }
+function anotarTurno(reg, day, alvo, turno) {
+  if (!reg) return;
+  var a = ocupantesDoTurno(day, alvo, turno);
+  reg.turnos.push({ day: day, alvo: alvo, turno: turno,
+    antes: { look: a.look || null, montado: a.montado || null } });
+}
+function desfazerRegistro(reg) {
+  if (!reg) return;
+  montagens = montagens.filter(function(m){ return reg.criados.indexOf(m.id) === -1; });
+  // De trás pra frente: se o mesmo dia foi mexido duas vezes, volta ao começo.
+  reg.turnos.slice().reverse().forEach(function(t){
+    limparTurno(t.day, t.alvo, t.turno);
+    porNoTurno(t.day, t.alvo, t.turno, t.antes);
+  });
+  saveMontagens(); saveToStorage();
+  renderWeek();
+  if (typeof renderGrid === 'function') renderGrid();
+  if (typeof renderLooksMontados === 'function' && document.getElementById('montadosGrid')) renderLooksMontados();
+  if (typeof renderTodaySuggestion === 'function') renderTodaySuggestion();
+  showSavedToast('Desfeito.');
+}
+
+// O aviso de baixo, com um botão "Desfazer". Fica um pouco mais na tela que o
+// aviso comum, pra dar tempo de ler e tocar.
+function avisoComDesfazer(msg, reg) {
+  var t = document.getElementById('savedToast');
+  if (!t || !reg) { showSavedToast(msg); return; }
+  showSavedToast(msg);
+  var b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'toast-desfazer';
+  b.textContent = 'Desfazer';
+  b.onclick = function(e){ e.stopPropagation(); desfazerRegistro(reg); };
+  t.appendChild(b);
+  t.style.pointerEvents = 'auto';
+  clearTimeout(t._timer);
+  t._timer = setTimeout(function(){
+    t.style.opacity = '0'; t.style.transform = 'translateX(-50%) translateY(10px)';
+    t.style.pointerEvents = 'none';
+  }, 5000);
+}
+
+// ── Looks guardados ──
+// O "Guardar" do "por uma peça" manda o look pra Looks Montados sem dia. Aqui
+// cada dia ganha "guardados", que abre só esses, pra pôr direto no dia.
+var guardadosAlvo = null;   // { day, alvo, turno }
+function looksGuardados() {
+  return montagens.filter(function(m){ return m.guardado; }).slice().reverse();
+}
+
+function abrirGuardadosNoDia(day, alvo, turno) {
+  guardadosAlvo = { day: day, alvo: alvo || 'atual', turno: (turno === 'noite') ? 'noite' : 'dia' };
+  document.getElementById('guardadosTitulo').textContent = 'Looks guardados · ' + day
+    + (guardadosAlvo.turno === 'noite' ? ' à noite' : '')
+    + (guardadosAlvo.alvo === 'proxima' ? ' da próxima semana' : '');
+  renderGuardadosNoDia();
+  document.getElementById('guardadosOverlay').classList.add('open');
+}
+
+function fecharGuardadosNoDia() {
+  document.getElementById('guardadosOverlay').classList.remove('open');
+  guardadosAlvo = null;
+}
+
+function renderGuardadosNoDia() {
+  var grid = document.getElementById('guardadosGrid');
+  var lista = looksGuardados();
+  document.getElementById('guardadosSub').textContent = lista.length
+    ? (lista.length + (lista.length === 1 ? ' look guardado' : ' looks guardados') + ' — toque no que vai nesse dia')
+    : 'Nenhum look guardado ainda. No "por uma peça", use "Guardar" nos que você gostar.';
+  grid.innerHTML = '';
+  lista.forEach(function(m){
+    var card = document.createElement('div');
+    card.className = 'montado-card';
+    var flat = document.createElement('div');
+    flat.className = 'flatlay-canvas';
+    card.appendChild(flat);
+    var corpo = document.createElement('div');
+    corpo.className = 'pc-card-body';
+    corpo.innerHTML = '<div class="pc-card-meta">' + (m.pieceIds || []).map(findPieceById).filter(Boolean)
+      .map(function(p){ return tripEsc(tripNomeCurto(p)); }).join(' · ') + '</div>';
+    card.appendChild(corpo);
+    card.onclick = function(){ usarGuardadoNoDia(m.id); };
+    grid.appendChild(card);
+    renderFlatLay(flat, (m.pieceIds || []).map(findPieceById).filter(Boolean));
+  });
+}
+
+function usarGuardadoNoDia(id) {
+  var a = guardadosAlvo;
+  var m = montagens.find(function(x){ return x.id === id; });
+  if (!a || !m) return;
+  var reg = novoRegistroDeDesfazer();
+  anotarTurno(reg, a.day, a.alvo, a.turno);
+  limparTurno(a.day, a.alvo, a.turno);
+  m[campoMontadoDe(a.alvo, a.turno)] = chaveDoDia(a.day);
+  saveMontagens(); saveToStorage();
+  fecharGuardadosNoDia();
+  renderWeek();
+  if (typeof renderGrid === 'function') renderGrid();
+  avisoComDesfazer('Look guardado posto em ' + a.day + (a.turno === 'noite' ? ' à noite' : '') + '.', reg);
+}
+
 function barraDeMontarNoDia(col, day, alvo, turno) {
   if (tripViewOnly) return;
   var barra = document.createElement('div');
@@ -7771,6 +7905,14 @@ function barraDeMontarNoDia(col, day, alvo, turno) {
   c.title = 'Você diz a forma do look ("saia com camisa e sapato"), eu escolho as peças';
   c.onclick = (function(d, al, t){ return function(e){ e.stopPropagation(); abrirEscolhaDeFormula(d, al, t); }; })(day, alvo, turno);
   barra.appendChild(a); barra.appendChild(b); barra.appendChild(c);
+  if (looksGuardados().length) {
+    var g = document.createElement('button');
+    g.className = 'day-noite-add';
+    g.textContent = 'guardados (' + looksGuardados().length + ')';
+    g.title = 'Os looks que você guardou no "por uma peça"';
+    g.onclick = (function(d, al, t){ return function(e){ e.stopPropagation(); abrirGuardadosNoDia(d, al, t); }; })(day, alvo, turno);
+    barra.appendChild(g);
+  }
   col.appendChild(barra);
 }
 
@@ -10824,6 +10966,7 @@ function showSavedToast(msg) {
   if(!t) return;
   if (t._defaultHTML == null) t._defaultHTML = t.innerHTML;
   t.innerHTML = msg ? String(msg).replace(/</g,'&lt;') : t._defaultHTML;
+  t.style.pointerEvents = 'none';   // só o aviso com "Desfazer" recebe toque
   // mantém o translateX(-50%) que centraliza o toast: sem ele o transform daqui
   // sobrescrevia a centralização e o aviso aparecia deslocado pra direita.
   t.style.opacity = '1'; t.style.transform = 'translateX(-50%) translateY(0)';
@@ -13100,17 +13243,18 @@ function montarPecaEmVariosDias() {
     if (!ids) break;
     looks.push(ids); usados.push(chaveDoLook(ids));
   }
-  var feitos = [];
+  var feitos = [], tudo = novoRegistroDeDesfazer();
   op.diasEscolhidos.forEach(function(d, i){
     if (!looks[i]) return;
-    gravarLookMontadoNoDia(d, alvo.alvo, alvo.turno, looks[i], op.bases, op.cor, true);
+    var reg = gravarLookMontadoNoDia(d, alvo.alvo, alvo.turno, looks[i], op.bases, op.cor, true);
+    tudo.turnos = tudo.turnos.concat(reg.turnos); tudo.criados = tudo.criados.concat(reg.criados);
     feitos.push(d);
   });
   var nome = nomeDasBases(op);
   fecharEscolhaDePecaBase();
-  showSavedToast(feitos.length
+  avisoComDesfazer(feitos.length
     ? ('Montei ' + feitos.length + (feitos.length === 1 ? ' look' : ' looks diferentes') + ' com ' + nome + ': ' + feitos.join(', ') + '.')
-    : ('Não consegui montar looks com ' + nome + ' agora.'));
+    : ('Não consegui montar looks com ' + nome + ' agora.'), feitos.length ? tudo : null);
 }
 
 // Cores que ela tem de verdade no armário, da mais comum pra menos. Oferecer
@@ -13311,19 +13455,29 @@ function gravarLookMontadoNoDia(day, alvo, turno, ids, base, cor, semAviso) {
     corPedida: cor || null,
     weekday: null, weekdayNext: null, weekdayNoite: null, weekdayNoiteNext: null
   };
-  if (day) novo[campoMontadoDe(alvo, turno)] = chaveDoDia(day);
+  var reg = novoRegistroDeDesfazer();
+  if (day) {
+    // Quem estava no dia sai — senão um look do catálogo lá escondia este.
+    anotarTurno(reg, day, alvo, turno);
+    limparTurno(day, alvo, turno);
+    novo[campoMontadoDe(alvo, turno)] = chaveDoDia(day);
+  } else {
+    novo.guardado = true;   // aparece no "guardados" de cada dia
+  }
   montagens.push(novo);
-  saveMontagens();
+  reg.criados.push(novo.id);
+  saveMontagens(); saveToStorage();
   renderWeek();
   if (typeof renderGrid === 'function') renderGrid();
-  if (semAviso) return novo;
-  if (!day) { showSavedToast('Guardei em Looks Montados — dá pra pôr num dia depois.'); return novo; }
+  if (semAviso) return reg;
+  if (!day) { avisoComDesfazer('Guardei — aparece em "guardados" em cada dia da semana.', reg); return reg; }
   var ac = acentoDoLook(ids.map(findPieceById).filter(Boolean));
   var comOQue = [base ? nomeBase : null, cor, ac ? ('acento ' + ac.cor) : null]
     .filter(Boolean).join(' e ');
-  showSavedToast(comOQue
+  avisoComDesfazer(comOQue
     ? ('Montei um look com ' + comOQue + ' pra ' + day + '.')
-    : ('Montei um look do seu armário pra ' + day + (turno === 'noite' ? ' à noite' : '') + '.'));
+    : ('Montei um look do seu armário pra ' + day + (turno === 'noite' ? ' à noite' : '') + '.'), reg);
+  return reg;
 }
 
 // O que o "outra" já mostrou em cada dia nesta sessão, pra não repetir na
@@ -13696,12 +13850,18 @@ function usarSugestaoEmOutroDia(i) {
   var pid = todaySuggestionCurrentId;
   if (!d || pid == null) return;
   var atual = weekLookFor(d.label, d.alvo);
+  var reg = novoRegistroDeDesfazer();
   // assignDay alterna: com o mesmo look já lá, tiraria em vez de pôr.
-  if (!atual || atual.id !== pid) assignDay(pid, d.label, d.alvo);
+  if (!atual || atual.id !== pid) {
+    anotarTurno(reg, d.label, d.alvo, 'dia');
+    clearWeekOccupants(d.label, d.alvo);   // look montado que estava lá sai também
+    saveMontagens();
+    assignDay(pid, d.label, d.alvo);
+  }
   outroDiaDaSugestaoAberto = false;
   renderOutroDiaDaSugestao();
-  showSavedToast('Look marcado pra ' + d.label + ' ' + brDate(d.data)
-    + (d.alvo === 'proxima' ? ' (próxima semana)' : '') + '!');
+  avisoComDesfazer('Look marcado pra ' + d.label + ' ' + brDate(d.data)
+    + (d.alvo === 'proxima' ? ' (próxima semana)' : '') + '!', reg.turnos.length ? reg : null);
 }
 
 function markTodaySuggestionWorn() {
