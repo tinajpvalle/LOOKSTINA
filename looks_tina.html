@@ -15186,8 +15186,42 @@ function abrirCapsulaDaSemana(alvo) {
   renderSudoku();
 }
 
+// A ordem das 27 combinações foi feita pra mala, que anda de 2 em 2 (dia e
+// noite). Pegando 5 seguidas, o casaco repetia em dias vizinhos — ela pegou o
+// verde na quarta e na quinta: "não se deve repetir o mesmo casaco por 2 dias".
+// Aqui a sequência é escolhida: dia vizinho não divide blusa, calça nem casaco,
+// e entre as que passam vence a que usa as peças mais por igual e não repete
+// a dupla blusa + calça.
+function capsulaSequencia(combos, n) {
+  var melhor = null;
+  function divide(a, b) { return a.top === b.top || a.bottom === b.bottom || a.outer === b.outer; }
+  function custo(seq) {
+    var uso = {};
+    seq.forEach(function(c){ [c.top, c.bottom, c.outer].forEach(function(p){ uso[p.id] = (uso[p.id] || 0) + 1; }); });
+    var vals = Object.keys(uso).map(function(k){ return uso[k]; });
+    // Mesma blusa com a mesma calça em dois dias é o mesmo look com outro
+    // casaco — com 3 × 3 pares dá pra não repetir nenhum em 5 dias.
+    var pares = {}, parRepetido = 0;
+    seq.forEach(function(c){ var k = c.top.id + '|' + c.bottom.id; if (pares[k]) parRepetido++; pares[k] = 1; });
+    return Math.max.apply(null, vals) * 100 + parRepetido * 10 - vals.length;
+  }
+  (function busca(seq) {
+    if (seq.length === n) {
+      var c = custo(seq);
+      if (!melhor || c < melhor.c) melhor = { seq: seq.slice(), c: c };
+      return;
+    }
+    combos.forEach(function(c){
+      if (seq.indexOf(c) !== -1) return;
+      if (seq.length && divide(seq[seq.length - 1], c)) return;
+      seq.push(c); busca(seq); seq.pop();
+    });
+  })([]);
+  return melhor ? melhor.seq : combos.slice(0, n);
+}
+
 function capsulaAprovar() {
-  var dias = capsulaDias, combos = sudokuCombinacoes(sudokuSel);
+  var dias = capsulaDias, combos = capsulaSequencia(sudokuCombinacoes(sudokuSel), capsulaDias.length);
   var tudo = novoRegistroDeDesfazer();
   dias.forEach(function(d, i){
     var fc = infoParaDia(d.label, d.alvo).fc;
