@@ -659,6 +659,9 @@ body.week-pick-mode .card-week-btn { display: block; }
 @media (max-width: 900px) { .week-grid { grid-template-columns: repeat(4, 1fr); } }
 @media (max-width: 600px) { .week-grid { grid-template-columns: repeat(2, 1fr); } }
 .day-col { background: #fff; border-radius: 12px; border: 1px solid #EAEAE7; overflow: hidden; min-height: 200px; transition: border-color .15s, box-shadow .15s; }
+.day-col.day-col-hoje { border-color: var(--ink, #1A1A1A); box-shadow: 0 0 0 1px var(--ink, #1A1A1A); }
+.day-col.day-col-hoje > .day-header { background: var(--ink, #1A1A1A); color: #fff; }
+.day-tempo { font-size: 10.5px; color: var(--txt-2, #666); text-align: center; padding: 4px 6px; border-bottom: 1px solid var(--line, #EAEAE7); line-height: 1.3; }
 .day-col.drag-over { border-color: #1A1A1A; box-shadow: 0 0 0 2px #1A1A1A; background: #FAFAF8; }
 .day-header { background: #F0F0EC; padding: 10px 12px; font-size: .82rem; font-weight: 600; text-align: center; color: #666666; }
 .day-look { position: relative; cursor: grab; }
@@ -894,6 +897,10 @@ body.compare-mode .card-compare-btn { display: flex; }
 
 .opcoes-da-peca-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px; }
 .opcoes-da-peca-grid .pc-card-meta { font-size:.72rem; line-height:1.35; }
+.opcao-acoes { display:flex; gap:6px; margin-top:8px; }
+.opcao-acoes .btn { flex:1; padding:6px 4px; font-size:.72rem; justify-content:center; }
+.opcao-varios-dias { margin-bottom:12px; font-size:.82rem; }
+.opcao-varios-dias summary { cursor:pointer; color:var(--txt-2); }
 .montado-card { background:#fff;border-radius:12px;overflow:hidden;border:1px solid #EAEAE7;cursor:pointer;transition: border-color .15s; }
 .montado-card:hover { border-color: #C6C6C2; }
 .montado-collage { display:flex; flex-wrap:wrap; gap:4px; padding:10px; justify-content:center; background:#FAFAF8; min-height:80px; align-items:center; }
@@ -1547,6 +1554,13 @@ body.compare-mode .card-compare-btn { display: flex; }
           <button class="btn btn-ghost" onclick="voltarParaAsPecasDaBase()">Trocar a peça</button>
           <span id="pecaBasePagina" style="font-size:.74rem;color:var(--txt-3);"></span>
         </div>
+        <div class="cor-bar" id="pecaBaseBases" style="margin-bottom:10px;"></div>
+        <details class="opcao-varios-dias">
+          <summary>Usar em vários dias</summary>
+          <div style="font-size:.74rem;color:var(--txt-2);margin:6px 0;">Um look diferente com a peça em cada dia que você marcar.</div>
+          <div class="cor-bar" id="pecaBaseDias"></div>
+          <button type="button" class="btn btn-ghost" id="pecaBaseDiasMontar" onclick="montarPecaEmVariosDias()" style="margin-top:6px;">Marque os dias</button>
+        </details>
         <div class="opcoes-da-peca-grid" id="pecaBaseOpcoesGrid"></div>
       </div>
     </div>
@@ -6268,7 +6282,9 @@ function init() {
   if (typeof loadForecast === 'function') {
     loadForecast().then(function(){
       if (typeof renderTodaySuggestion === 'function') renderTodaySuggestion();
+      renderWeek();   // a previsão chega depois da primeira pintura da semana
     });
+    loadForecast(1).then(function(){ renderWeek(); });
   }
   document.getElementById('search').addEventListener('input', function(){
     activeTagFilter = null;
@@ -7066,6 +7082,18 @@ function tituloDaMalaNoDia(col, m) {
   col.appendChild(t);
 }
 
+// A previsão já era buscada pra sugerir look, mas não aparecia na semana — ela
+// planejava sem saber que quarta ia chover.
+function tempoNoTopoDoDia(col, day, alvo) {
+  var fc = infoParaDia(day, alvo).fc;
+  if (!fc || !fc.temp || fc.temp === '—') return;
+  var t = document.createElement('div');
+  t.className = 'day-tempo';
+  t.textContent = fc.temp + ' · ' + fc.cond;
+  t.title = fc.deCache ? 'Previsão guardada (sem conexão agora)' : 'Previsão do tempo';
+  col.appendChild(t);
+}
+
 function renderWeek() {
   renderAvisoUsoRegistrado();
   var wg = document.getElementById('weekGrid');
@@ -7075,8 +7103,13 @@ function renderWeek() {
     col.dataset.day = day;
     // Com a data, igual à Próxima semana — só "SEG" não dizia que dia do mês era.
     var dataNoTopo = mondayOfCurrentWeek(); dataNoTopo.setDate(dataNoTopo.getDate() + i);
-    var dh = document.createElement('div'); dh.className = 'day-header'; dh.textContent = day + ' ' + brDate(dataNoTopo);
+    var dh = document.createElement('div'); dh.className = 'day-header';
+    var ehHoje = isoDate(dataNoTopo) === isoDate(new Date());
+    dh.textContent = (ehHoje ? 'Hoje' : day) + ' ' + brDate(dataNoTopo);
+    if (ehHoje) dh.title = day + ' — hoje';
+    if (ehHoje) col.classList.add('day-col-hoje');
     col.appendChild(dh);
+    tempoNoTopoDoDia(col, day, 'atual');
 
     // Dia de viagem: a mala já decidiu o look, então ela ocupa o lugar dele.
     var dataDoDia = new Date(mondayOfCurrentWeek());
@@ -7473,6 +7506,7 @@ function renderNextWeekGrid(alvo, idGrid, idRange, semanasAdiante) {
     var dh = document.createElement('div'); dh.className = 'day-header';
     dh.textContent = day + ' ' + brDate(d);
     col.appendChild(dh);
+    if (alvo === 'proxima' && (semanasAdiante || 1) === 1) tempoNoTopoDoDia(col, day, 'proxima');
     ligarSoltarNoDia(col, day, alvo);
 
     var look = weekLookFor(day, alvo);
@@ -12871,15 +12905,33 @@ function montarPelaFormulaNoDia(texto, slots, day, alvo, turno) {
 var OPCOES_POR_PECA = 4;
 // paginas guarda cada leva de opções que ela já viu, pra dar pra voltar numa
 // anterior ("se eu vi uma opção anterior e gostei"); looks é a que está na tela.
-var opcoesDaPeca = null;   // { base, cor, paginas: [[[ids]]], pagina, looks }
+// bases são as peças que ela escolheu — uma ou mais ("essa calça e esse sapato").
+var opcoesDaPeca = null;   // { bases, cor, paginas: [[[ids]]], pagina, looks, guardados, adicionando, diasEscolhidos }
+
+function chaveDoLook(ids) { return ids.slice().sort().join('|'); }
 
 function montarComEssaPeca(pieceId) {
   if (!pecaBaseAlvo) return;
-  var base = findPieceById(pieceId);
-  if (!base) return;
-  opcoesDaPeca = { base: base, cor: pecaBaseCor, paginas: [], pagina: -1, looks: [] };
+  var peca = findPieceById(pieceId);
+  if (!peca) return;
+  if (opcoesDaPeca && opcoesDaPeca.adicionando) {
+    // Peça a mais: entra junto com a(s) que já estavam e as opções recomeçam.
+    opcoesDaPeca.adicionando = false;
+    if (!opcoesDaPeca.bases.some(function(b){ return String(b.id) === String(peca.id); })) opcoesDaPeca.bases.push(peca);
+    recomecarOpcoesDaPeca();
+    return;
+  }
+  opcoesDaPeca = { bases: [peca], cor: pecaBaseCor, guardados: {} };
+  recomecarOpcoesDaPeca();
+}
+
+function recomecarOpcoesDaPeca() {
+  var op = opcoesDaPeca;
+  op.paginas = []; op.pagina = -1; op.looks = []; op.diasEscolhidos = [];
   gerarOpcoesDaPeca();
 }
+
+function nomeDasBases(op) { return op.bases.map(tripNomeCurto).join(' + '); }
 
 function gerarOpcoesDaPeca() {
   var op = opcoesDaPeca;
@@ -12888,15 +12940,14 @@ function gerarOpcoesDaPeca() {
   // de sortear novas.
   if (op.pagina < op.paginas.length - 1) { mostrarPaginaDeOpcoes(op.pagina + 1); return; }
   // As que ela já viu não voltam ao pedir outras.
-  var chave = function(ids){ return ids.slice().sort().join('|'); };
-  var vistos = [].concat.apply([], op.paginas).map(chave);
+  var vistos = [].concat.apply([], op.paginas).map(chaveDoLook);
   var leva = [];
   for (var t = 0; t < OPCOES_POR_PECA * 2 && leva.length < OPCOES_POR_PECA; t++) {
-    var ids = idsDeUmLookNovo(op.base, op.cor, vistos.concat(leva.map(chave)));
+    var ids = idsDeUmLookNovo(op.bases, op.cor, vistos.concat(leva.map(chaveDoLook)));
     if (ids) leva.push(ids);
   }
   if (!leva.length && op.paginas.length) {
-    showSavedToast('Não achei mais looks diferentes com essa peça.');
+    showSavedToast('Não achei mais looks diferentes com ' + nomeDasBases(op) + '.');
     return;
   }
   op.paginas.push(leva);
@@ -12922,16 +12973,26 @@ function renderOpcoesDaPeca() {
   var caixa = document.getElementById('pecaBaseOpcoes');
   var escolha = document.getElementById('pecaBaseEscolha');
   if (!caixa || !escolha) return;
-  if (!op) { caixa.style.display = 'none'; escolha.style.display = ''; return; }
+  if (!op || op.adicionando) { caixa.style.display = 'none'; escolha.style.display = ''; return; }
   escolha.style.display = 'none';
   caixa.style.display = '';
   document.getElementById('pecaBaseSub').textContent = op.looks.length
-    ? ('Looks com ' + tripNomeCurto(op.base) + (op.cor ? (' + ' + op.cor) : '') + ' — toque no que você quer usar')
-    : ('Não consegui montar look com ' + tripNomeCurto(op.base) + ' agora.');
+    ? ('Looks com ' + nomeDasBases(op) + (op.cor ? (' + ' + op.cor) : '') + ' — toque no que você quer usar em ' + pecaBaseAlvo.day)
+    : ('Não consegui montar look com ' + nomeDasBases(op) + ' agora.');
+
+  // As peças escolhidas, com × pra tirar e "+ outra peça" pra juntar mais uma.
+  document.getElementById('pecaBaseBases').innerHTML = op.bases.map(function(b, i){
+    return '<span class="cor-chip active">' + tripEsc(tripNomeCurto(b))
+      + (op.bases.length > 1 ? ' <span style="cursor:pointer;opacity:.7" title="Tirar esta peça" onclick="tirarPecaDaBase(' + i + ')">×</span>' : '')
+      + '</span>';
+  }).join('') + '<button type="button" class="cor-chip" onclick="adicionarPecaNaBase()">+ outra peça</button>';
+
   var anterior = document.getElementById('pecaBaseAnteriores');
   if (anterior) anterior.style.display = op.pagina > 0 ? '' : 'none';
   var qual = document.getElementById('pecaBasePagina');
   if (qual) qual.textContent = op.paginas.length > 1 ? ((op.pagina + 1) + ' de ' + op.paginas.length) : '';
+  renderVariosDiasDaPeca();
+
   var grid = document.getElementById('pecaBaseOpcoesGrid');
   grid.innerHTML = '';
   op.looks.forEach(function(ids, i){
@@ -12944,6 +13005,16 @@ function renderOpcoesDaPeca() {
     nomes.className = 'pc-card-body';
     nomes.innerHTML = '<div class="pc-card-meta">' + ids.map(findPieceById).filter(Boolean)
       .map(function(p){ return tripEsc(tripNomeCurto(p)); }).join(' · ') + '</div>';
+    // Gostou mas não é pra esse dia: guarda em Looks Montados sem pôr em dia nenhum.
+    var guardado = !!op.guardados[chaveDoLook(ids)];
+    var acoes = document.createElement('div');
+    acoes.className = 'opcao-acoes';
+    acoes.innerHTML = '<button type="button" class="btn btn-ghost opcao-usar">Usar em ' + tripEsc(pecaBaseAlvo.day) + '</button>'
+      + '<button type="button" class="btn btn-ghost opcao-guardar"' + (guardado ? ' disabled' : '') + '>'
+      + (guardado ? 'Guardado ✓' : 'Guardar') + '</button>';
+    acoes.querySelector('.opcao-usar').onclick = function(e){ e.stopPropagation(); escolherOpcaoDaPeca(i); };
+    acoes.querySelector('.opcao-guardar').onclick = function(e){ e.stopPropagation(); guardarOpcaoDaPeca(i); };
+    nomes.appendChild(acoes);
     card.appendChild(nomes);
     card.onclick = function(){ escolherOpcaoDaPeca(i); };
     grid.appendChild(card);
@@ -12955,13 +13026,89 @@ function escolherOpcaoDaPeca(i) {
   var op = opcoesDaPeca, alvo = pecaBaseAlvo;
   if (!op || !alvo || !op.looks[i]) return;
   fecharEscolhaDePecaBase();
-  gravarLookMontadoNoDia(alvo.day, alvo.alvo, alvo.turno, op.looks[i], op.base, op.cor);
+  gravarLookMontadoNoDia(alvo.day, alvo.alvo, alvo.turno, op.looks[i], op.bases, op.cor);
+}
+
+function guardarOpcaoDaPeca(i) {
+  var op = opcoesDaPeca, alvo = pecaBaseAlvo;
+  if (!op || !alvo || !op.looks[i]) return;
+  var chave = chaveDoLook(op.looks[i]);
+  if (op.guardados[chave]) return;
+  gravarLookMontadoNoDia(null, alvo.alvo, alvo.turno, op.looks[i], op.bases, op.cor);
+  op.guardados[chave] = true;
+  renderOpcoesDaPeca();
+}
+
+function adicionarPecaNaBase() {
+  if (!opcoesDaPeca) return;
+  opcoesDaPeca.adicionando = true;
+  document.getElementById('pecaBaseBusca').value = '';
+  renderOpcoesDaPeca();
+  renderEscolhaDePecaBase();
+  document.getElementById('pecaBaseSub').textContent =
+    'Qual peça vai junto com ' + nomeDasBases(opcoesDaPeca) + '? — toque nela';
+}
+
+function tirarPecaDaBase(i) {
+  var op = opcoesDaPeca;
+  if (!op || op.bases.length < 2) return;
+  op.bases.splice(i, 1);
+  recomecarOpcoesDaPeca();
 }
 
 function voltarParaAsPecasDaBase() {
   opcoesDaPeca = null;
   renderOpcoesDaPeca();
   renderEscolhaDePecaBase();
+}
+
+// "Essa calça na segunda e na quinta": um look diferente com a peça em cada dia
+// que ela marcar. Usa primeiro as opções que estão na tela, na ordem.
+function renderVariosDiasDaPeca() {
+  var op = opcoesDaPeca, box = document.getElementById('pecaBaseDias');
+  if (!box || !op) return;
+  var dias = op.diasEscolhidos || [];
+  box.innerHTML = DAYS.map(function(d){
+    return '<button type="button" class="cor-chip' + (dias.indexOf(d) !== -1 ? ' active' : '') + '" '
+      + 'onclick="alternarDiaDaPeca(\'' + d + '\')">' + d + '</button>';
+  }).join('');
+  var botao = document.getElementById('pecaBaseDiasMontar');
+  botao.disabled = !dias.length;
+  botao.textContent = dias.length
+    ? ('Montar ' + dias.length + (dias.length === 1 ? ' look' : ' looks diferentes'))
+    : 'Marque os dias';
+}
+
+function alternarDiaDaPeca(d) {
+  var op = opcoesDaPeca;
+  if (!op) return;
+  var i = op.diasEscolhidos.indexOf(d);
+  if (i === -1) op.diasEscolhidos.push(d); else op.diasEscolhidos.splice(i, 1);
+  op.diasEscolhidos.sort(function(a, b){ return DAYS.indexOf(a) - DAYS.indexOf(b); });
+  renderVariosDiasDaPeca();
+}
+
+function montarPecaEmVariosDias() {
+  var op = opcoesDaPeca, alvo = pecaBaseAlvo;
+  if (!op || !alvo || !op.diasEscolhidos.length) return;
+  var looks = op.looks.slice();
+  var usados = [].concat.apply([], op.paginas).map(chaveDoLook);
+  while (looks.length < op.diasEscolhidos.length) {
+    var ids = idsDeUmLookNovo(op.bases, op.cor, usados);
+    if (!ids) break;
+    looks.push(ids); usados.push(chaveDoLook(ids));
+  }
+  var feitos = [];
+  op.diasEscolhidos.forEach(function(d, i){
+    if (!looks[i]) return;
+    gravarLookMontadoNoDia(d, alvo.alvo, alvo.turno, looks[i], op.bases, op.cor, true);
+    feitos.push(d);
+  });
+  var nome = nomeDasBases(op);
+  fecharEscolhaDePecaBase();
+  showSavedToast(feitos.length
+    ? ('Montei ' + feitos.length + (feitos.length === 1 ? ' look' : ' looks diferentes') + ' com ' + nome + ': ' + feitos.join(', ') + '.')
+    : ('Não consegui montar looks com ' + nome + ' agora.'));
 }
 
 // Cores que ela tem de verdade no armário, da mais comum pra menos. Oferecer
@@ -13111,7 +13258,9 @@ function idsDeUmLookNovo(base, cor, evitar) {
   // O construtor guarda o estado dele em variáveis globais; aqui ele é usado
   // sem a tela, então o que estava aberto volta como estava.
   var guardado = { slots: suggestionSlots, locked: suggestionLockedIds, hist: historicoSugestoes };
-  suggestionLockedIds = base ? [base.id] : [];   // peça escolhida por ela fica travada
+  // Peças escolhidas por ela ficam travadas — uma ou várias ("essa calça e esse sapato").
+  var bases = !base ? [] : (Array.isArray(base) ? base : [base]);
+  suggestionLockedIds = bases.map(function(b){ return b.id; });
   historicoSugestoes = [];
   var ids = null;
   for (var i = 0; i < 10 && !ids; i++) {
@@ -13119,6 +13268,8 @@ function idsDeUmLookNovo(base, cor, evitar) {
     var ps = suggestionSlots.map(function(s){ return findPieceById(s.pieceId); }).filter(Boolean);
     if (ps.length < 2) continue;
     if (!ps.some(function(p){ return p.category === 'Tops'; })) continue;
+    var temTodas = bases.every(function(b){ return ps.some(function(p){ return String(p.id) === String(b.id); }); });
+    if (!temTodas) continue;
     if (lookBateEmRegra(ps)) continue;
     if (quantasEstampas(ps) > 1) continue;           // ela reclamou disso cinco vezes
     var chave = ps.map(function(p){ return p.id; }).sort().join('|');
@@ -13133,32 +13284,40 @@ function idsDeUmLookNovo(base, cor, evitar) {
   return ids;
 }
 
-function gravarLookMontadoNoDia(day, alvo, turno, ids, base, cor) {
+// day null = só guardar em Looks Montados, sem pôr em dia nenhum.
+function gravarLookMontadoNoDia(day, alvo, turno, ids, base, cor, semAviso) {
   turno = (turno === 'noite') ? 'noite' : 'dia';
   alvo = alvo || 'atual';
+  var bases = !base ? [] : (Array.isArray(base) ? base : [base]);
+  var nomeBase = bases.map(tripNomeCurto).join(' + ');
+  base = bases[0] || null;
+  var sufixo = day ? (' — ' + day) : '';
   var novo = {
     id: 'm_' + Date.now() + '_' + Math.floor(Math.random() * 100000),
     name: (function(){
       var a = acentoDoLook(ids.map(findPieceById).filter(Boolean));
-      if (base) return tripNomeCurto(base) + (cor ? (' + ' + cor) : '') + ' — ' + day;
-      if (cor) return 'Montado + ' + cor + ' — ' + day;
-      return (a ? ('Acento ' + a.cor) : 'Montado') + ' — ' + day;
+      if (base) return nomeBase + (cor ? (' + ' + cor) : '') + sufixo;
+      if (cor) return 'Montado + ' + cor + sufixo;
+      return (a ? ('Acento ' + a.cor) : 'Montado') + sufixo;
     })(),
     pieceIds: ids,
     createdAt: new Date().toISOString(),
     source: 'auto',
     // Guardados pra dar pra montar outro depois com o mesmo pedido dela.
     baseId: base ? base.id : null,
+    baseIds: bases.length > 1 ? bases.map(function(b){ return b.id; }) : undefined,
     corPedida: cor || null,
     weekday: null, weekdayNext: null, weekdayNoite: null, weekdayNoiteNext: null
   };
-  novo[campoMontadoDe(alvo, turno)] = chaveDoDia(day);
+  if (day) novo[campoMontadoDe(alvo, turno)] = chaveDoDia(day);
   montagens.push(novo);
   saveMontagens();
   renderWeek();
   if (typeof renderGrid === 'function') renderGrid();
+  if (semAviso) return novo;
+  if (!day) { showSavedToast('Guardei em Looks Montados — dá pra pôr num dia depois.'); return novo; }
   var ac = acentoDoLook(ids.map(findPieceById).filter(Boolean));
-  var comOQue = [base ? tripNomeCurto(base) : null, cor, ac ? ('acento ' + ac.cor) : null]
+  var comOQue = [base ? nomeBase : null, cor, ac ? ('acento ' + ac.cor) : null]
     .filter(Boolean).join(' e ');
   showSavedToast(comOQue
     ? ('Montei um look com ' + comOQue + ' pra ' + day + '.')
