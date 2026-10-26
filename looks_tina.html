@@ -677,6 +677,7 @@ body.week-pick-mode .card-week-btn { display: block; }
   cursor:pointer; line-height:1.5;
 }
 .day-look-resuggest:hover { border-color:var(--ink); color:var(--ink); }
+.day-look-voltar { left:44px; }
 .day-look-mover { position:absolute; bottom:4px; left:4px; z-index:6;
   background:rgba(255,255,255,.92); color:var(--txt-2);
   border:1px solid var(--line-input); border-radius:5px;
@@ -7162,6 +7163,7 @@ function renderWeek() {
       resugg.textContent = 'outra';
       resugg.onclick = (function(d){ return function(e){ e.stopPropagation(); sugerirLookParaDia(d, 'atual'); }; })(day);
       dl.appendChild(img); dl.appendChild(rm); dl.appendChild(resugg);
+      botaoVoltarSugestao(dl, day, 'atual', 'dia');
       botaoTrocarTurno(dl, day, 'atual', 'dia');
       botaoMoverSemana(dl, day, 'atual', 'dia');
       col.appendChild(dl);
@@ -7199,6 +7201,7 @@ function renderWeek() {
       mrs.textContent = 'outra';
       mrs.onclick = (function(dd){ return function(e){ e.stopPropagation(); sugerirLookParaDia(dd, 'atual'); }; })(day);
       dm.appendChild(mrs);
+      botaoVoltarSugestao(dm, day, 'atual', 'dia');
       dm.appendChild(mrm);
       botaoTrocarTurno(dm, day, 'atual', 'dia');
       botaoMoverSemana(dm, day, 'atual', 'dia');
@@ -7587,6 +7590,7 @@ function renderNextWeekGrid(alvo, idGrid, idRange, semanasAdiante) {
       rs.textContent = 'outra';
       rs.onclick = (function(dd){ return function(e){ e.stopPropagation(); sugerirLookParaDia(dd, alvo); }; })(day);
       dl.appendChild(img); dl.appendChild(rm); dl.appendChild(rs);
+      botaoVoltarSugestao(dl, day, alvo, 'dia');
       botaoTrocarTurno(dl, day, alvo, 'dia');
       botaoMoverSemana(dl, day, alvo, 'dia');
       col.appendChild(dl);
@@ -7611,6 +7615,7 @@ function renderNextWeekGrid(alvo, idGrid, idRange, semanasAdiante) {
       mrs.textContent = 'outra';
       mrs.onclick = (function(dd){ return function(e){ e.stopPropagation(); sugerirLookParaDia(dd, alvo); }; })(day);
       dm.appendChild(mrs);
+      botaoVoltarSugestao(dm, day, alvo, 'dia');
       dm.appendChild(mrm);
       botaoTrocarTurno(dm, day, alvo, 'dia');
       botaoMoverSemana(dm, day, alvo, 'dia');
@@ -8035,6 +8040,7 @@ function blocoDaNoite(col, day, alvo) {
   outra.title = 'Sugerir outro look pra noite de ' + day;
   outra.onclick = (function(d,a){ return function(e){ e.stopPropagation(); sugerirLookParaDia(d, a, 'noite'); }; })(day, alvo);
   wrap.appendChild(outra);
+  botaoVoltarSugestao(wrap, day, alvo, 'noite');
   var lb = document.createElement('span'); lb.className = 'day-noite-label';
   lb.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.6 8.6 0 1 0 11.1 11.1z"/></svg> noite';
   wrap.appendChild(lb);
@@ -13559,6 +13565,38 @@ function gravarLookMontadoNoDia(day, alvo, turno, ids, base, cor, semAviso) {
 var mostradosNoDia = {};
 function idDaSugestao(c) { return c.montado ? ('m:' + c.montado.id) : ('l:' + c.look.id); }
 
+// O que estava no dia antes de cada "outra", pra poder voltar: ela via um look
+// bom, clicava "outra" e não tinha como recuperar o anterior. É uma pilha, então
+// dá pra voltar vários passos. Também some ao recarregar.
+var anterioresNoDia = {};
+function chaveDoVoltar(day, alvo, turno) { return (alvo || 'atual') + '|' + day + '|' + (turno === 'noite' ? 'noite' : 'dia'); }
+
+function botaoVoltarSugestao(el, day, alvo, turno) {
+  var pilha = anterioresNoDia[chaveDoVoltar(day, alvo, turno)];
+  if (!pilha || !pilha.length) return;
+  var b = document.createElement('button');
+  b.className = (turno === 'noite' ? 'day-noite-outra' : 'day-look-resuggest') + ' day-look-voltar';
+  b.textContent = 'voltar';
+  b.title = 'Voltar pro look que estava antes';
+  b.onclick = function(e){ e.stopPropagation(); voltarSugestaoDoDia(day, alvo, turno); };
+  el.appendChild(b);
+}
+
+function voltarSugestaoDoDia(day, alvo, turno) {
+  var pilha = anterioresNoDia[chaveDoVoltar(day, alvo, turno)];
+  if (!pilha || !pilha.length) return;
+  var ant = pilha.pop();
+  var noite = (turno === 'noite');
+  if (noite) limparNoiteDoDia(day, alvo);
+  else clearWeekOccupants(day, alvo);
+  if (ant.lookId != null) setWeekLookFor(day, ant.lookId, alvo, noite ? 'noite' : undefined);
+  var m = ant.montadoId != null ? montagens.find(function(x){ return x.id === ant.montadoId; }) : null;
+  if (m) m[campoMontadoDe(alvo, noite ? 'noite' : undefined)] = chaveDoDia(day);
+  saveMontagens(); saveToStorage();
+  renderGrid(); renderWeek();
+  showSavedToast('Voltou o look de antes.');
+}
+
 function sugerirLookParaDia(day, alvo, turno) {
   turno = (turno === 'noite') ? 'noite' : 'dia';
   var noite = (turno === 'noite');
@@ -13638,6 +13676,13 @@ function sugerirLookParaDia(day, alvo, turno) {
   while (memoria.length > 8) memoria.shift();
   mostradosNoDia[info.chave] = memoria;
 
+  if (ocupa.look || ocupa.montado) {
+    var kv = chaveDoVoltar(day, info.alvo, turno);
+    (anterioresNoDia[kv] = anterioresNoDia[kv] || []).push({
+      lookId: ocupa.look ? ocupa.look.id : null,
+      montadoId: ocupa.montado ? ocupa.montado.id : null
+    });
+  }
   if (noite) limparNoiteDoDia(day, info.alvo);
   else clearWeekOccupants(day, info.alvo); // sugerir substitui o que estava no dia
 
